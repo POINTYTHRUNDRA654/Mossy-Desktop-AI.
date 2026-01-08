@@ -55,7 +55,7 @@ const TheSplicer: React.FC = () => {
             if (event.target?.result) {
                 const buffer = event.target.result as ArrayBuffer;
                 // Limit to 1KB for performance in this UI demo
-                const uint8 = new Uint8Array(buffer).slice(0, 1024);
+                const uint8 = new Uint8Array(buffer).subarray(0, 1024);
                 setBytes(uint8);
                 renderHex(uint8);
                 setAnalysisResult(null);
@@ -78,26 +78,31 @@ const TheSplicer: React.FC = () => {
             const chunk = bytes.slice(start, end);
             const hexStr = Array.from(chunk).map(b => b.toString(16).padStart(2, '0')).join(' ');
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: `Analyze this hex byte sequence from a game file (${fileName}): "${hexStr}".
+            const promptText = `Analyze this hex byte sequence from a game file (${fileName || 'unknown'}): "${hexStr}".
                 The cursor is at byte offset ${cursor}.
                 Identify likely data types (float, int, string, header).
                 Return a JSON object with:
                 1. "interpretation": A short explanation of what these bytes likely represent.
                 2. "structName": A technical name for this block (e.g. NiNode, HeaderString).
-                `,
+                `;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: [{ parts: [{ text: promptText }] }],
                 config: { responseMimeType: 'application/json' }
             });
 
-            const result = JSON.parse(response.text);
+            const text = response.text || "{}";
+            const result = JSON.parse(text);
             setAnalysisResult(result.interpretation);
             
             // Add a visual highlight map for this "found" structure
-            setStructureMap(prev => [
-                ...prev, 
-                { start: cursor, end: cursor + 8, label: result.structName, color: 'bg-emerald-500/30' }
-            ]);
+            if (result.structName) {
+                setStructureMap(prev => [
+                    ...prev, 
+                    { start: cursor, end: cursor + 8, label: result.structName, color: 'bg-emerald-500/30' }
+                ]);
+            }
 
         } catch (e) {
             console.error(e);
