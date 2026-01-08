@@ -27,6 +27,9 @@ import TheSplicer from './components/TheSplicer';
 import ThePrism from './components/ThePrism';
 import TheFabric from './components/TheFabric';
 import TheCatalyst from './components/TheCatalyst';
+import TheCartographer from './components/TheCartographer';
+import TheRegistry from './components/TheRegistry';
+import TheOrganizer from './components/TheOrganizer';
 
 // Define window interface for AI Studio helpers
 declare global {
@@ -75,6 +78,9 @@ const App: React.FC = () => {
             <Route path="/prism" element={<ThePrism />} />
             <Route path="/fabric" element={<TheFabric />} />
             <Route path="/catalyst" element={<TheCatalyst />} />
+            <Route path="/cartographer" element={<TheCartographer />} />
+            <Route path="/registry" element={<TheRegistry />} />
+            <Route path="/organizer" element={<TheOrganizer />} />
             <Route path="/conduit" element={<TheConduit />} />
             <Route path="/cortex" element={<TheCortex />} />
             <Route path="/terminal" element={<HyperTerminal />} />

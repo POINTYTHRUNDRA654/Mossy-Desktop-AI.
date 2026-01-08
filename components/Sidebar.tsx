@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical } from 'lucide-react';
+import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical, Map, FileDigit, Library } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
   const [bridgeConnected, setBridgeConnected] = useState(false);
@@ -19,6 +19,7 @@ const Sidebar: React.FC = () => {
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'The Nexus' },
     { to: '/chat', icon: MessageSquare, label: 'Talk to Mossy' },
+    { to: '/organizer', icon: Library, label: 'The Organizer' },
     { to: '/catalyst', icon: FlaskConical, label: 'The Catalyst' },
     { to: '/fabric', icon: PenTool, label: 'The Fabric' },
     { to: '/prism', icon: Triangle, label: 'The Prism' },
@@ -26,6 +27,8 @@ const Sidebar: React.FC = () => {
     { to: '/reverie', icon: Sparkles, label: 'The Reverie' },
     { to: '/genome', icon: Dna, label: 'The Genome' },
     { to: '/hive', icon: Hexagon, label: 'The Hive' },
+    { to: '/cartographer', icon: Map, label: 'The Cartographer' },
+    { to: '/registry', icon: FileDigit, label: 'The Registry' },
     { to: '/blueprint', icon: DraftingCompass, label: 'The Blueprint' },
     { to: '/synapse', icon: Workflow, label: 'The Synapse' },
     { to: '/splicer', icon: Binary, label: 'The Splicer' },

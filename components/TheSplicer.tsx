@@ -58,7 +58,7 @@ const TheSplicer: React.FC = () => {
                 const uint8 = new Uint8Array(buffer).subarray(0, 1024);
                 setBytes(uint8);
                 renderHex(uint8);
-                setAnalysisResult(null);
+                setAnalysisResult(() => null);
                 setStructureMap([]);
             }
         };
@@ -88,7 +88,7 @@ const TheSplicer: React.FC = () => {
 
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: [{ parts: [{ text: promptText }] }],
+                contents: { parts: [{ text: promptText }] },
                 config: { responseMimeType: 'application/json' }
             });
 
@@ -255,7 +255,7 @@ const TheSplicer: React.FC = () => {
                                 {/* AI Analysis Section */}
                                 <div className="pt-4 border-t border-slate-800">
                                     <button 
-                                        onClick={handleAnalyzeRegion}
+                                        onClick={() => handleAnalyzeRegion()}
                                         disabled={isAnalyzing}
                                         className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
                                     >

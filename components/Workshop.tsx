@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Folder, FileCode, FileImage, FileBox, ChevronRight, ChevronDown, Play, Save, RefreshCw, Box, Layers, Code, CheckCircle, AlertCircle, Share2, Workflow, Plus, Zap, ArrowRight, Package } from 'lucide-react';
+import { Folder, FileCode, FileImage, FileBox, ChevronRight, ChevronDown, Play, Save, RefreshCw, Box, Layers, Code, CheckCircle2, AlertCircle, Share2, Workflow, Plus, Zap, ArrowRight, Package, BookOpen, Copy } from 'lucide-react';
 
 // --- Types ---
 interface FileNode {
@@ -117,6 +117,14 @@ const initialQuestNodes: GraphNode[] = [
     { id: 'n5', type: 'action', label: 'ArtifactContainer.Enable()', x: 500, y: 80, outputs: [] },
     { id: 'n6', type: 'action', label: 'Player.AddItem(Artifact)', x: 500, y: 170, outputs: [] },
     { id: 'n7', type: 'action', label: 'Update Objectives', x: 500, y: 230, outputs: [] },
+];
+
+const papyrusSnippets = [
+    { label: 'OnHit Event', code: 'Event OnHit(ObjectReference akAggressor, Form akSource, Projectile akProjectile, bool abPowerAttack, bool abSneakAttack, bool abBashAttack, bool abHitBlocked, string asMaterialName)\n    ; Code\nEndEvent' },
+    { label: 'OnEquip Event', code: 'Event OnEquipped(Actor akActor)\n    if akActor == Game.GetPlayer()\n        ; Code\n    endif\nEndEvent' },
+    { label: 'Remote Event', code: 'RegisterForRemoteEvent(PlayerRef, "OnItemAdded")\n\nEvent ObjectReference.OnItemAdded(ObjectReference akSender, Form akBaseItem, int aiItemCount, ObjectReference akItemReference, ObjectReference akSourceContainer)\n    ; Code\nEndEvent' },
+    { label: 'Loop (While)', code: 'while (condition)\n    ; Code\nendWhile' },
+    { label: 'Message Box', code: 'int button = MyMessage.Show()\nif button == 0\n    ; Option 1\nelseif button == 1\n    ; Option 2\nendif' },
 ];
 
 // --- 3D Wireframe Preview Component ---
@@ -319,11 +327,13 @@ const Workshop: React.FC = () => {
   const [codeContent, setCodeContent] = useState(selectedFile?.content || '');
   const [viewMode, setViewMode] = useState<'code' | 'graph'>('code');
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>(initialQuestNodes);
+  const [showSnippets, setShowSnippets] = useState(true);
   
   const [compiling, setCompiling] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([
       "Mossy Workshop v2.4 initialized.",
+      "Target Context: Fallout 4 (Papyrus)",
       "Connected to Local Bridge: ACTIVE",
       "Ready for input."
   ]);
@@ -348,9 +358,14 @@ const Workshop: React.FC = () => {
       }
   };
 
+  const insertSnippet = (snippet: string) => {
+      setCodeContent(prev => prev + '\n\n' + snippet);
+  };
+
   const handleCompile = () => {
       setCompiling(true);
       setConsoleOutput(prev => [...prev, `> Compiling ${selectedFile?.name}...`]);
+      setConsoleOutput(prev => [...prev, `> Linking against Fallout4.esm...`]);
       
       setTimeout(() => {
           setCompiling(false);
@@ -358,7 +373,7 @@ const Workshop: React.FC = () => {
           if (success) {
               setConsoleOutput(prev => [...prev, `> Compilation SUCCESS (0 Errors, 0 Warnings)`, "> Object script attached to Data/Scripts/Source/User/"]);
           } else {
-              setConsoleOutput(prev => [...prev, `> Compilation FAILED`, `> Error on Line 14: mismatched types`]);
+              setConsoleOutput(prev => [...prev, `> Compilation FAILED`, `> Error on Line 14: mismatched types (Int vs Float)`]);
           }
       }, 1500);
   };
@@ -476,35 +491,64 @@ const Workshop: React.FC = () => {
                   
                   {/* View Toggles for Scripts */}
                   {selectedFile?.fileType === 'script' && (
-                      <div className="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700 scale-90">
-                          <button 
-                              onClick={() => setViewMode('code')}
-                              className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition-all ${viewMode === 'code' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
-                          >
-                              <Code className="w-3 h-3" /> Code
+                      <div className="flex items-center gap-2">
+                          <button onClick={() => setShowSnippets(!showSnippets)} className={`p-1.5 rounded ${showSnippets ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-white'}`} title="Toggle Snippets">
+                              <BookOpen className="w-3 h-3" />
                           </button>
-                          <button 
-                              onClick={() => setViewMode('graph')}
-                              className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition-all ${viewMode === 'graph' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
-                          >
-                              <Workflow className="w-3 h-3" /> Loom
-                          </button>
+                          <div className="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700 scale-90">
+                              <button 
+                                  onClick={() => setViewMode('code')}
+                                  className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition-all ${viewMode === 'code' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                              >
+                                  <Code className="w-3 h-3" /> Code
+                              </button>
+                              <button 
+                                  onClick={() => setViewMode('graph')}
+                                  className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition-all ${viewMode === 'graph' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                              >
+                                  <Workflow className="w-3 h-3" /> Loom
+                              </button>
+                          </div>
                       </div>
                   )}
               </div>
 
               {/* Content */}
-              <div className="flex-1 overflow-hidden relative">
+              <div className="flex-1 overflow-hidden relative flex">
                   {selectedFile?.fileType === 'script' ? (
                       viewMode === 'code' ? (
-                          <textarea
-                              className="w-full h-full bg-slate-900 p-4 font-mono text-sm text-slate-300 resize-none focus:outline-none leading-relaxed"
-                              value={codeContent}
-                              onChange={(e) => {
-                                  setCodeContent(e.target.value);
-                              }}
-                              spellCheck={false}
-                          />
+                          <>
+                            <textarea
+                                className="flex-1 bg-slate-900 p-4 font-mono text-sm text-slate-300 resize-none focus:outline-none leading-relaxed"
+                                value={codeContent}
+                                onChange={(e) => {
+                                    setCodeContent(e.target.value);
+                                }}
+                                spellCheck={false}
+                            />
+                            
+                            {/* Snippets Sidebar */}
+                            {showSnippets && (
+                                <div className="w-56 bg-slate-900 border-l border-slate-700 flex flex-col animate-slide-in-right">
+                                    <div className="p-3 text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-slate-700/50">
+                                        Papyrus Kit
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                                        {papyrusSnippets.map((snip, i) => (
+                                            <div key={i} className="group bg-slate-800 p-2 rounded border border-slate-700 hover:border-slate-500 transition-colors">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="text-xs font-bold text-slate-300">{snip.label}</span>
+                                                    <button onClick={() => insertSnippet(snip.code)} className="text-slate-500 hover:text-forge-accent">
+                                                        <Plus className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                                <pre className="text-[8px] text-slate-500 font-mono truncate">{snip.code.split('\n')[0]}</pre>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                          </>
                       ) : (
                           <GraphEditor nodes={graphNodes} setNodes={setGraphNodes} />
                       )
