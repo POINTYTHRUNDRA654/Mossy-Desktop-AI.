@@ -30,6 +30,8 @@ import TheCatalyst from './components/TheCatalyst';
 import TheCartographer from './components/TheCartographer';
 import TheRegistry from './components/TheRegistry';
 import TheOrganizer from './components/TheOrganizer';
+import TheCrucible from './components/TheCrucible';
+import TheAssembler from './components/TheAssembler';
 
 // Define window interface for AI Studio helpers
 declare global {
@@ -81,6 +83,8 @@ const App: React.FC = () => {
             <Route path="/cartographer" element={<TheCartographer />} />
             <Route path="/registry" element={<TheRegistry />} />
             <Route path="/organizer" element={<TheOrganizer />} />
+            <Route path="/crucible" element={<TheCrucible />} />
+            <Route path="/assembler" element={<TheAssembler />} />
             <Route path="/conduit" element={<TheConduit />} />
             <Route path="/cortex" element={<TheCortex />} />
             <Route path="/terminal" element={<HyperTerminal />} />

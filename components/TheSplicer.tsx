@@ -58,7 +58,7 @@ const TheSplicer: React.FC = () => {
                 const uint8 = new Uint8Array(buffer).subarray(0, 1024);
                 setBytes(uint8);
                 renderHex(uint8);
-                setAnalysisResult(() => null);
+                setAnalysisResult(null);
                 setStructureMap([]);
             }
         };
@@ -76,7 +76,7 @@ const TheSplicer: React.FC = () => {
             const start = Math.max(0, cursor - 16);
             const end = Math.min(bytes.length, cursor + 32);
             const chunk = bytes.slice(start, end);
-            const hexStr = Array.from(chunk).map(b => b.toString(16).padStart(2, '0')).join(' ');
+            const hexStr = Array.from(chunk).map((b: number) => b.toString(16).padStart(2, '0')).join(' ');
 
             const promptText = `Analyze this hex byte sequence from a game file (${fileName || 'unknown'}): "${hexStr}".
                 The cursor is at byte offset ${cursor}.
