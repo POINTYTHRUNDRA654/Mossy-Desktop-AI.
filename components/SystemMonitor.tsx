@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Cpu, HardDrive, Activity, Terminal, Trash2, Search, CheckCircle, Database, Layers, Radio, ShieldCheck, Zap, History, Archive, FileCode, XCircle, RefreshCw, Save, Clock, RotateCcw, Upload, Download } from 'lucide-react';
+import { Cpu, HardDrive, Activity, Terminal, Trash2, Search, CheckCircle, Database, Layers, Radio, ShieldCheck, Zap, History, Archive, FileCode, XCircle, RefreshCw, Save, Clock, RotateCcw, Upload, Download, DownloadCloud, Box, Settings } from 'lucide-react';
 
 interface LogEntry {
   id: string;
@@ -35,12 +35,27 @@ const SystemMonitor: React.FC = () => {
   const [scanHistory, setScanHistory] = useState<ScanSnapshot[]>([]);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
 
+  // Model Hub State
+  const [showModelHub, setShowModelHub] = useState(false);
+  const [modelConfig, setModelConfig] = useState({
+    name: 'Llama-3-8B-Instruct',
+    format: 'GGUF',
+    quantization: 'Q4_K_M'
+  });
+  const [modelDownloadProgress, setModelDownloadProgress] = useState(0);
+  const [isDownloadingModel, setIsDownloadingModel] = useState(false);
+
   // New State for Validation Toggles
   const [validationOptions, setValidationOptions] = useState({
-    shaderFlags: true,
+    shaderFlags: false,
     collisionLayers: true,
-    nodeHierarchy: true
+    nodeHierarchy: false
   });
+
+  // Resource Monitoring State
+  const [flashState, setFlashState] = useState<{ cpu: boolean; memory: boolean }>({ cpu: false, memory: false });
+  const highUsageTracker = useRef<{ cpu: number | null; memory: number | null; gpu: number | null }>({ cpu: null, memory: null, gpu: null });
+  const warningLogged = useRef<{ cpu: boolean; memory: boolean; gpu: boolean }>({ cpu: false, memory: false, gpu: false });
 
   const logsEndRef = useRef<HTMLDivElement>(null);
   const logsContainerRef = useRef<HTMLDivElement>(null);
@@ -79,22 +94,74 @@ const SystemMonitor: React.FC = () => {
     }
   }, [logs]);
 
-  // Chart data simulation
+  // Chart data simulation & Monitoring
   useEffect(() => {
     const interval = setInterval(() => {
+      const now = new Date();
+      const time = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
+      // Load increases if scanning or many integrations found
+      // Modified logic to allow higher spikes for monitoring testing
+      const baseLoad = isScanning ? 60 : (integrations.length * 5) + 10;
+      
+      const cpuVal = Math.min(100, Math.floor(Math.random() * 30) + baseLoad);
+      const memVal = Math.min(100, Math.floor(Math.random() * 20) + baseLoad + 10);
+      const gpuVal = Math.min(100, Math.floor(Math.random() * 40) + (isScanning ? 30 : 10));
+      const neuralVal = Math.min(100, Math.floor(Math.random() * 40) + (integrations.length > 0 ? 30 : 0));
+
+      const newPoint = {
+        name: time,
+        cpu: cpuVal,
+        memory: memVal,
+        gpu: gpuVal,
+        neural: neuralVal,
+      };
+
+      // --- Monitor High Usage Logic ---
+      const checkMetric = (metric: 'cpu' | 'memory' | 'gpu', val: number, chartKey: 'cpu' | 'memory') => {
+        const threshold = 85;
+        const duration = 30000; // 30s in ms
+
+        if (val > threshold) {
+          if (highUsageTracker.current[metric] === null) {
+            highUsageTracker.current[metric] = Date.now();
+          } else {
+            const elapsed = Date.now() - highUsageTracker.current[metric]!;
+            if (elapsed > duration && !warningLogged.current[metric]) {
+              // Trigger Log
+              setLogs(prev => {
+                 const newEntry: LogEntry = {
+                    id: Date.now().toString() + Math.random(),
+                    time: new Date().toLocaleTimeString(),
+                    msg: `[WARNING] High ${metric.toUpperCase()} usage detected (>85%) for 30s! System performance may degrade.`,
+                    type: 'warning'
+                 };
+                 const updated = [...prev, newEntry];
+                 return updated.length > 200 ? updated.slice(updated.length - 200) : updated;
+              });
+
+              // Trigger Warning Flag to prevent spam
+              warningLogged.current[metric] = true;
+
+              // Trigger Visual Flash
+              setFlashState(prev => ({ ...prev, [chartKey]: true }));
+              setTimeout(() => {
+                setFlashState(prev => ({ ...prev, [chartKey]: false }));
+              }, 2000); // Flash duration
+            }
+          }
+        } else {
+          // Reset tracking if drops below threshold
+          highUsageTracker.current[metric] = null;
+          warningLogged.current[metric] = false;
+        }
+      };
+
+      // Monitor Metrics
+      checkMetric('cpu', cpuVal, 'cpu');
+      checkMetric('memory', memVal, 'memory');
+      checkMetric('gpu', gpuVal, 'memory'); // GPU is in the second chart (Resource Allocation)
+
       setData(prev => {
-        const now = new Date();
-        const time = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-        // Load increases if scanning or many integrations found
-        const baseLoad = isScanning ? 40 : (integrations.length * 5) + 10;
-        
-        const newPoint = {
-          name: time,
-          cpu: Math.min(100, Math.floor(Math.random() * 20) + baseLoad),
-          memory: Math.min(100, Math.floor(Math.random() * 10) + baseLoad + 10),
-          gpu: Math.min(100, Math.floor(Math.random() * 30) + (isScanning ? 30 : 10)),
-          neural: Math.min(100, Math.floor(Math.random() * 40) + (integrations.length > 0 ? 30 : 0)),
-        };
         const newData = [...prev, newPoint];
         if (newData.length > 20) newData.shift();
         return newData;
@@ -253,6 +320,47 @@ const SystemMonitor: React.FC = () => {
     e.target.value = ''; // Reset
   };
 
+  // --- Model Hub Logic ---
+  
+  const toggleModelHub = () => {
+    setShowModelHub(!showModelHub);
+    if (!showModelHub) setShowHistoryPanel(false);
+  };
+  
+  const toggleHistory = () => {
+    setShowHistoryPanel(!showHistoryPanel);
+    if (!showHistoryPanel) setShowModelHub(false);
+  };
+
+  const startModelDownload = () => {
+    if (isDownloadingModel) return;
+    setIsDownloadingModel(true);
+    setModelDownloadProgress(0);
+    addLog(`[HUB] Initiating download: ${modelConfig.name} [${modelConfig.format}/${modelConfig.quantization}]`, 'info');
+
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.floor(Math.random() * 5) + 1;
+        if (progress > 100) progress = 100;
+        
+        setModelDownloadProgress(progress);
+        
+        if (progress % 20 === 0 && progress < 100) {
+            addLog(`[NETWORK] Downloading chunk ${(progress / 100 * 4.2).toFixed(1)}GB / 4.2GB... (${(Math.random() * 15 + 10).toFixed(1)} MB/s)`, 'info');
+        }
+
+        if (progress === 100) {
+            clearInterval(interval);
+            setIsDownloadingModel(false);
+            addLog(`[HUB] Download complete. Verifying SHA256 checksum...`, 'info');
+            setTimeout(() => {
+                addLog(`[HUB] Integrity verified. Model mounted to /models/${modelConfig.format.toLowerCase()}/`, 'info');
+                setShowModelHub(false);
+            }, 800);
+        }
+    }, 200);
+  };
+
   // -----------------------------
 
   const handleNifSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -306,27 +414,50 @@ const SystemMonitor: React.FC = () => {
                                addLog(`[STATS] Scene Graph: NiNode(${niNodeCount}), NiTriShape(${shapeCount}), NiTriStrips(${stripCount})`, 'info');
                                addLog(`[STATS] Spatial Complexity: Avg Depth ${avgDepth} | Root Bounds Verified`, 'info');
 
-                               // Deep Node Check
-                               if (parseFloat(avgDepth) > 3.5 || Math.random() > 0.8) {
-                                    const deepNodeName = `Bone_Sub_Finger_${Math.floor(Math.random()*3)}_Ref`;
-                                    addLog(`[HIERARCHY] Optimization Warning: Node "${deepNodeName}" exceeds depth limit (Level 6). Flatten hierarchy suggested.`, 'warning');
+                               // Missing Geometry Data Check (Orphan Nodes)
+                               if (Math.random() > 0.8) {
+                                   const orphanNodes = ['NiTriShape "Trigger_Poly"', 'NiTriShape "Bolt_Catch"', 'NiTriShape "Muzzle_Break"'];
+                                   const orphan = orphanNodes[Math.floor(Math.random() * orphanNodes.length)];
+                                   addLog(`[HIERARCHY] Critical Error: ${orphan} has no associated NiTriShapeData or NiTriStripsData block. Mesh is empty/invisible.`, 'error');
+                                   issues++;
+                               }
+
+                               // Deep Hierarchy Check (> 5 Levels)
+                               if (parseFloat(avgDepth) > 3.0 || Math.random() > 0.65) {
+                                    const deepNodes = [`NiNode "Finger_02_L"`, `NiTriShape "Bolt_LP_01"`, `NiNode "Sight_Rear_Att"`, `NiNode "Helper_Mag_Release"`];
+                                    const targetNode = deepNodes[Math.floor(Math.random() * deepNodes.length)];
+                                    const depthLevel = 6 + Math.floor(Math.random() * 4);
+                                    addLog(`[HIERARCHY] Depth Warning: ${targetNode} is ${depthLevel} levels deep (Limit: 5). Flattening hierarchy recommended.`, 'warning');
                                     issues++;
                                }
 
-                               // Naming Convention Check
-                               if (Math.random() > 0.75) {
-                                   const badName = `Cylinder.${Math.floor(Math.random()*999).toString().padStart(3, '0')}`; 
-                                   addLog(`[HIERARCHY] Naming Convention: "${badName}" detected. Please rename to standard Fallout 4 conventions (e.g., 'Receiver', 'Barrel').`, 'warning');
+                               // Unexpected Naming Convention Check
+                               if (Math.random() > 0.6) {
+                                   const suspiciousNames = [`Cylinder.001`, `Cube.004`, `Material.001`, `Shape_Indexed_11`];
+                                   const detectedName = suspiciousNames[Math.floor(Math.random() * suspiciousNames.length)];
+                                   addLog(`[HIERARCHY] Naming Alert: Node '${detectedName}' violates Fallout 4 naming conventions. Expected descriptive names (e.g., 'Receiver', 'Stock').`, 'warning');
                                    issues++;
                                }
                            }
 
                            if (validationOptions.shaderFlags) {
-                               if (seed > 0.4 && seed < 0.6) {
-                                   addLog(`[SHADERS] Warning: Block 12 (BSLightingShaderProperty): SLSF2_Double_Sided flag mismatch.`, 'warning');
+                               const shaderRoll = Math.random();
+                               
+                               // Expanded check logic
+                               if (seed > 0.5 && seed < 0.6) {
+                                   addLog(`[SHADERS] Warning: Block 12 (BSLightingShaderProperty): SLSF2_Double_Sided flag mismatch. Mesh may cull backfaces incorrectly.`, 'warning');
+                                   issues++;
+                               } else if (shaderRoll > 0.8) {
+                                   addLog(`[SHADERS] Error: Texture Slot 4 (Cubemap) detected but SLSF1_Environment_Mapping flag is disabled. Reflections will not render.`, 'error');
+                                   issues++;
+                               } else if (shaderRoll < 0.15) {
+                                   addLog(`[SHADERS] Error: Glow Map (_g.dds) detected in Slot 3, but SLSF1_External_Emissive flag is MISSING. Mesh will appear dark.`, 'error');
+                                   issues++;
+                               } else if (seed < 0.1) {
+                                   addLog(`[SHADERS] Warning: Vertex Colors present in mesh data, but SLSF2_Vertex_Colors flag is disabled.`, 'warning');
                                    issues++;
                                } else {
-                                   addLog(`[SHADERS] Flags optimized for Creation Engine (PBR).`, 'info');
+                                   addLog(`[SHADERS] Flags optimized for Creation Engine (PBR). Environment, Emissive, and Alpha flags verified.`, 'info');
                                }
                            }
 
@@ -335,9 +466,27 @@ const SystemMonitor: React.FC = () => {
                                    addLog(`[COLLISION] Error: NiNode "ProjectileNode" has no child collision object.`, 'error');
                                    issues++;
                                } else if (seed >= 0.15 && seed < 0.35) {
-                                   const detected = "OL_CLUTTER";
-                                   const expected = "OL_STATIC";
-                                   addLog(`[COLLISION] Layer Mismatch: Detected "${detected}", Expected "${expected}" for static mesh.`, 'warning');
+                                   const intentRoll = Math.random();
+                                   let intent = "Static Mesh";
+                                   let recommended = "OL_STATIC";
+                                   
+                                   // Fix Logic: Ensure Projectile can be reached
+                                   if (intentRoll > 0.85) {
+                                       intent = "Dynamic Projectile";
+                                       recommended = "OL_PROJECTILE";
+                                   } else if (intentRoll > 0.6) {
+                                       intent = "Animated Object";
+                                       recommended = "OL_ANIM_STATIC";
+                                   } else if (intentRoll > 0.4) {
+                                       intent = "Trigger Volume";
+                                       recommended = "OL_TRIGGER";
+                                   }
+
+                                   const wrongLayers = ['OL_CLUTTER', 'OL_BIPED', 'OL_WATER', 'OL_NONCOLLIDABLE', 'OL_TRANSPARENT'];
+                                   const detected = wrongLayers[Math.floor(Math.random() * wrongLayers.length)];
+
+                                   addLog(`[COLLISION] Analysis: Geometry topology suggests usage as ${intent}.`, 'warning');
+                                   addLog(`[COLLISION] Layer Violation: Found "${detected}". Expected "${recommended}" for correct physics simulation.`, 'warning');
                                    issues++;
                                } else {
                                    addLog(`[COLLISION] Havok physics data validated (Layer: OL_WEAPON).`, 'info');
@@ -372,7 +521,10 @@ const SystemMonitor: React.FC = () => {
     if (nifProcess.status === 'running') {
         addLog(`[QUERY] Polling PID ${nifProcess.pid}...`, 'info');
         setTimeout(() => {
-            addLog(`[STATUS] PID ${nifProcess.pid} is RESPONDING. Mem: 142MB. Threads: 6.`, 'info');
+            // Simulate dynamic values for more realistic monitoring
+            const memUsage = 140 + Math.floor(Math.random() * 45);
+            const threadCount = 6 + Math.floor(Math.random() * 4);
+            addLog(`[STATUS] PID ${nifProcess.pid} is RESPONDING. Mem: ${memUsage}MB. Threads: ${threadCount}.`, 'info');
         }, 400);
     } else {
         addLog(`[QUERY] Checking NifSkope service status...`, 'info');
@@ -464,8 +616,19 @@ const SystemMonitor: React.FC = () => {
         </div>
         
         <div className="flex gap-2 relative">
+            <button
+                onClick={toggleModelHub}
+                className={`px-4 py-3 rounded-lg font-bold flex items-center gap-2 transition-all border ${
+                    showModelHub
+                    ? 'bg-forge-accent text-slate-900 border-forge-accent'
+                    : 'bg-slate-800 border-slate-600 text-slate-400 hover:text-white hover:bg-slate-700'
+                }`}
+            >
+                <DownloadCloud className="w-5 h-5" />
+                Model Hub
+            </button>
             <button 
-                onClick={() => setShowHistoryPanel(!showHistoryPanel)}
+                onClick={toggleHistory}
                 className={`px-4 py-3 rounded-lg font-bold flex items-center gap-2 transition-all border ${
                     showHistoryPanel 
                     ? 'bg-forge-accent text-slate-900 border-forge-accent' 
@@ -487,6 +650,100 @@ const SystemMonitor: React.FC = () => {
                 {isScanning ? <Zap className="w-5 h-5 animate-pulse" /> : <Search className="w-5 h-5" />}
                 {isScanning ? `Scanning... ${scanProgress}%` : 'Scan Local Ecosystem'}
             </button>
+
+            {/* Model Hub Panel Dropdown */}
+            {showModelHub && (
+                <div className="absolute top-14 right-0 w-96 bg-forge-panel border border-slate-600 rounded-xl shadow-2xl z-20 p-5">
+                    <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                        <h4 className="font-bold text-white flex items-center gap-2">
+                            <Box className="w-4 h-4 text-forge-accent" /> AI Model Manager
+                        </h4>
+                        <button onClick={() => setShowModelHub(false)} className="text-slate-500 hover:text-white">
+                            <XCircle className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 mb-1">Model Architecture</label>
+                            <select 
+                                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:border-forge-accent focus:outline-none"
+                                value={modelConfig.name}
+                                onChange={(e) => setModelConfig({...modelConfig, name: e.target.value})}
+                                disabled={isDownloadingModel}
+                            >
+                                <option value="Llama-3-8B-Instruct">Llama 3 8B Instruct</option>
+                                <option value="Mistral-7B-v0.3">Mistral 7B v0.3</option>
+                                <option value="Gemma-7B-it">Gemma 7B Instruct</option>
+                                <option value="Stable-Diffusion-XL-Turbo">Stable Diffusion XL Turbo</option>
+                                <option value="Whisper-Large-v3">Whisper Large v3 (Audio)</option>
+                            </select>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1">Format</label>
+                                <select 
+                                    className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:border-forge-accent focus:outline-none"
+                                    value={modelConfig.format}
+                                    onChange={(e) => setModelConfig({...modelConfig, format: e.target.value})}
+                                    disabled={isDownloadingModel}
+                                >
+                                    <option value="GGUF">GGUF (CPU/Edge)</option>
+                                    <option value="ONNX">ONNX (Generic)</option>
+                                    <option value="SafeTensors">SafeTensors (GPU)</option>
+                                    <option value="CoreML">CoreML (Apple)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1">Quantization</label>
+                                <select 
+                                    className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:border-forge-accent focus:outline-none"
+                                    value={modelConfig.quantization}
+                                    onChange={(e) => setModelConfig({...modelConfig, quantization: e.target.value})}
+                                    disabled={isDownloadingModel}
+                                >
+                                    <option value="Q4_K_M">Q4_K_M (Balanced)</option>
+                                    <option value="Q5_K_M">Q5_K_M (High Quality)</option>
+                                    <option value="Q8_0">Q8_0 (Lossless)</option>
+                                    <option value="FP16">FP16 (Raw)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Progress Section */}
+                        {isDownloadingModel ? (
+                            <div className="bg-slate-900/50 p-3 rounded border border-slate-700">
+                                <div className="flex justify-between text-xs mb-1">
+                                    <span className="text-forge-accent animate-pulse">Downloading...</span>
+                                    <span>{modelDownloadProgress}%</span>
+                                </div>
+                                <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-forge-accent transition-all duration-200" 
+                                        style={{width: `${modelDownloadProgress}%`}}
+                                    />
+                                </div>
+                                <div className="text-[10px] text-slate-500 mt-1 text-center font-mono">
+                                    Downloading from HuggingFace Hub...
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={startModelDownload}
+                                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg shadow-emerald-900/20"
+                            >
+                                <DownloadCloud className="w-5 h-5" />
+                                Fetch Model
+                            </button>
+                        )}
+                        
+                        <div className="text-[10px] text-slate-500 flex items-center gap-1 justify-center border-t border-slate-700 pt-3">
+                             <Settings className="w-3 h-3" /> Configures local inference endpoints automatically.
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* History Panel Dropdown */}
             {showHistoryPanel && (
@@ -650,7 +907,10 @@ const SystemMonitor: React.FC = () => {
 
                                 <div className="space-y-2">
                                     <button 
-                                        onClick={() => nifInputRef.current?.click()}
+                                        onClick={() => {
+                                            addLog("[SYSTEM] Opening local file interface...", 'info');
+                                            nifInputRef.current?.click();
+                                        }}
                                         className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-forge-accent text-xs font-bold py-2 rounded border border-slate-600 transition-colors group-hover:bg-slate-700"
                                     >
                                         <FileCode className="w-3 h-3" />
@@ -691,7 +951,7 @@ const SystemMonitor: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         {/* CPU/GPU Load */}
-        <div className="bg-forge-panel p-4 rounded-xl border border-slate-700 shadow-lg h-64">
+        <div className={`bg-forge-panel p-4 rounded-xl border shadow-lg h-64 transition-all duration-300 ${flashState.cpu ? 'animate-pulse border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]' : 'border-slate-700'}`}>
           <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
             <Cpu className="w-4 h-4 text-emerald-400" /> Computation Load
           </h3>
@@ -721,7 +981,7 @@ const SystemMonitor: React.FC = () => {
         </div>
 
         {/* Memory/VRAM */}
-        <div className="bg-forge-panel p-4 rounded-xl border border-slate-700 shadow-lg h-64">
+        <div className={`bg-forge-panel p-4 rounded-xl border shadow-lg h-64 transition-all duration-300 ${flashState.memory ? 'animate-pulse border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]' : 'border-slate-700'}`}>
           <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
             <HardDrive className="w-4 h-4 text-amber-400" /> Resource Allocation
           </h3>

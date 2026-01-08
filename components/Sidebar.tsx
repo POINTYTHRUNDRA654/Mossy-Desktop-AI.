@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { MessageSquare, Radio, Image, Volume2, Activity } from 'lucide-react';
+import { MessageSquare, Radio, Image, Volume2, Activity, Heart } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
   const navItems = [
@@ -37,8 +37,16 @@ const Sidebar: React.FC = () => {
           </NavLink>
         ))}
       </nav>
-      <div className="p-4 border-t border-slate-800 text-xs text-slate-600">
-        v1.0.4 | Gemini 3 Pro
+      
+      {/* Donation/Sponsor Section */}
+      <div className="p-4 border-t border-slate-800">
+        <button className="w-full mb-4 group relative px-4 py-2 flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-pink-500/10 to-rose-500/10 border border-pink-500/20 hover:border-pink-500/50 hover:from-pink-500/20 hover:to-rose-500/20 transition-all cursor-pointer">
+            <Heart className="w-4 h-4 text-pink-400 group-hover:scale-110 transition-transform group-hover:fill-pink-400/20" />
+            <span className="text-sm font-semibold text-pink-300 group-hover:text-pink-200">Sponsor Project</span>
+        </button>
+        <div className="text-xs text-slate-600 text-center">
+          v1.0.5 | Gemini 3 Pro
+        </div>
       </div>
     </div>
   );
