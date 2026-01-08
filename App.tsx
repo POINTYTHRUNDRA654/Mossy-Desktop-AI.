@@ -16,6 +16,15 @@ import HyperTerminal from './components/HyperTerminal';
 import TheCortex from './components/TheCortex';
 import TheLens from './components/TheLens';
 import TheNexus from './components/TheNexus';
+import TheConduit from './components/TheConduit';
+import TheSynapse from './components/TheSynapse';
+import TheHive from './components/TheHive';
+import TheBlueprint from './components/TheBlueprint';
+import TheGenome from './components/TheGenome';
+import TheReverie from './components/TheReverie';
+import TheAnima from './components/TheAnima';
+import TheSplicer from './components/TheSplicer';
+import ThePrism from './components/ThePrism';
 
 // Define window interface for AI Studio helpers
 declare global {
@@ -54,6 +63,15 @@ const App: React.FC = () => {
             <Route path="/monitor" element={<SystemMonitor />} />
             <Route path="/chat" element={<ChatInterface />} />
             <Route path="/lens" element={<TheLens />} />
+            <Route path="/synapse" element={<TheSynapse />} />
+            <Route path="/hive" element={<TheHive />} />
+            <Route path="/blueprint" element={<TheBlueprint />} />
+            <Route path="/genome" element={<TheGenome />} />
+            <Route path="/reverie" element={<TheReverie />} />
+            <Route path="/anima" element={<TheAnima />} />
+            <Route path="/splicer" element={<TheSplicer />} />
+            <Route path="/prism" element={<ThePrism />} />
+            <Route path="/conduit" element={<TheConduit />} />
             <Route path="/cortex" element={<TheCortex />} />
             <Route path="/terminal" element={<HyperTerminal />} />
             <Route path="/orchestrator" element={<WorkflowOrchestrator />} />

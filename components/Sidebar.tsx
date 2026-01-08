@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard } from 'lucide-react';
+import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
   const [bridgeConnected, setBridgeConnected] = useState(false);
@@ -19,7 +19,16 @@ const Sidebar: React.FC = () => {
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'The Nexus' },
     { to: '/chat', icon: MessageSquare, label: 'Talk to Mossy' },
+    { to: '/prism', icon: Triangle, label: 'The Prism' },
+    { to: '/anima', icon: Flame, label: 'The Anima' },
+    { to: '/reverie', icon: Sparkles, label: 'The Reverie' },
+    { to: '/genome', icon: Dna, label: 'The Genome' },
+    { to: '/hive', icon: Hexagon, label: 'The Hive' },
+    { to: '/blueprint', icon: DraftingCompass, label: 'The Blueprint' },
+    { to: '/synapse', icon: Workflow, label: 'The Synapse' },
+    { to: '/splicer', icon: Binary, label: 'The Splicer' },
     { to: '/lens', icon: Aperture, label: 'The Lens' },
+    { to: '/conduit', icon: Satellite, label: 'The Conduit' },
     { to: '/cortex', icon: BrainCircuit, label: 'The Cortex' },
     { to: '/terminal', icon: SquareTerminal, label: 'HyperTerminal' },
     { to: '/holo', icon: Gamepad2, label: 'The Holodeck' },
