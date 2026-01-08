@@ -12,6 +12,10 @@ import WorkflowOrchestrator from './components/WorkflowOrchestrator';
 import Lorekeeper from './components/Lorekeeper';
 import Holodeck from './components/Holodeck';
 import TheVault from './components/TheVault';
+import HyperTerminal from './components/HyperTerminal';
+import TheCortex from './components/TheCortex';
+import TheLens from './components/TheLens';
+import TheNexus from './components/TheNexus';
 
 // Define window interface for AI Studio helpers
 declare global {
@@ -46,9 +50,12 @@ const App: React.FC = () => {
         <Sidebar />
         <main className="flex-1 relative overflow-hidden">
           <Routes>
-            <Route path="/" element={<Navigate to="/chat" replace />} />
+            <Route path="/" element={<TheNexus />} />
             <Route path="/monitor" element={<SystemMonitor />} />
             <Route path="/chat" element={<ChatInterface />} />
+            <Route path="/lens" element={<TheLens />} />
+            <Route path="/cortex" element={<TheCortex />} />
+            <Route path="/terminal" element={<HyperTerminal />} />
             <Route path="/orchestrator" element={<WorkflowOrchestrator />} />
             <Route path="/lore" element={<Lorekeeper />} />
             <Route path="/holo" element={<Holodeck />} />

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container } from 'lucide-react';
+import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
   const [bridgeConnected, setBridgeConnected] = useState(false);
@@ -17,7 +17,11 @@ const Sidebar: React.FC = () => {
   }, []);
 
   const navItems = [
+    { to: '/', icon: LayoutDashboard, label: 'The Nexus' },
     { to: '/chat', icon: MessageSquare, label: 'Talk to Mossy' },
+    { to: '/lens', icon: Aperture, label: 'The Lens' },
+    { to: '/cortex', icon: BrainCircuit, label: 'The Cortex' },
+    { to: '/terminal', icon: SquareTerminal, label: 'HyperTerminal' },
     { to: '/holo', icon: Gamepad2, label: 'The Holodeck' },
     { to: '/orchestrator', icon: GitBranch, label: 'The Orchestrator' },
     { to: '/vault', icon: Container, label: 'The Vault' },
@@ -47,7 +51,7 @@ const Sidebar: React.FC = () => {
           </p>
         </div>
       </div>
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
