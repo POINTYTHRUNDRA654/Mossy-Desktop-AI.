@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network } from 'lucide-react';
+import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
   const [bridgeConnected, setBridgeConnected] = useState(false);
@@ -18,7 +18,9 @@ const Sidebar: React.FC = () => {
 
   const navItems = [
     { to: '/chat', icon: MessageSquare, label: 'Talk to Mossy' },
+    { to: '/holo', icon: Gamepad2, label: 'The Holodeck' },
     { to: '/orchestrator', icon: GitBranch, label: 'The Orchestrator' },
+    { to: '/vault', icon: Container, label: 'The Vault' },
     { to: '/lore', icon: Network, label: 'The Lorekeeper' },
     { to: '/workshop', icon: Hammer, label: 'The Workshop' },
     { to: '/images', icon: Image, label: 'Image Studio' },

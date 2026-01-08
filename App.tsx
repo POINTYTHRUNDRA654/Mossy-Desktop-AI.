@@ -10,6 +10,8 @@ import DesktopBridge from './components/DesktopBridge';
 import Workshop from './components/Workshop';
 import WorkflowOrchestrator from './components/WorkflowOrchestrator';
 import Lorekeeper from './components/Lorekeeper';
+import Holodeck from './components/Holodeck';
+import TheVault from './components/TheVault';
 
 // Define window interface for AI Studio helpers
 declare global {
@@ -49,6 +51,8 @@ const App: React.FC = () => {
             <Route path="/chat" element={<ChatInterface />} />
             <Route path="/orchestrator" element={<WorkflowOrchestrator />} />
             <Route path="/lore" element={<Lorekeeper />} />
+            <Route path="/holo" element={<Holodeck />} />
+            <Route path="/vault" element={<TheVault />} />
             <Route path="/workshop" element={<Workshop />} />
             <Route path="/live" element={<LiveInterface />} />
             <Route path="/images" element={<ImageSuite />} />
