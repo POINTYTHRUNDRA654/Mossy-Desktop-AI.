@@ -67,8 +67,8 @@ const SystemMonitor: React.FC = () => {
     const t = new Date().toLocaleTimeString();
     if (logs.length === 0 && !isScanning && integrations.length === 0) {
         setLogs([
-        { id: 'init-1', time: t, msg: "[SYSTEM] OmniForge Core Standby...", type: 'info' },
-        { id: 'init-2', time: t, msg: "[WAITING] Awaiting system scan initialization...", type: 'warning' },
+        { id: 'init-1', time: t, msg: "[SYSTEM] Mossy Backend Services Active...", type: 'info' },
+        { id: 'init-2', time: t, msg: "[WAITING] Passive monitoring initialized...", type: 'warning' },
         ]);
     }
 
@@ -218,7 +218,7 @@ const SystemMonitor: React.FC = () => {
         { msg: "System kernel update successful (v4.2.0)", type: 'info' },
         { msg: "Backup routine completed: 45GB transferred", type: 'info' },
         { msg: "Warning: High memory usage detected in render pipeline", type: 'warning' },
-        { msg: "OmniForge service restarted by user", type: 'info' },
+        { msg: "Mossy service restarted by user", type: 'info' },
         { msg: "Connection established with external drive 'Vault_111'", type: 'info' },
         { msg: "NifSkope plugin registered successfully", type: 'info' },
         { msg: "Failed to connect to local Ollama instance (Timeout)", type: 'error' }
@@ -278,7 +278,7 @@ const SystemMonitor: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `omniforge_history_${new Date().toISOString().slice(0,10)}.json`;
+    link.download = `mossy_history_${new Date().toISOString().slice(0,10)}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -546,9 +546,9 @@ const SystemMonitor: React.FC = () => {
         { name: 'Creation Kit (FO4)', category: 'Modding', path: 'C:/Steam/Fallout4/CK.exe' },
         { name: 'NifSkope 2.0', category: 'Modding', path: 'C:/Tools/NifSkope/NifSkope.exe' },
         { name: 'Ollama Service', category: 'AI', path: 'localhost:11434' },
-        { name: 'Stable Diffusion UI', category: 'AI', path: 'localhost:7860' },
-        { name: 'Python 3.10 (Conda)', category: 'System', path: 'env: forge-core' },
-        { name: 'VS Code', category: 'System', path: 'Linked: IPC Server' },
+        { name: 'AMUSE', category: 'AI', path: 'C:/Program Files/Amuse/Amuse.exe' },
+        { name: 'PhotoDemon', category: 'System', path: 'E:/Tools/PhotoDemon/PhotoDemon.exe' },
+        { name: 'GIMP 3.0.4', category: 'System', path: 'C:/Program Files/GIMP 3/bin/gimp-3.0.exe' },
     ];
     
     // Use a copy for processing to allow capturing all found items for the snapshot
@@ -610,7 +610,7 @@ const SystemMonitor: React.FC = () => {
         <div>
             <h2 className="text-2xl font-bold flex items-center gap-3 mb-2 text-forge-accent">
             <Activity className="w-6 h-6" />
-            System Integration Monitor
+            Mossy System Map
             </h2>
             <p className="text-slate-400 text-sm">Real-time telemetry and bridge status.</p>
         </div>
@@ -1006,7 +1006,7 @@ const SystemMonitor: React.FC = () => {
         <div className="flex justify-between items-center border-b border-slate-800 pb-2 mb-2">
             <div className="flex items-center gap-4">
               <h3 className="text-xs font-bold text-slate-500 flex items-center gap-2">
-                <Terminal className="w-3 h-3" /> INTEGRATION LOG
+                <Terminal className="w-3 h-3" /> MOSSY INTEGRATION LOG
               </h3>
               <div className="flex gap-1">
                  <div className="w-2 h-2 rounded-full bg-red-500/50"></div>

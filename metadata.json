@@ -1,6 +1,6 @@
 {
-  "name": "OmniForge AI Assistant",
-  "description": "An advanced desktop assistant specialized in 3D workflows (Blender to Fallout 4), system integration simulation, and multi-modal creation using Gemini 3 and 2.5 models.",
+  "name": "Mossy AI Assistant",
+  "description": "Mossy: Your step-by-step desktop companion for creative workflows, modding, and system integration.",
   "requestFramePermissions": [
     "microphone"
   ]

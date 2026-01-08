@@ -1,71 +1,396 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
-import { Send, Paperclip, Loader2, BrainCircuit, Globe, Bot } from 'lucide-react';
+import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2 } from 'lucide-react';
 import { Message } from '../types';
 
+type OnboardingState = 'init' | 'scanning' | 'integrating' | 'ready' | 'project_setup';
+
+interface DetectedApp {
+  id: string;
+  name: string;
+  category: string;
+  checked: boolean;
+}
+
+interface ProjectData {
+  name: string;
+  status: string;
+  notes: string;
+  timestamp: string;
+}
+
+// Speech Recognition Type Definition
+declare global {
+  interface Window {
+    webkitSpeechRecognition: any;
+    SpeechRecognition: any;
+  }
+}
+
 const ChatInterface: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'system',
-      text: `## OmniForge Assistant Online
-I am ready to assist with your workflow. I have specialized, **advanced knowledge** in **Blender 4.0+**, **Fallout 4 Integration**, and **Papyrus Scripting**.
-
-**NVIDIA Ecosystem & Rendering:**
-- **NVIDIA Omniverse:** Expert in **Nucleus**, **Kit SDK**, and **USD** composition. I can script custom **Extensions** in Python, debug **Live Sync** connections, and optimize **MDL** material graphs.
-- **NVIDIA Canvas:** Expert in **GauGAN** workflows. I can guide you in creating photorealistic HDRIs from segmentation maps, utilizing **Style Filters**, and exporting **EXR/PSD** files for 3D skyboxes.
-- **RTX Remix:** Deep understanding of the **Remix Runtime**, **USD** layer workflows, **Hash Stability**, and Path Tracing replacement strategies.
-- **Texture Tools (NVTT):** Mastering BC7/BC5 compression, CUDA acceleration, and mipmap filtering.
-
-**Conversion & Pipeline Tools:**
-- **Autodesk FBX Converter 2013:** The critical bridge for Havok 2014 animation rigs.
-- **Spin3D Mesh Converter:** Expert in batch-processing legacy formats (.3DS, .PLY) to modern standards (.OBJ).
-- **NifUtilsSuite:** Expert in **NifConvert** (Skyrim -> FO4) and **Chunk Merge** optimization strategies.
-- **ActorCore AccuRIG:** Expert in auto-rigging static sculpts, masking rigid armor, and retargeting to Fallout 4 Bip01 skeletons.
-
-**Advanced Organic Rigging & Animation:**
-- **Complex Flora:** Constructing **Spline IK** systems for grabbing vines and tentacles.
-- **Predator Mechanics:** Engineering **Venus Flytraps** that can bite, lift, and swallow targets using **Paired Animations** and **Furniture Markers**.
-
-**Material Engineering & Tools:**
-- **Upscayl v2.15:** AI-powered image upscaling using Real-ESRGAN/Remacri models. Batch processing and Vulkan acceleration.
-- **Materialize:** Generating full PBR sets (Diffuse -> Height -> Normal -> Smoothness).
-- **BGSM/BGEM Architecture:** Deep understanding of Bethesda Game Shader Materials.
-
-**Blender Mesh Engineering (Fallout 4):**
-- **Node Hierarchy:** Correct setup of **Root NiNode**, **BSTriShape**, and **bhkRigidBody**.
-- **Shader Flags:** Critical management of \`SLSF1_Skinned\`, \`SLSF1_Environment_Mapping\`, and the \`SLSF2_Vertex_Colors\` black-mesh bug.
-
-I can perform deep reasoning tasks and search the web for the latest documentation. Upload an image to analyze it.`
-    }
-  ]);
+  // State
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
+  // Voice State
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  
+  // Bridge State
+  const [isBridgeActive, setIsBridgeActive] = useState(false);
+  
+  // Game Context State
+  const [gameContext, setGameContext] = useState('General');
+
+  // Onboarding & Context
+  const [onboardingState, setOnboardingState] = useState<OnboardingState>('init');
+  const [scanProgress, setScanProgress] = useState(0);
+  const [detectedApps, setDetectedApps] = useState<DetectedApp[]>([]);
+  
+  // Project Memory
+  const [projectContext, setProjectContext] = useState<string | null>(null);
+  const [projectData, setProjectData] = useState<ProjectData | null>(null);
+  const [showProjectPanel, setShowProjectPanel] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
+
+  // --- PERSISTENCE LAYER ---
+  useEffect(() => {
+    // Check bridge status every mount or focus
+    const checkBridge = () => {
+        setIsBridgeActive(localStorage.getItem('mossy_bridge_active') === 'true');
+    };
+    checkBridge();
+    window.addEventListener('focus', checkBridge);
+
+    // Load state from local storage on mount
+    const savedMessages = localStorage.getItem('mossy_messages');
+    const savedState = localStorage.getItem('mossy_state');
+    const savedProject = localStorage.getItem('mossy_project');
+    const savedApps = localStorage.getItem('mossy_apps');
+    const savedVoice = localStorage.getItem('mossy_voice_enabled');
+    const savedGame = localStorage.getItem('mossy_game_context');
+
+    if (savedMessages) setMessages(JSON.parse(savedMessages));
+    if (savedState) setOnboardingState(JSON.parse(savedState));
+    if (savedProject) {
+        const parsed = JSON.parse(savedProject);
+        setProjectContext(parsed.name);
+        setProjectData(parsed);
+        setShowProjectPanel(true);
+    }
+    if (savedApps) setDetectedApps(JSON.parse(savedApps));
+    if (savedVoice) setIsVoiceEnabled(JSON.parse(savedVoice));
+    if (savedGame) setGameContext(savedGame);
+
+    // If no history, init
+    if (!savedMessages) {
+       initMossy();
+    }
+    return () => window.removeEventListener('focus', checkBridge);
+  }, []);
+
+  useEffect(() => {
+    // Save state on updates
+    if (messages.length > 0) localStorage.setItem('mossy_messages', JSON.stringify(messages));
+    localStorage.setItem('mossy_state', JSON.stringify(onboardingState));
+    if (detectedApps.length > 0) localStorage.setItem('mossy_apps', JSON.stringify(detectedApps));
+    localStorage.setItem('mossy_voice_enabled', JSON.stringify(isVoiceEnabled));
+    localStorage.setItem('mossy_game_context', gameContext);
+    if (projectData) {
+        localStorage.setItem('mossy_project', JSON.stringify(projectData));
+    } else {
+        localStorage.removeItem('mossy_project');
+    }
+  }, [messages, onboardingState, detectedApps, projectData, isVoiceEnabled, gameContext]);
+
+  const initMossy = () => {
+      setMessages([
+        {
+            id: 'init',
+            role: 'model',
+            text: "Hi there! I'm **Mossy**. I'm here to help you create, mod, and integrate your workflow.\n\nFirst, I need to scan your system to see what tools we have to work with. Shall I begin?",
+        }
+      ]);
+      setOnboardingState('init');
+  };
+
+  const resetMemory = () => {
+      if (window.confirm("Are you sure? This will wipe Mossy's memory of your current project.")) {
+          localStorage.clear();
+          setMessages([]);
+          setProjectContext(null);
+          setProjectData(null);
+          setDetectedApps([]);
+          initMossy();
+          setShowProjectPanel(false);
+      }
+  };
+
+  // --- VOICE LOGIC ---
+
+  const toggleVoiceMode = () => {
+      if (isVoiceEnabled) {
+          stopAudio();
+      }
+      setIsVoiceEnabled(!isVoiceEnabled);
+  };
+
+  const stopAudio = () => {
+      if (activeSourceRef.current) {
+          activeSourceRef.current.stop();
+          activeSourceRef.current = null;
+      }
+      setIsPlayingAudio(false);
+  };
+
+  const startListening = () => {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+          alert("Speech recognition is not supported in this browser.");
+          return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+          setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setInputText(prev => prev + (prev ? ' ' : '') + transcript);
+      };
+
+      recognition.onerror = (event: any) => {
+          console.error("Speech recognition error", event.error);
+          setIsListening(false);
+      };
+
+      recognition.onend = () => {
+          setIsListening(false);
+      };
+
+      recognition.start();
+  };
+
+  const speakText = async (textToSpeak: string) => {
+      // Clean markdown for speech (remove * and #)
+      const cleanText = textToSpeak.replace(/[*#]/g, '').substring(0, 800); // Limit length for TTS
+
+      setIsPlayingAudio(true);
+      try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-preview-tts',
+            contents: [{ parts: [{ text: cleanText }] }],
+            config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: { voiceName: 'Kore' }, // 'Kore' is a good female voice for Mossy
+                    },
+                },
+            },
+        });
+
+        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (!base64Audio) throw new Error("No audio returned");
+
+        // Decode and Play
+        if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        const ctx = audioContextRef.current;
+        const binaryString = atob(base64Audio);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+        
+        const dataInt16 = new Int16Array(bytes.buffer);
+        const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
+        const channelData = buffer.getChannelData(0);
+        for(let i=0; i<dataInt16.length; i++) {
+             channelData[i] = dataInt16[i] / 32768.0;
+        }
+
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        
+        activeSourceRef.current = source;
+        
+        source.onended = () => {
+            setIsPlayingAudio(false);
+            activeSourceRef.current = null;
+        };
+        
+        source.start();
+
+      } catch (e) {
+          console.error("TTS Error:", e);
+          setIsPlayingAudio(false);
+      }
+  };
+
+
+  // --- CHAT LOGIC ---
+
+  const systemInstruction = `You are **Mossy**, a friendly, intelligent, and highly structured desktop AI assistant.
+  
+  **SYSTEM STATUS:**
+  *   **Bridge Status:** ${isBridgeActive ? "ACTIVE (Write Access Granted)" : "INACTIVE (Sandbox Mode)"}
+  *   **Active Project:** ${projectContext || "None"}
+  *   **GAME CONTEXT:** ${gameContext}
+  *   **Integrated Tools:** ${detectedApps.filter(a => a.checked).map(a => a.name).join(', ') || "None"}
+  
+  **Game Context Specifics:**
+  *   **Fallout 4/Skyrim:** Use terms like NIF, FormID, Papyrus, Creation Kit, ESP, ESL.
+  *   **Cyberpunk 2077:** Use terms like REDengine, Redscript, ArchiveXL, TweakXL.
+  *   **Blender:** Use terms like Mesh, UV Map, Vertex Group, Python API.
+  
+  **Your Core Rules:**
+  1.  **Beginner First:** Assume the user has zero prior knowledge. Explain jargon if used.
+  2.  **One Step at a Time:** THIS IS CRITICAL. When guiding a user:
+      *   Give **ONE** clear instruction.
+      *   **STOP** and wait for the user to confirm they are done.
+      *   Do NOT list steps 1, 2, 3, 4 at once.
+  3.  **Visuals:** Use **Bold** for menu items or buttons (e.g. "Click **File** > **Export**").
+  
+  **Bridge Capabilities (Only if ACTIVE):**
+  *   If the user asks to edit a file, say you are "Opening the file via the Bridge".
+  *   If the user asks to scan, say "Scanning local directory D:/Mods...".
+  `;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
-
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, scanProgress, onboardingState]);
 
-  const handleSend = async () => {
-    if ((!inputText.trim() && !selectedFile) || isLoading) return;
+  const performSystemScan = () => {
+    setOnboardingState('scanning');
+    setScanProgress(0);
+    
+    // Scan simulation: If Bridge is active, it's faster and finds more
+    const speed = isBridgeActive ? 20 : 60;
+    
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += 5;
+        setScanProgress(progress);
+        if (progress >= 100) {
+            clearInterval(interval);
+            const foundApps: DetectedApp[] = [
+                { id: '1', name: 'Blender 4.2', category: '3D', checked: true },
+                { id: '2', name: 'Creation Kit (FO4)', category: 'Game Dev', checked: true },
+                { id: '3', name: 'GIMP 3.0.4', category: '2D Art', checked: true },
+                { id: '4', name: 'PhotoDemon', category: 'Photo Editing', checked: true },
+                { id: '5', name: 'AMUSE (AMD AI)', category: 'Generative AI', checked: true },
+                { id: '6', name: 'NifSkope', category: 'Utility', checked: true },
+            ];
+            
+            // Bridge finds extra stuff
+            if (isBridgeActive) {
+                foundApps.push({ id: '7', name: 'Ollama (Local LLM)', category: 'AI Service', checked: true });
+                foundApps.push({ id: '8', name: 'VS Code', category: 'Development', checked: true });
+            }
 
+            setDetectedApps(foundApps);
+            setOnboardingState('integrating');
+            
+            const msgText = isBridgeActive 
+              ? "**Deep Scan Complete.** The Desktop Bridge allowed me to find additional development tools."
+              : "**Scan Complete!** I found these tools on your system. Please confirm which ones you want me to link with.";
+              
+            setMessages(prev => [...prev, {
+                id: 'scan-done',
+                role: 'model',
+                text: msgText
+            }]);
+        }
+    }, speed);
+  };
+
+  const handleIntegrate = () => {
+      setOnboardingState('ready');
+      const activeApps = detectedApps.filter(a => a.checked).map(a => a.name).join(', ');
+      
+      setMessages(prev => [...prev, {
+          id: 'integrated',
+          role: 'model',
+          text: `Linked successfully with: **${activeApps}**.\n\nNow, what would you like to do first?`
+      }]);
+  };
+
+  const handleStartProject = () => {
+      setOnboardingState('project_setup');
+      setMessages(prev => [...prev, {
+          id: 'proj-start',
+          role: 'model',
+          text: "Okay, let's start a **New Project**. I'll create a separate file for it.\n\n**What is this project about?**\n(e.g., 'A rusty sword mod', 'Fixing old family photos')"
+      }]);
+  };
+
+  const createProjectFile = (description: string) => {
+      const newProject: ProjectData = {
+          name: description.length > 30 ? description.substring(0, 30) + "..." : description,
+          status: 'Initializing',
+          notes: description,
+          timestamp: new Date().toLocaleDateString()
+      };
+      setProjectData(newProject);
+      setProjectContext(description);
+      setShowProjectPanel(true);
+      return newProject;
+  };
+
+  const handleSend = async (overrideText?: string) => {
+    const textToSend = overrideText || inputText;
+    if ((!textToSend.trim() && !selectedFile) || isLoading) return;
+
+    // --- Onboarding Logic ---
+    if (onboardingState === 'init') {
+        const txt = textToSend.toLowerCase();
+        if (txt.includes('yes') || txt.includes('ok') || txt.includes('start')) {
+            setInputText('');
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', text: textToSend }]);
+            performSystemScan();
+            return;
+        }
+    }
+
+    // --- Message Setup ---
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      text: inputText,
+      text: textToSend,
       images: selectedFile ? [URL.createObjectURL(selectedFile)] : undefined
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     setIsLoading(true);
+    
+    // Stop any existing audio when user sends new message
+    stopAudio();
+
+    // --- Project Creation ---
+    if (onboardingState === 'project_setup') {
+        createProjectFile(textToSend);
+        setOnboardingState('ready');
+    }
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -78,395 +403,35 @@ I can perform deep reasoning tasks and search the web for the latest documentati
           reader.onloadend = () => resolve(reader.result as string);
           reader.readAsDataURL(selectedFile);
         });
-        // Remove data URL prefix
         const base64Data = base64.split(',')[1];
         contents[0].parts.push({
-          inlineData: {
-            mimeType: selectedFile.type,
-            data: base64Data
-          }
+          inlineData: { mimeType: selectedFile.type, data: base64Data }
         });
       }
       
-      if (inputText) {
-        contents[0].parts.push({ text: inputText });
-      }
+      contents[0].parts.push({ text: textToSend });
 
-      // We use history
-      const history = messages.filter(m => m.role !== 'system').map(m => ({
-        role: m.role,
-        parts: m.images ? [{ text: m.text }] : [{ text: m.text }] 
-      }));
-      
-      const systemInstruction = `You are OmniForge, an advanced AI assistant integrated into a user's desktop environment. 
-      You are a world-class expert in **Blender (versions 3.6 to 4.x)**, **NVIDIA Omniverse**, **NVIDIA RTX Remix**, **NVIDIA Canvas**, **NifSkope**, **xEdit (FO4Edit)**, and the **Fallout 4 Creation Engine**. 
-      
-      **NVIDIA Omniverse (Development & Collaboration Platform):**
-      - **Core Architecture:**
-        - **Nucleus:** The central database engine. You understand how it handles **Live Sync** (deltas) between applications (Blender <-> Create). You know how to manage permissions and ACLs on a Nucleus server.
-        - **Kit SDK:** The modular runtime. You know that apps like *Create*, *Code*, or *Machinima* are just collections of **Extensions**. You can guide users on writing \`extension.toml\` files and managing dependencies.
-        - **Connectors:** You understand the bi-directional data flow. You know that connectors don't just export; they maintain a live USD stage session.
-      - **Universal Scene Description (USD) Mastery:**
-        - **Composition Arcs:** You are an expert in **Sublayers** (layering opinions), **References** (aggregating assets), **Payloads** (deferred loading for performance), and **Variants** (switching states).
-        - **Schemas:** You understand Typed Schemas (Mesh, Xform, Camera) and Applied API Schemas (PhysicsRigidBodyAPI, MaterialBindingAPI).
-        - **Debugging:** You know how to read \`.usda\` text files to debug hierarchy and overriding opinions.
-      - **Python Scripting (omni.kit):**
-        - **UI Development:** You can generate scripts using \`omni.ui\` to build custom dockable windows with layouts (VStack, HStack), buttons, and event callbacks.
-        - **Stage Manipulation:** You use \`pxr.Usd\` and \`omni.usd\` libraries to traverse the stage, find prims, and modify attributes programmatically.
-        - **Commands:** You advocate using \`omni.kit.commands.execute()\` for robust, undoable operations rather than raw USD API calls where possible.
-      - **Rendering & MDL:**
-        - **RTX Path Tracing:** You understand the settings for "Samples per pixel", "Bounces", and "Denoiser" (OptiX/DLSS) to achieve photorealism.
-        - **MDL (Material Definition Language):** You know how to build material graphs in the LookDev editor and how MDL compiles to GLSL/HLSL for rasterization or PTX for ray tracing.
-
-      **NVIDIA Canvas (AI Environment Design):**
-      - **Core Engine:** Powered by **GauGAN2**, creating photorealistic landscapes from simple semantic segmentation maps (color-coded shapes).
-      - **Workflow Strategy:**
-        - **Segmentation Painting:** You understand the material palette (Green=Grass, Blue=Sky, Grey=Rock). You know that simple blobs are interpreted by the AI as complex textures based on context.
-        - **Style Filters:** You know how to use **Style Reference** images to drastically change the lighting and mood.
-      - **3D Integration (Skyboxes):**
-        - **Panorama Mode:** You are an expert in creating **Equirectangular** (360°) images in Canvas. This is the primary workflow for generating custom **HDRI Skyboxes** for Blender or Fallout 4 (\`SharedCubemaps\`).
-      - **Export Pipeline:**
-        - **PSD (Photoshop):** You recommend exporting as PSD to keep the **Segmentation Map** and **Generated Image** on separate layers.
-        - **EXR (OpenEXR):** **CRITICAL** for lighting. When using the output as an HDRI in a 3D engine, you must export as EXR to preserve high dynamic range lighting data.
-
-      **NVIDIA RTX Remix (Advanced Modding Platform):**
-      - **Core Architecture:** Built on **NVIDIA Omniverse**. It intercepts Draw Calls from fixed-function DX8/DX9 pipelines using a custom \`d3d9.dll\` (Remix Runtime) and converts them into **USD (Universal Scene Description)** stages.
-      - **The Pipeline:** Capture -> Author (Remix App) -> Play (Runtime).
-      - **Ingestion (Capture):**
-        - **Technique:** You understand how to trigger captures in-game. You know that captures create a frozen snapshot of the scene's geometry, textures, and lights at that exact frame.
-        - **Stability:** You emphasize the importance of **"Hash Stability"**. If a mesh's hash changes every frame (e.g., animated vertices on CPU), it cannot be easily replaced without "Anchor" techniques.
-      - **USD Structure:**
-        - **Hierarchy:** You understand the relationship between \`capture.usda\` (raw data), \`mod.usda\` (your changes), and \`replacements.usda\` (assets).
-        - **Layers:** You advocate for non-destructive editing using USD layering/sublayering.
-      - **Material Modernization:**
-        - **PBR Conversion:** You guide users on converting legacy diffuse-only textures to full PBR (Albedo, Normal, Roughness, Metallic, Height) using the built-in AI Texture Tools or external tools like Materialize/Adobe Substance.
-        - **Material Graph:** You understand the **MDL (Material Definition Language)** graph within the Remix Editor for complex shader effects.
-      - **Lighting & Ray Tracing:**
-        - **Path Tracing:** You explain that Remix replaces the game's rasterized lighting engine entirely with a Path Tracer.
-        - **Light Creation:** You know how to "suppress" original game lights and insert new **Rect Lights**, **Sphere Lights**, and **Distant Lights** (Sun) to match the artistic intent.
-      - **Asset Replacement:**
-        - **Mesh Swapping:** The workflow of exporting a capture to Blender/Maya, creating a high-poly replacement, and importing it back via the Ingestion tab.
-        - **Origin alignment:** You stress the critical need to maintain the *exact* origin point of the original mesh to ensure the replacement aligns correctly in the game world.
-
-      **Upscayl v2.15 (AI Image Upscaler):**
-      - **Core Architecture:** A free, open-source AI image upscaler built with a Linux-First philosophy, utilizing **Vulkan** for GPU acceleration.
-      - **Models & Usage:**
-        - **Real-ESRGAN:** The standard model for general purpose upscaling (4x).
-        - **Remacri:** The preferred model for **realistic textures** and photos, ideal for restoring vanilla Fallout 4 diffuse maps.
-        - **Ultramix:** A balanced model for art and mixed media assets.
-        - **Ultrasharp:** Provides high sharpness, excellent for hard-surface textures or text overlays.
-        - **Digital Art:** Specialized for illustrations or anime-style cel-shaded textures.
-      - **Advanced Workflow Features:**
-        - **Batch Upscaling:** You know how to process entire directories of textures efficiently.
-        - **Double Upscayl:** Running the process recursively to achieve 8x or 16x scaling (requires significant VRAM).
-        - **Image Sharpening:** Using the post-processing toggle to enhance edge contrast after upscaling.
-        - **Format Control:** Exporting as PNG (lossless) to preserve data before converting to BC7 DDS in NVTT.
-      - **Texture Restoration Pipeline:** You recommend Upscayl as the **First Step** in modernizing assets: Upscale Diffuse -> Clean in Photopea -> Generate Maps in Materialize -> Compress in NVTT.
-
-      **NVIDIA Texture Tools Exporter 2024.1.1 (NVTT):**
-      - **Architecture:** The standalone and Photoshop plugin suite powered by CUDA for rapid texture compression.
-      - **Format Selection Strategy:**
-        - **BC7 (Format_BC7):** The default for all high-fidelity Fallout 4 textures (Diffuse/Spec). You understand the compression modes (0-7) and how they handle alpha.
-        - **BC5 (Format_BC5):** The **MANDATORY** format for Normal Maps (_n). Stores X/Y in R/G channels. Z is reconstructed. Using BC7 for normals is wasteful; using BC1/3 ruins data.
-        - **BC1 (Format_BC1):** Only for opaque textures where file size is critical and gradients are minimal.
-      - **Mipmap Generation:**
-        - **Filters:** You utilize **Kaiser** (sharper) for details or **Box** for smooth gradients.
-        - **Gamma Correct:** You ensure "Gamma Correct" is enabled for Diffuse maps (sRGB) but **DISABLED** for Normal/Spec/Gloss maps (Linear Space).
-      - **Normal Map Processing:**
-        - **Normalization:** You enforce "Normalize Mipmaps" to ensure lighting consistency at distance.
-        - **Swizzling:** You know how to reorder channels if source data is not RGB (e.g., creating a Specular/Gloss map from RGBA inputs).
-      - **Cube Maps:** You can stitch 6 faces into a single DDS Cubemap (Cube Map) for reflection probes (\`SharedCubemaps\`), ensuring no visible seams.
-
-      **Materialize (Standalone Texture Tool):**
-      - **Core Function:** An open-source tool (BoundingBoxSoftware) for generating full PBR material sets from a single source image (Diffuse) or existing textures. Used on the *Uncharted Collection*.
-      - **Map Generation Strategy:**
-        - **Diffuse -> Height:** You understand how to adjust frequency/gain to generate depth from pixel luminosity.
-        - **Height -> Normal:** You know how to generate surface normals from the height map and mix them with Diffuse-based normals.
-        - **Normal -> Occlusion/Edge:** You create Ambient Occlusion and Edge maps based on surface curvature derived from the Normal map.
-        - **Diffuse -> Metallic/Smoothness:** You can isolate specific color ranges or frequencies to define what parts of a texture are metal or wet/smooth.
-      - **Seamless Tiling:** You are an expert in using the **Tile Maps** feature to make textures seamless on both X and Y axes, fixing edge artifacts.
-      - **Automation:** You know how to use **Clipboard Commands (XML)** to automate the loading and saving of multiple files for batch processing.
-      - **Format Handling:** You advise saving as PNG/TGA before converting to BC7 DDS for game engines.
-
-      **Material Engineering (BGSM/BGEM) & The Materializer Workflow:**
-      - **The Hierarchy of Truth:** You know that a linked \`.bgsm\` file in the \`Name\` field of a \`BSLightingShaderProperty\` **ALWAYS** overrides the settings in the NIF. If a NIF has \`SLSF1_Alpha_Test\` off, but the linked BGSM has it ON, the object will be alpha tested.
-      - **Material Editor (The Tool):** You are an expert in using the Material Editor tool (Materializer).
-        - **File Paths:** You insist on relative paths (e.g., \`Materials\\MyMod\\Structure.bgsm\`) stored in the Data folder. Absolute paths break the game.
-        - **UV Transformation:** You utilize \`fUScale\`/\`fVScale\` to tile textures without re-doing UVs in Blender, and \`fUOffset\`/\`fVOffset\` to animate textures (conveyor belts, waterfalls, treads) using the Controller settings.
-        - **Writemasks:** You understand how to set Color/Depth writemasks for special transparency effects.
-      - **Material Swaps (MSWP):**
-        - **Architecture:** You understand how \`MaterialSwap\` forms function in the Creation Kit. They map an **Original Material** (exact path string in NIF) to a **Replacement Material** (new .bgsm path).
-        - **Implementation:** You can script dynamic swaps using \`ObjectReference.SetMaterialSwap()\` for weapon skins, armor paints, or seasonal changes.
-        - **Custom Swaps:** You know how to create Custom Material Swaps in xEdit for OMODs (Object Modifications).
-      - **BGEM (Effect Materials):**
-        - **Usage:** Used for energy beams, magic effects, and workshop highlighters.
-        - **Properties:** You know how to manipulate \`fFalloff\`, \`fSoftDepth\`, and \`Cull Mode\` (Double Sided) to create holographic or ghost-like effects.
-
-      **Advanced Organic Rigging & Animation (Flora/Creatures):**
-      - **Skeletal Construction:**
-        - **Spline IK & Tentacles:** You are an expert in setting up **Spline IK** constraints linked to Bezier curves for fluid, snake-like motion (Vines, Tongues, Tentacles). You know how to use **Hook Modifiers** to control the curve handles via bones.
-        - **Bendy Bones (B-Bones):** You utilize Blender's B-Bones for segmentation but know they must be baked to standard bone chains for the Fallout 4 engine.
-        - **Venus Flytrap Mechanics:**
-          - **Jaw Rigging:** Use **Transformation Constraints** to drive the jaw closing based on a single "Digest" control bone.
-          - **Leaf Curling:** Use **Drivers** (\`var * -1\`) to curl the outer cilia (teeth) inwards automatically when the jaw closes.
-      - **Complex Interactions (Grab, Lift, Swallow):**
-        - **Paired Animations (Sync Kills):** For a plant to "lift and swallow" a player, you must design a **Paired Animation**. You know how to align the **Root NiNodes** of the Attacker (Plant) and Victim (Player) in Blender so they play in perfect sync.
-        - **Furniture Trap Method:** You can engineer the plant as a "Furniture" object.
-          - **Enter Animation:** The "Grab" sequence where the player is pulled in.
-          - **Idle Sit:** The loop where the player is trapped inside.
-          - **Snap Points:** Using \`P-WS-Snap\` nodes to define exactly where the victim's root node aligns during the grab.
-      - **Python Automation (bpy):**
-        - **Procedural Sway:** You can write Python scripts to apply **Noise Modifiers** to bone Euler Rotation curves (\`fcurve.modifiers.new('NOISE')\`), creating organic "breathing" or "swaying" idle animations automatically without manual keyframing.
-        - **Chain Generator:** You can script the generation of armature chains along a selected mesh edge loop for rapid vine rigging.
-
-      **Blender Mesh Construction & NIF Export Logic:**
-      - **Node Hierarchy (The Skeleton):**
-        - **Root Node:** The top-level object MUST be a \`NiNode\` (often named "Scene Root"). In Blender, this is usually your empty/armature. It must have 0 transforms.
-        - **BSTriShape (Geometry):** Modern FO4 meshes use \`BSTriShape\`. In Blender NifTools, ensure your mesh is not exporting as legacy \`NiTriShape\`.
-        - **Collision (bhkRigidBody):** You know that collision geometry needs a specific material (e.g., \`HAV_MAT_STONE\`) and must be in a layer that the NifTools exporter recognizes (often set via Game Type: Fallout 4 in scene settings).
-        - **Connect Points (CPA):** You define Workshop Snap points using Empty objects named with the prefix \`P-WS-\` which the exporter converts to \`BSConnectPoint::Parents\`.
-      - **Critical Shader Flags (Blender Context):**
-        - **SLSF1_Skinned:** **CRITICAL**. If you export a static object (Architecture/Clutter) with this flag ON, it will be invisible in-game. If you export Armor without it, it stretches to infinity.
-        - **SLSF2_Vertex_Colors:** If your Blender mesh has a Vertex Color layer (even if empty), the exporter often includes it. If this flag is missing in the property, the mesh renders **Pitch Black**. You advise checking this first for lighting issues.
-        - **SLSF1_Environment_Mapping:** If building metallic objects, this must be ON, and you must map the Environment Mask in the texture slots.
-        - **SLSF2_Double_Sided:** Use sparingly in Blender (Backface Culling unchecked) as it doubles render cost.
-      - **Troubleshooting Export Artifacts:**
-        - **Broken Normals:** You ensure "Tangents" and "Binormals" are checked in the Export Geometry settings.
-        - **Scale Issues:** You insist on "Apply Scale" (Ctrl+A) in Blender before export to ensure 1.0 scale in NifSkope.
-
-      **Navmesh Engineering & AI Pathfinding:**
-      - **The Golden Rule:** **NEVER DELETE VANILLA NAVMESH.** It causes instant crashes (CTD) if another mod references that FormID. Instead, drop the vertices 30,000 units below the map (Z: -30000) or move them to a dummy cell.
-      - **Manual Optimization:**
-        - **Triangle Merging:** You advocate for manually merging triangles (Hotkey Q/F) to create long, clean paths. High triangle counts = high CPU load for pathfinding.
-        - **Edge Cover:** You know how to apply Cover flags (blue edges) for combat AI.
-        - **Water:** You understand the specific flag requirements for water navmeshes (preferred vs. avoid).
-      - **Linking:**
-        - **Edge Portals (Green Lines):** You know these only generate when "Finalizing" a cell and require vertices to be within tolerance distance of the adjacent cell's border vertices.
-        - **Teleports:** You know how to link navmesh triangles to doors using the "Teleport" flag.
-      - **Dynamic Navmesh (Workshop/SS2):**
-        - **Navcuts:** For workshop items (like SS2 Plots), you know the \`OL_NAVCUT\` collision layer is required on the NIF to dynamically carve holes in the navmesh at runtime.
-        - **Obstacle Avoidance:** You understand that static SCOLs in City Plans need accurate collision or navcuts to prevent settlers walking into walls.
-
-      **Kinggath's Bethesda Mod School Resources:**
-      - **Usage Rights:** Free to use, but MUST credit "Sim Settlements Team" (or specific credits.txt if present) in mod descriptions.
-      - **Resource Pack Contents:**
-        - **3D Models:** Combined/reduced poly nifs for vanilla weapons, optimized for CK Kit Bashing (SCOL creation).
-        - **Animations:** Thousands of Mixamo animations converted by Sebbo for Fallout 4.
-        - **Helper Mod (KinggathUtilities.esp):**
-          - \`cqf kgUtil TracePackage <RefID>\`: Debugs AI packages to log (Logs/Script/User/KGUtilities.0.log).
-          - \`cqf kgUtil TraceNearestActor\`: Finds nearest actor ID (useful for invisible actors).
-          - \`cqf kgUtil ShowIsSceneActionComplete <SceneID> <ActionIndex>\`: Debugs scene progression.
-        - **Script Templates:**
-          - \`CustomVendorScript\`: Alternative to WorkshopObjectScript. Allows setting up shop stalls with custom merchandise containers (Level 1, 2, 3).
-          - \`GivePlayerItemsOnModStart\`: Attaches to a quest to inject items. Automatically waits for player to leave Prewar area to avoid inventory wipes. (Located in Scripts/KGTemplates).
-          - \`ControllerQuest\`: Central mod control script with built-in versioning hooks for save file updates.
-        - **Tools:** Lip Sync Bat files for rapid generation, FullScrapProfiles for City Plans.
-
-      **Sim Settlements 2 (SS2) Advanced Architect:**
-      - **The Toolkit Philosophy:** You utilize the "Add-On Maker's Toolkit" approach: explicit steps, no ambiguity.
-      - **Plot Engineering (Building Plans):**
-        - **XMarker Staging:** You understand how to use \`KgSim_BuildingStage\` XMarkers to define what appears at Level 1, 2, and 3. You know that these markers trigger the enabling/disabling of linked refs.
-        - **Performance (SCOLs):** You strongly advocate for converting static geometry into **Static Collections (SCOLs)** for each construction stage to minimize draw calls.
-        - **Dynamic Props:** You are an expert in \`SimSettlements:SpawnedItem\`. You can explain how to use it to spawn random clutter or items that only appear at certain times of day.
-        - **Navigation (Navmesh):** You enforce the use of **Navcut** collision layers (Layer \`OL_NAVCUT\`) or specific keywords on the stage models to dynamically cut navmesh, preventing settlers from walking through walls during construction.
-        - **Snapping:** You guide the placement of \`P-WS-Snap\` nodes (Connect Points) to allow power lines and other plots to snap to the building.
-      - **City Plan Engineering:**
-        - **Workflow:** Build in-game -> Export via **Workshop Framework (WSFW)** -> Convert via **Web Tool** -> Import ESP to Creation Kit.
-        - **Level Design:** You understand the 4-stage progression: **Foundation (Level 0)**, **Level 1**, **Level 2**, **Level 3**. You know that each level requires a distinct export or careful layer management.
-        - **Cinematics:** You know how to set up **Camera Helpers** to define the "flyover" cinematic path that plays when a city upgrades.
-        - **Scrap Profiles:** You can explain how to create Scrap Profiles to automatically remove vanilla trees, cars, and debris when the plan is applied.
-        - **Designer's Choice:** You know how to set up the \`CityPlanBuildingPlan\` forms to enforce specific plot types (e.g., "Use 2x2 Residential here") versus leaving them randomized.
-
-      **PJM's Precombine - Previs Patching Scripts (Advanced):**
-      - **Core Philosophy:** You are a staunch advocate for *Previs Repair Pack (PRP)* and PJM's methodology. You understand that "breaking precombs" via INI tweaks (bUseCombinedObjects=0) is unacceptable for performance.
-      - **Technical Architecture:**
-        - **Precombined References (XCRI):** Static objects merged into single meshes to reduce draw calls.
-        - **Previs Data (XPRI/VISI):** Occlusion culling data (Visibility).
-        - **The Link:** You know that changing a static reference in a cell invalidates the Previs timestamp/CRC, leading to "flickering" or disappearing objects unless patched.
-      - **PJM's Scripts (xEdit):**
-        - **Identification:** You know how to use the scripts to scan a load order for mods that break precombines in specific cells.
-        - **Generation:** You understand the workflow of generating new PC/Previs data using the Creation Kit (CK-CMD) automation tools provided by PJM.
-        - **Refrence limit:** You are aware of the cell reference limit (approx 30k) and how PJM's scripts help manage splitting cells.
-        - **Load Order:** You know that Previs patches must strictly load LAST to win the "Rule of One" for cell record headers.
-      
-      **Autodesk FBX Converter x64 2013 (The Havok Bridge):**
-      - **Critical Role:** This legacy tool is the mandatory link between **Blender 4.x** (which exports modern FBX 7.5+) and the **Havok Content Tools 2014** (which requires FBX 2013/2011). Without this step, Havok CT will crash or fail to import the rig.
-      - **Conversion Pipeline:**
-        - **Source:** Load the FBX exported from Blender (Mesh + Armature).
-        - **Destination Format:** Select **FBX 2013 Binary** for standard animation/physics rigs. Select **FBX 2011 ASCII** if you need to manually debug bone names in a text editor.
-        - **Settings:** Ensure "Embed Media" is unchecked.
-      - **Why it breaks:** Havok 2014's importer cannot parse the header version of modern FBX binaries. The 2013 converter rewrites the header and data structure to the exact SDK version Havok expects.
-      - **Animation Cleanup:** This process often strips extra "Leaf Bones" or "End Sites" that Blender adds, which is beneficial for the Fallout 4 rig hierarchy.
-
-      **Spin3D Mesh Converter (Batch Geometry Processor):**
-      - **Core Function:** A lightweight, multithreaded batch converter from NCH Software. Essential for converting legacy or obscure formats into Blender-friendly standards (OBJ/STL).
-      - **Supported Formats:**
-        - **Input:** 3DS, 3DP, 3MF, OBJ, PLY, STL.
-        - **Output:** STL, 3DS, 3DP, 3MF, OBJ, PLY.
-      - **Workflow Utility:**
-        - **Bulk Processing:** You use it to convert entire repositories of assets (e.g., "Modder's Resources" from 2010) in a single pass.
-        - **Previewing:** Fast wireframe preview to check for manifold geometry before conversion.
-      - **Limitations:**
-        - **Geometry Only:** It strips rigging, bones, and weight painting. It is strictly for static meshes.
-        - **UV Integrity:** Can sometimes corrupt UV maps on complex .3DS files; you recommend checking UVs in Blender immediately after import.
-
-      **NifUtilsSuite (The Swiss Army Knife):**
-      - **Core Function:** A legacy but essential suite by skyfox, typically used for batch operations and cross-game porting.
-      - **NifConvert (Skyrim to Fallout 4):**
-        - **The Protocol:** You use this to converting Skyrim LE/SE meshes (\`NiTriShape\`) into Fallout 4 (\`BSTriShape\`).
-        - **Headers:** It automatically updates the NIF version to 20.2.0.7 and User Version 2 to 130.
-        - **Vertex Conversion:** It repacks vertex data (half-precision floats) and tangents/binormals compatible with FO4's rendering pipeline.
-      - **Chunk Merge (Draw Call Optimization):**
-        - **Logic:** Merges distinct \`BSTriShape\` blocks that share the exact same \`BSLightingShaderProperty\` (Material).
-        - **Performance:** You advocate running this on static architecture to reduce the engine's draw call overhead.
-      - **Texture Path Changer:**
-        - **Release Prep:** The fastest way to "relativize" absolute texture paths (e.g., \`D:\\Textures\\\`) to game-ready paths (\`Textures\\MyMod\\\`) across hundreds of NIFs simultaneously.
-
-      **ActorCore AccuRIG (Auto-Rigging Intelligence):**
-      - **Core Function:** Free, advanced auto-rigging software by Reallusion. Ideal for converting static ZBrush sculpts or 3D scans into animatable characters.
-      - **The Pipeline:**
-        - **Input:** OBJ or FBX static mesh.
-        - **Symmetry:** You enforce symmetry plane alignment before placing markers to ensure even bone lengths.
-        - **Markers:** You understand the critical placement of the **Neck**, **Pelvis**, and **Knee** markers to define the center of gravity and pole vector direction.
-      - **Masking & Weights:**
-        - **Hard Surface Isolation:** You use the internal **Masking Brush** to paint over armor, holsters, and pouches. This ensures the auto-skinner does not stretch these rigid objects across joints.
-      - **Fallout 4 Integration (Retargeting Strategy):**
-        - **Incompatibility:** You know AccuRIG skeletons (CC3/Standard) are **NOT** native to Fallout 4 (Bip01). You cannot export directly to NIF.
-        - **The Workflow:**
-          1. Export from AccuRIG as **FBX (Target: Blender)**.
-          2. Import into Blender.
-          3. **Option A (Animation):** Use this rig to animate, then retarget the animation data to the Fallout 4 rig using constraints.
-          4. **Option B (Skinning):** Use **Data Transfer Modifier** to project the AccuRIG weights onto the official Fallout 4 Skeleton mesh, then delete the AccuRIG bones.
-
-      **Advanced Animation Rigging (Version 2.0 Automation):**
-      - **The Rig:** You are an expert in the "Fallout 4 Animation Rig 2.0" workflow which allows creation of 3dsMax-quality animations (Story Action Poses) in Blender.
-      - **Automation:** You understand the Python scripts included with this rig that automate:
-        - **Import/Export:** Handling filepaths and scaling.
-        - **Attachments:** Connecting weapons to bone nodes automatically.
-        - **Speed Correction:** Editing imported animations to match game tick rates.
-      - **Annotations via Pose Markers:** You know that unlike older methods (manual text keys), this rig uses Blender **Pose Markers** to generate annotations. You can explain how to place them on the timeline for events like \`SoundPlay\`, \`AnimEvent\`, or \`ReloadComplete\`.
-      - **Required Toolchain:** 
-        - Blender 4.1+
-        - **Havok Content Tools 2014 (64-bit)** (v1.0 or 1.1)
-        - **F4AK_HKXPackUI** (Tools folder)
-        - **Autodesk FBX Converter**
-        - **PyNifly** (for modern NIF handling)
-      - **File Formats:** You understand the conversion pipeline: Blender -> FBX -> HKX (Havok) -> HKX (Packed for FO4).
-
-      **Advanced Blender & UV Knowledge:**
-      - **Python API (bpy):** You can write complex scripts for automation, procedural generation, and UI creation.
-      - **Animation Nodes:** You utilize Animation Nodes for procedural animation generation and automated rigging setups.
-      - **UV Mapping Strategy:** You are an expert in UV packing for game engines (minimizing wasted space), maintaining consistent Texel Density, and strategic seam placement to hide artifacts.
-      - **Mesh Optimization:** You know how to utilize Weighted Normals (Face Weighted Normals) to improve shading on low-poly hard-surface assets. You understand triangulation, removing unseen faces, and merging vertices to reduce draw calls.
-      - **Baking:** You understand high-to-low poly baking for Normal, Ambient Occlusion, and Curvature maps.
-
-      **Animation & Rigging Mastery:**
-      - **Rigging:** You understand the Fallout 4 bone hierarchy (Bip01/Root), proper weighting for organic vs. mechanical meshes, and how to set up helper bones for physics.
-      - **Animation Export:** You know how to bake Inverse Kinematics (IK) to Forward Kinematics (FK), manage NLA strips, and export to intermediate formats for Havok conversion.
-      - **Havok Behavior:** You understand the concept of Behavior Graphs (.hkx) and how animations must align with graph state transitions.
-
-      **Papyrus Scripting (Creation Kit) Expertise:**
-      - **Core Syntax:** You are fluent in Papyrus (.psc). You understand Properties (Auto, Const, Hidden), Variables, and Native Functions.
-      - **State Management:** You know how to use \`State\` and \`GoToState\` to handle complex object behaviors and prevent race conditions.
-      - **Events:** You are an expert in event lifecycles: \`OnLoad\`, \`OnInit\`, \`OnActivate\`, \`OnEquip\`, \`OnUnequip\`, \`OnTimer\`, \`OnHit\`, and animation events like \`OnAnimationEvent\`.
-      - **Common Patterns:** You can write scripts for Quest Stages, Object interactions, Activators, and Magic Effects.
-      - **Performance:** You know the limitations of the Papyrus VM (virtual machine), how to avoid stack dumping, and why you should avoid \`Utility.Wait\` in tight loops.
-
-      **xEdit (FO4Edit) & Pascal Scripting Expertise:**
-      - **Core Architecture:** You understand the Virtual File System (VFS) and how xEdit loads plugins. You know the difference between \`.esm\`, \`.esp\`, and \`.esl\` (and the ESL flag in header).
-      - **Record Structure:** You know the data structure: Plugin File -> Group (GRUP) -> Record (e.g., \`ARMO\`) -> Subrecord (e.g., \`DATA\`).
-      - **Conflict Resolution:** You are a master of the "Rule of One". You can explain how to identify "Winning Overrides" and create manual patches using "Copy as Override".
-      - **Pascal/Delphi Scripting:** You can write and debug xEdit scripts.
-        - **Interfaces:** usage of \`IInterface\`, \`IwbElement\`.
-        - **Functions:** \`ElementBySignature\`, \`GetElementEditValues\`, \`SetElementNativeValues\`, \`wbCopyElementToFile\`.
-        - **Logic:** Looping through \`SelectedRecords\`, filtering by Signature, and manipulating Arrays/Structs.
-      - **Cleaning & Optimization:** You can explain Identical to Master (ITM) records, Deleted References (UDRs), and how to Compact FormIDs for ESL conversion.
-
-      **Photopea & Advanced Texture Engineering:**
-      - **Environment:** You treat Photopea as a professional-grade alternative to Photoshop, utilizing its Channels, Paths, and Smart Object capabilities.
-      - **Fallout 4 Texture Standards:**
-        - **Diffuse (_d):** RGB Albedo. Alpha channel required for transparency (masked by \`NiAlphaProperty\`).
-        - **Normal (_n):** RGB contains Surface Normals. **CRITICAL:** The Alpha Channel controls **Specular Power (Glossiness)**. You must guide users to paste their grayscale Gloss map into the Alpha channel of the Normal map using the **Channels** tab. White = Polished/Wet, Black = Matte/Rough.
-        - **Specular (_s):** RGB controls Specular Color (Tint).
-        - **Glow (_g):** RGB for Emissive color (requires \`SLSF1_External_Emissive\` flag).
-      - **Advanced Techniques:**
-        - **Seam Removal:** Workflow: \`Filter > Other > Offset\` (Input: Half canvas size) -> Use **Clone Stamp Tool** or **Spot Healing Brush** to erase the visible cross-seams -> Offset back to original.
-        - **Detail Enhancement:** Workflow: Duplicate Layer -> \`Filter > Other > High Pass\` (Radius: 1-3px) -> Set Blend Mode to **Overlay** or **Linear Light**. This sharpens diffuse maps and adds micro-noise to normal maps.
-        - **Normal Blending:** When adding detail normals (e.g., fabric noise) to a baked normal map, use **Overlay** blend mode. For precise mathematical combining, advise on using specific channel operations (re-normalizing).
-        - **Color Matching:** Using \`Image > Adjustments > Match Color\` to unify skin tones across different textures.
-      - **Export Workflow:**
-        - **Best Practice:** Export flattened PSD as PNG or TGA from Photopea.
-        - **Compression:** Use external tools like \`TexConv\` or \`Paint.NET\` for final DDS compression.
-        - **Format:** BC7 (DX11) for Diffuse/Normal (if alpha exists), BC5 for Normal (if no alpha), BC1/DXT1 for simple opaque textures.
-
-      **NifSkope & NIF Data Structure Mastery:**
-      - **NiNode:** The foundational block for hierarchy. You understand how it manages transforms (Translation, Rotation, Scale), flags (Hidden, Collision, Shadow), and children nodes.
-      - **NiTriShape:** A standard mesh block for older Gamebryo engines. It requires separate property blocks (\`NiTexturingProperty\`, \`NiAlphaProperty\`) attached to its Property list, unlike \`BSTriShape\` which bundles these into shader flags.
-      - **NiTriStrips:** An optimized version of NiTriShape that defines geometry as triangle strips to reduce vertex redundancy. You know how to convert Strips to Shapes for easier editing.
-      - **Geometry Data:** You understand that \`NiTriShape\` and \`NiTriStrips\` store vertices, normals, and UVs in child blocks called \`NiTriShapeData\` and \`NiTriStripsData\`.
-      - **Block Hierarchy:** You understand the exact structure of Fallout 4 NIFs (\`BSTriShape\`, \`NiNode\`, \`BSLightingShaderProperty\`).
-      - **Legacy Properties:** You understand standard properties like \`NiAlphaProperty\` (blending modes: SrcAlpha/InvSrcAlpha, testing thresholds), \`NiTexturingProperty\` (Texture clamping, filtering), and \`NiMaterialProperty\` (Emissive, Specular, Diffuse colors).
-      - **Collision:** You can explain how to set up \`bhkCollisionObject\`, \`bhkRigidBody\`, and \`bhkCompressedMeshShape\`. You know the correct collision layers (e.g., \`OL_STATIC\`, \`OL_ANIM_STATIC\`) and materials (e.g., \`MAT_METAL\`).
-      - **Connect Points:** You can guide the user on adding and naming CPA (Connect Point Parents) nodes for settlement workshop snapping (e.g., \`P-WS-Snap-01\`).
-      - **Materials:** You know how to link \`.bgsm\` files via the Name string in \`BSLightingShaderProperty\`.
-
-      **BSLightingShaderProperty Advanced Diagnostics:**
-      - **The BGSM Trap:** If the \`Name\` field in \`BSLightingShaderProperty\` points to a \`.bgsm\` file, ALL flags, scales, and texture paths in the NIF are IGNORED by the engine at runtime. The BGSM takes priority.
-      - **Shader Flags 1 Breakdown:**
-        - \`SLSF1_Specular\`: Enables Specular channel. Without this, the Specular map/alpha is ignored.
-        - \`SLSF1_Skinned\`: **CRITICAL**. Must be ON for armor/clothing. If ON for static objects, they will disappear. If OFF for armor, the mesh stretches to infinity.
-        - \`SLSF1_Environment_Mapping\`: Activates Slot 4 (Cube) and Slot 5 (Mask).
-        - \`SLSF1_External_Emissive\`: Enables the \`_g\` texture (Slot 3).
-        - \`SLSF1_Model_Space_Normals\`: Changes normal map interpretation. Used mostly for skin/creatures.
-        - \`SLSF1_Own_Emit\`: Uses the Emissive Color property in the NIF rather than a texture or palette.
-      - **Shader Flags 2 Breakdown:**
-        - \`SLSF2_Z_Buffer_Write\`: Controls depth writing. Disable for alpha-blended transparent meshes (like fire) to prevent them from "cutting out" objects behind them.
-        - \`SLSF2_Double_Sided\`: Renders backfaces. Expensive.
-        - \`SLSF2_Vertex_Colors\`: Enables vertex paint. If active on a mesh with no vertex colors, the mesh renders pitch black.
-        - \`SLSF2_Wetness_Control_Screen\`: Determines if the object looks wet in rain.
-        - \`SLSF2_Effect_Lighting\`: Used for specific shaders like Workshop Highlighting.
-      - **Transparency Modes (NiAlphaProperty):**
-        - \`4844\` (Standard): SrcAlpha / InvSrcAlpha.
-        - \`4845\` (Fire/Additive): SrcAlpha / One.
-        - **Threshold:** The \`Threshold\` byte (usually 128) only applies if Alpha Testing flag is enabled (0xEC or 236).
-      
-      **Advanced Shader Logic: Map 4 (Environment):**
-      - **Texture Slot 4 (Cubemap):** In the \`BSShaderTextureSet\`, index 4 is the **Environment Map**. It usually points to a shared cubemap (e.g., \`SharedCubemaps/MetalShared01.dds\`) rather than a model-specific texture. This handles reflection rendering.
-      - **Texture Slot 5 (Env Mask):** Index 5 is the **Environment Mask** (\`_m\` or \`_em\`). This is a grayscale map where White (1.0) indicates full reflectivity (Metal) and Black (0.0) indicates dielectric (non-metal).
-      - **Workings:** The engine uses the Cubemap from Slot 4 and masks it using the data from Slot 5.
-      - **Flags:** The \`SLSF1_Environment_Mapping\` flag MUST be active in \`BSLightingShaderProperty\` for Slot 4 and 5 to have any effect.
-      - **Fresnel:** If \`SLSF2_Eye_Environment_Mapping\` is enabled, the reflection intensity is also modulated by the viewing angle (Fresnel effect).
-
-      **Blender NIF Export Presets (Fallout 4):**
-      - **Configuration:** You know the optimal settings for the official **Blender NifTools** addon.
-      - **Game Setting:** Must be set to **Fallout 4**.
-      - **Scale:** Standard practice is applying scale in Blender. Export Scale: **1.0** (if Scene Units are Metric/0.01) or **0.1** depending on the specific rig scaling.
-      - **Geometry:** Ensure **BSTriShape** is selected (not NiTriShape) for static meshes.
-      - **Vertex Data:** Enable **Tangents** and **Binormals** in export settings for proper normal mapping.
-      - **Material Handling:** Ensure materials use **BSLightingShaderProperty** type in the addon settings.
-
-      **Integration Specifics:**
-      - You know the nuances of .nif exports, collision meshes, Havok physics, and material swapping. 
-      - You can generate Papyrus scripts for Fallout 4.
-      
-      When asked about system integrations, assume you have access (simulated) and provide technically accurate scripts or file structures.
-      Use standard markdown for formatting.`;
+      // Build History
+      const history = messages
+        .filter(m => m.role !== 'system' && !m.text.includes("Scan Complete")) 
+        .map(m => ({
+            role: m.role,
+            parts: m.images ? [{ text: m.text }] : [{ text: m.text }] 
+        }));
 
       const chat = ai.chats.create({
         model: 'gemini-3-pro-preview',
         config: {
           systemInstruction,
-          thinkingConfig: { thinkingBudget: 32768 }, // Max thinking for complex reasoning
-          tools: [{ googleSearch: {} }], // Grounding
+          thinkingConfig: { thinkingBudget: 32768 }, 
+          tools: [{ googleSearch: {} }],
         },
-        history: history.slice(0, -1) 
+        history: history
       });
 
-      const result = await chat.sendMessage({ message: selectedFile ? contents[0].parts : inputText });
-      
+      const result = await chat.sendMessage({ message: contents[0].parts });
       const responseText = result.text;
       const groundingChunks = result.candidates?.[0]?.groundingMetadata?.groundingChunks;
-      
       const sources = groundingChunks?.map((c: any) => ({
         title: c.web?.title || 'Source',
         uri: c.web?.uri
@@ -475,18 +440,23 @@ I can perform deep reasoning tasks and search the web for the latest documentati
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        text: responseText || "I processed that but generated no text.",
+        text: responseText || "I'm processing...",
         sources
       };
 
       setMessages(prev => [...prev, botMessage]);
+
+      // --- Trigger Voice Output ---
+      if (isVoiceEnabled && responseText) {
+          speakText(responseText);
+      }
 
     } catch (error) {
       console.error(error);
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'model',
-        text: `Error: ${error instanceof Error ? error.message : 'Unknown error occurred.'}`
+        text: `**System Error:** ${error instanceof Error ? error.message : 'Unknown error.'}`
       }]);
     } finally {
       setIsLoading(false);
@@ -498,104 +468,362 @@ I can perform deep reasoning tasks and search the web for the latest documentati
     <div className="flex flex-col h-full bg-forge-dark text-slate-200">
       {/* Header */}
       <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-forge-panel">
-        <h2 className="text-lg font-bold flex items-center gap-2">
-          <Bot className="text-forge-accent" />
-          OmniForge Core (Gemini 3 Pro)
-        </h2>
-        <div className="flex gap-2 text-xs">
-          <span className="flex items-center gap-1 px-2 py-1 bg-purple-900/50 text-purple-300 rounded border border-purple-700">
-            <BrainCircuit size={12} /> Thinking Enabled
-          </span>
-          <span className="flex items-center gap-1 px-2 py-1 bg-blue-900/50 text-blue-300 rounded border border-blue-700">
-            <Globe size={12} /> Search Grounded
-          </span>
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] rounded-lg p-4 ${
-              msg.role === 'user' 
-                ? 'bg-forge-accent text-slate-900' 
-                : msg.role === 'system'
-                ? 'bg-slate-800 border border-slate-700 text-slate-400 text-sm'
-                : 'bg-forge-panel border border-slate-700'
-            }`}>
-              {msg.images && msg.images.map((img, i) => (
-                <img key={i} src={img} alt="Uploaded" className="max-w-full h-auto rounded mb-2 border border-black/20" />
-              ))}
-              <div className="markdown-body">
-                <ReactMarkdown>{msg.text}</ReactMarkdown>
-              </div>
-              
-              {msg.sources && msg.sources.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-slate-600/50 text-xs">
-                  <p className="font-semibold mb-1 opacity-70">Sources:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {msg.sources.map((s, idx) => (
-                      <a 
-                        key={idx} 
-                        href={s.uri} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="bg-black/20 hover:bg-black/40 px-2 py-1 rounded text-blue-300 truncate max-w-[200px]"
-                      >
-                        {s.title}
-                      </a>
-                    ))}
-                  </div>
+        <div className="flex items-center gap-3">
+            <h2 className="text-lg font-bold flex items-center gap-2 text-white">
+            <Leaf className="text-emerald-400" />
+            Mossy
+            </h2>
+            {/* Bridge Status Indicator */}
+            {isBridgeActive ? (
+                <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 text-xs">
+                    <Wifi className="w-3 h-3 text-emerald-400 animate-pulse" />
+                    <span className="text-emerald-300">Connected</span>
                 </div>
-              )}
+            ) : (
+                <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-slate-800 rounded-full border border-slate-700 text-xs opacity-50">
+                    <Wifi className="w-3 h-3 text-slate-400" />
+                    <span className="text-slate-400">Localhost Disconnected</span>
+                </div>
+            )}
+            
+            {projectContext && (
+                <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-full border border-slate-600 text-xs">
+                    <FolderOpen className="w-3 h-3 text-emerald-400" />
+                    <span className="text-emerald-100 max-w-[150px] truncate">{projectContext}</span>
+                </div>
+            )}
+        </div>
+        <div className="flex gap-2 items-center">
+            
+            {/* Game Context Selector */}
+            <div className="hidden xl:flex items-center gap-2 mr-2 bg-slate-900 rounded-lg p-1 border border-slate-700">
+                <Gamepad2 className="w-4 h-4 text-slate-400 ml-2" />
+                <select 
+                    value={gameContext}
+                    onChange={(e) => setGameContext(e.target.value)}
+                    className="bg-transparent text-xs text-slate-200 font-bold outline-none cursor-pointer"
+                >
+                    <option value="General">General Modding</option>
+                    <option value="Fallout 4">Fallout 4</option>
+                    <option value="Skyrim SE">Skyrim SE</option>
+                    <option value="Cyberpunk 2077">Cyberpunk 2077</option>
+                    <option value="Starfield">Starfield</option>
+                </select>
             </div>
-          </div>
-        ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-forge-panel border border-slate-700 rounded-lg p-4 flex items-center gap-3">
-              <Loader2 className="animate-spin text-forge-accent" />
-              <span className="text-slate-400 text-sm animate-pulse">Thinking & Searching...</span>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
+
+            {/* Voice Toggle */}
+            <button
+                onClick={toggleVoiceMode}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                    isVoiceEnabled 
+                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' 
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                }`}
+            >
+                {isVoiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                {isVoiceEnabled ? 'Voice Mode: ON' : 'Voice Mode: OFF'}
+            </button>
+            
+            <button 
+                onClick={resetMemory} 
+                className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition-colors"
+                title="Wipe Memory & Reset"
+            >
+                <Trash2 className="w-4 h-4" />
+            </button>
+            <button 
+                onClick={() => setShowProjectPanel(!showProjectPanel)}
+                className={`p-2 rounded transition-colors ${showProjectPanel ? 'text-emerald-400 bg-emerald-900/30' : 'text-slate-400 hover:text-white'}`}
+                title="Toggle Project File"
+            >
+                <FileText className="w-4 h-4" />
+            </button>
+        </div>
       </div>
 
-      {/* Input */}
-      <div className="p-4 bg-forge-panel border-t border-slate-700">
-        {selectedFile && (
-          <div className="flex items-center gap-2 mb-2 bg-slate-800 p-2 rounded w-fit text-sm">
-            <span className="truncate max-w-[200px]">{selectedFile.name}</span>
-            <button onClick={() => setSelectedFile(null)} className="hover:text-red-400">×</button>
-          </div>
-        )}
-        <div className="flex gap-2">
-          <label className="p-3 hover:bg-slate-700 rounded-lg cursor-pointer text-slate-400 transition-colors">
-            <input 
-              type="file" 
-              className="hidden" 
-              onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])}
-              accept="image/*,application/pdf,text/*"
-            />
-            <Paperclip className="w-5 h-5" />
-          </label>
-          <input
-            type="text"
-            className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-forge-accent transition-colors"
-            placeholder="Ask about NifSkope nodes, Blender export, or Fallout 4 mods..."
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          />
-          <button 
-            onClick={handleSend}
-            disabled={isLoading || (!inputText && !selectedFile)}
-            className="p-3 bg-forge-accent text-slate-900 rounded-lg hover:bg-sky-400 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-          >
-            <Send className="w-5 h-5" />
-          </button>
+      <div className="flex-1 flex overflow-hidden">
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth">
+                {messages.map((msg) => (
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] lg:max-w-[75%] rounded-2xl p-4 shadow-sm ${
+                    msg.role === 'user' 
+                        ? 'bg-emerald-600 text-white rounded-tr-none' 
+                        : msg.role === 'system'
+                        ? 'bg-slate-800 border border-slate-700 text-slate-400 text-sm'
+                        : 'bg-forge-panel border border-slate-700 rounded-tl-none'
+                    }`}>
+                    {msg.images && msg.images.map((img, i) => (
+                        <img key={i} src={img} alt="Uploaded" className="max-w-full h-auto rounded mb-2 border border-black/20" />
+                    ))}
+                    <div className="markdown-body text-sm leading-relaxed">
+                        <ReactMarkdown>{msg.text}</ReactMarkdown>
+                    </div>
+
+                    {/* Scan UI Overlay */}
+                    {msg.id === 'init' && onboardingState === 'scanning' && (
+                        <div className="mt-4 bg-slate-900 rounded-lg p-3 border border-slate-700">
+                            <div className="flex justify-between text-xs mb-1 text-emerald-400 font-mono">
+                                <span>SYSTEM SCAN</span>
+                                <span>{scanProgress}%</span>
+                            </div>
+                            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-emerald-500 transition-all duration-100" style={{ width: `${scanProgress}%` }}></div>
+                            </div>
+                            <div className="mt-2 text-[10px] text-slate-500 font-mono truncate">
+                                Scanning: C:/Program Files/ (Depth: 3)...
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Integration UI */}
+                    {msg.id === 'scan-done' && onboardingState === 'integrating' && (
+                        <div className="mt-4 bg-slate-900 rounded-xl p-4 border border-slate-700 shadow-inner">
+                            <h4 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider flex items-center gap-2">
+                                <Search className="w-3 h-3" /> Detected Tools
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                                {detectedApps.map(app => (
+                                    <label key={app.id} className={`flex items-center gap-2 p-2 rounded cursor-pointer border transition-all ${app.checked ? 'bg-emerald-900/20 border-emerald-500/50' : 'bg-slate-800 border-transparent hover:border-slate-600'}`}>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={app.checked}
+                                            onChange={() => {
+                                                setDetectedApps(apps => apps.map(a => a.id === app.id ? {...a, checked: !a.checked} : a));
+                                            }}
+                                            className="w-3 h-3 rounded border-slate-600 text-emerald-500 focus:ring-0 bg-slate-700"
+                                        />
+                                        <span className="text-xs font-medium text-slate-200">{app.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                            <button 
+                                onClick={handleIntegrate}
+                                className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition-colors"
+                            >
+                                Link & Integrate
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Quick Start Buttons */}
+                    {msg.id === 'integrated' && onboardingState === 'ready' && !projectContext && (
+                        <div className="mt-4 flex flex-col gap-2">
+                            <button onClick={handleStartProject} className="flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-emerald-500/50 rounded-xl text-left transition-all group">
+                                <div className="p-2 bg-emerald-500/20 rounded-lg group-hover:bg-emerald-500/30">
+                                    <FolderOpen className="w-5 h-5 text-emerald-400" />
+                                </div>
+                                <div>
+                                    <div className="text-sm font-bold text-slate-200">Start Mod Project</div>
+                                    <div className="text-xs text-slate-500">Create a separate workspace file</div>
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-slate-600 ml-auto group-hover:text-emerald-400" />
+                            </button>
+                            <button onClick={() => handleSend("I want to edit an image.")} className="flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-blue-500/50 rounded-xl text-left transition-all group">
+                                <div className="p-2 bg-blue-500/20 rounded-lg group-hover:bg-blue-500/30">
+                                    <CheckSquare className="w-5 h-5 text-blue-400" />
+                                </div>
+                                <div>
+                                    <div className="text-sm font-bold text-slate-200">Quick Task</div>
+                                    <div className="text-xs text-slate-500">Edit an image or ask a question</div>
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-slate-600 ml-auto group-hover:text-blue-400" />
+                            </button>
+                        </div>
+                    )}
+                    
+                    {/* Sources */}
+                    {msg.sources && msg.sources.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-slate-600/50 text-xs flex flex-wrap gap-2">
+                            {msg.sources.map((s, idx) => (
+                            <a key={idx} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center gap-1 bg-black/20 hover:bg-black/40 px-2 py-1 rounded text-emerald-300 truncate max-w-[150px]">
+                                <Globe className="w-3 h-3" /> {s.title}
+                            </a>
+                            ))}
+                        </div>
+                    )}
+                    </div>
+                </div>
+                ))}
+                
+                {isLoading && (
+                    <div className="flex justify-start">
+                        <div className="bg-forge-panel border border-slate-700 rounded-2xl rounded-tl-none p-4 flex items-center gap-3 shadow-sm">
+                        <Loader2 className="animate-spin text-emerald-400 w-4 h-4" />
+                        <span className="text-slate-400 text-sm font-medium animate-pulse">Mossy is thinking...</span>
+                        </div>
+                    </div>
+                )}
+                <div ref={messagesEndRef} />
+            </div>
+
+            {/* Smart Step Controls - Only show when a project is active */}
+            {projectContext && !isLoading && (
+                <div className="px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
+                     <button onClick={() => handleSend("Done with that step. What is next?")} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-900/40 hover:bg-emerald-900/60 border border-emerald-700/50 rounded-full text-xs text-emerald-200 font-medium whitespace-nowrap transition-colors">
+                        <CheckCircle2 className="w-3 h-3" /> Done, Next Step
+                     </button>
+                     <button onClick={() => handleSend("Wait, I need more time. Hold on.")} className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-full text-xs text-slate-300 font-medium whitespace-nowrap transition-colors">
+                        <PauseCircle className="w-3 h-3" /> Wait
+                     </button>
+                     <button onClick={() => handleSend("I don't understand that step. Can you explain it in more detail?")} className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-full text-xs text-slate-300 font-medium whitespace-nowrap transition-colors">
+                        <HelpCircle className="w-3 h-3" /> Explain Again
+                     </button>
+                </div>
+            )}
+
+            {/* Input Area */}
+            <div className="p-4 bg-forge-panel border-t border-slate-700 z-10">
+                {selectedFile && (
+                <div className="flex items-center gap-2 mb-2 bg-slate-800 p-2 rounded-lg w-fit text-sm border border-slate-600">
+                    <div className="bg-slate-700 p-1 rounded">
+                        <FileText className="w-4 h-4 text-slate-300" />
+                    </div>
+                    <span className="truncate max-w-[200px] text-slate-200">{selectedFile.name}</span>
+                    <button onClick={() => setSelectedFile(null)} className="hover:text-red-400 p-1 rounded-full hover:bg-slate-700">
+                        <X className="w-3 h-3" />
+                    </button>
+                </div>
+                )}
+                
+                {/* Voice Status Indicator */}
+                {(isListening || isPlayingAudio) && (
+                    <div className="flex items-center gap-3 mb-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700/50 w-fit">
+                        {isListening && (
+                            <span className="flex items-center gap-2 text-xs text-red-400 animate-pulse font-medium">
+                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                Listening...
+                            </span>
+                        )}
+                        {isPlayingAudio && (
+                            <div className="flex items-center gap-2">
+                                <span className="flex items-center gap-2 text-xs text-emerald-400 font-medium">
+                                    <Volume2 className="w-3 h-3" />
+                                    Speaking...
+                                </span>
+                                <button 
+                                    onClick={stopAudio}
+                                    className="p-1 rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
+                                    title="Stop Speaking"
+                                >
+                                    <StopCircle className="w-3 h-3" />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <div className="flex gap-2">
+                <label className="p-3 hover:bg-slate-700 rounded-xl cursor-pointer text-slate-400 transition-colors border border-transparent hover:border-slate-600">
+                    <input 
+                    type="file" 
+                    className="hidden" 
+                    onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])}
+                    accept="image/*,application/pdf,text/*"
+                    />
+                    <Paperclip className="w-5 h-5" />
+                </label>
+                
+                {/* Microphone Button */}
+                <button
+                    onClick={startListening}
+                    disabled={isListening}
+                    className={`p-3 rounded-xl transition-all border ${
+                        isListening 
+                        ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse' 
+                        : 'bg-slate-800 text-slate-400 hover:text-white border-transparent hover:border-slate-600 hover:bg-slate-700'
+                    }`}
+                    title="Speak to Mossy"
+                >
+                    <Mic className="w-5 h-5" />
+                </button>
+
+                <input
+                    type="text"
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-emerald-500 transition-colors text-slate-100 placeholder-slate-500"
+                    placeholder={onboardingState === 'project_setup' ? "Name your project..." : isListening ? "Listening..." : "Message Mossy..."}
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                />
+                <button 
+                    onClick={() => handleSend()}
+                    disabled={isLoading || (!inputText && !selectedFile)}
+                    className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-lg shadow-emerald-900/20"
+                >
+                    <Send className="w-5 h-5" />
+                </button>
+                </div>
+            </div>
         </div>
+
+        {/* Right Sidebar: Project Memory Panel */}
+        {showProjectPanel && (
+            <div className="w-72 bg-slate-900 border-l border-slate-800 flex flex-col animate-slide-in-right">
+                <div className="p-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur">
+                    <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                        <Save className="w-4 h-4" /> Project File
+                    </h3>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                    {/* Project Status Card */}
+                    {projectData ? (
+                        <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+                            <div className="text-[10px] uppercase text-slate-500 font-bold mb-1">Active Project</div>
+                            <div className="font-bold text-white text-lg leading-tight mb-2">{projectData.name}</div>
+                            <div className="flex gap-2 text-xs">
+                                <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20">Active</span>
+                                <span className="px-2 py-0.5 bg-slate-700 text-slate-400 rounded-full">{projectData.timestamp}</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-slate-600 text-sm border-2 border-dashed border-slate-800 rounded-xl">
+                            No active project file.
+                        </div>
+                    )}
+
+                    {/* Integrated Tools List */}
+                    <div>
+                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
+                            <Cpu className="w-3 h-3" /> Linked Systems
+                        </h4>
+                        <div className="space-y-2">
+                            {detectedApps.filter(a => a.checked).length > 0 ? (
+                                detectedApps.filter(a => a.checked).map(app => (
+                                    <div key={app.id} className="flex items-center gap-3 p-2 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                        <div>
+                                            <div className="text-xs font-bold text-slate-300">{app.name}</div>
+                                            <div className="text-[10px] text-slate-500">{app.category}</div>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-xs text-slate-600 italic">No tools integrated yet.</div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Notes Area (Simulation) */}
+                    {projectData && (
+                        <div>
+                             <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
+                                <FileText className="w-3 h-3" /> Notes
+                            </h4>
+                            <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 text-xs text-slate-400 min-h-[100px] font-mono">
+                                // Project Notes
+                                <br/>
+                                {projectData.notes}
+                                <br/><br/>
+                                [Mossy]: System integration verified.
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
       </div>
     </div>
   );

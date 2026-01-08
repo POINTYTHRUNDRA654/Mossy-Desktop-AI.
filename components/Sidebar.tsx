@@ -1,23 +1,49 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { MessageSquare, Radio, Image, Volume2, Activity, Heart } from 'lucide-react';
+import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
+  const [bridgeConnected, setBridgeConnected] = useState(false);
+
+  // Poll for bridge status check
+  useEffect(() => {
+    const checkBridge = () => {
+        const isConnected = localStorage.getItem('mossy_bridge_active') === 'true';
+        setBridgeConnected(isConnected);
+    };
+    checkBridge();
+    const interval = setInterval(checkBridge, 2000); // Check every 2s
+    return () => clearInterval(interval);
+  }, []);
+
   const navItems = [
-    { to: '/', icon: Activity, label: 'System Monitor' },
-    { to: '/chat', icon: MessageSquare, label: 'Expert Chat' },
-    { to: '/live', icon: Radio, label: 'Live Voice' },
+    { to: '/chat', icon: MessageSquare, label: 'Talk to Mossy' },
+    { to: '/orchestrator', icon: GitBranch, label: 'The Orchestrator' },
+    { to: '/lore', icon: Network, label: 'The Lorekeeper' },
+    { to: '/workshop', icon: Hammer, label: 'The Workshop' },
     { to: '/images', icon: Image, label: 'Image Studio' },
-    { to: '/tts', icon: Volume2, label: 'Speech Lab' },
+    { to: '/tts', icon: Mic2, label: 'Audio Studio' },
+    { to: '/monitor', icon: Activity, label: 'System Map' },
+    { to: '/live', icon: Radio, label: 'Live Voice' },
+    { to: '/bridge', icon: Monitor, label: 'Desktop Bridge' },
   ];
 
   return (
     <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-full">
-      <div className="p-6 border-b border-slate-800">
-        <h1 className="text-2xl font-bold text-white tracking-tighter">
-          OMNI<span className="text-forge-accent">FORGE</span>
-        </h1>
-        <p className="text-xs text-slate-500 mt-1">AI Integrated Workspace</p>
+      <div className="p-6 border-b border-slate-800 flex items-center gap-2">
+        <Leaf className="w-6 h-6 text-emerald-400" />
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tighter">
+            MOSSY<span className="text-emerald-400">.AI</span>
+          </h1>
+          <p className="text-[10px] text-slate-500 uppercase tracking-widest flex items-center gap-1">
+             {bridgeConnected ? (
+                 <span className="text-emerald-400 flex items-center gap-1"><Wifi className="w-3 h-3" /> LINKED</span>
+             ) : (
+                 <span className="text-slate-600 flex items-center gap-1"><WifiOff className="w-3 h-3" /> WEB MODE</span>
+             )}
+          </p>
+        </div>
       </div>
       <nav className="flex-1 p-4 space-y-2">
         {navItems.map((item) => (
@@ -27,7 +53,7 @@ const Sidebar: React.FC = () => {
             className={({ isActive }) =>
               `flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                 isActive 
-                  ? 'bg-forge-accent text-slate-900 font-bold shadow-[0_0_15px_rgba(56,189,248,0.3)]' 
+                  ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30' 
                   : 'text-slate-400 hover:bg-slate-800 hover:text-white'
               }`
             }
@@ -42,10 +68,10 @@ const Sidebar: React.FC = () => {
       <div className="p-4 border-t border-slate-800">
         <button className="w-full mb-4 group relative px-4 py-2 flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-pink-500/10 to-rose-500/10 border border-pink-500/20 hover:border-pink-500/50 hover:from-pink-500/20 hover:to-rose-500/20 transition-all cursor-pointer">
             <Heart className="w-4 h-4 text-pink-400 group-hover:scale-110 transition-transform group-hover:fill-pink-400/20" />
-            <span className="text-sm font-semibold text-pink-300 group-hover:text-pink-200">Sponsor Project</span>
+            <span className="text-sm font-semibold text-pink-300 group-hover:text-pink-200">Support Mossy</span>
         </button>
         <div className="text-xs text-slate-600 text-center">
-          v1.0.5 | Gemini 3 Pro
+          v2.4.0 | Workshop Enabled
         </div>
       </div>
     </div>
