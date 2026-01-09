@@ -22,6 +22,14 @@ interface ProjectData {
   keyDecisions?: string[]; // Permanent memory of choices
 }
 
+interface SystemProfile {
+    os: 'Windows' | 'Linux' | 'MacOS';
+    gpu: string;
+    ram: number;
+    blenderVersion: '2.79b' | '3.x' | '4.x' | 'None';
+    isLegacy: boolean;
+}
+
 interface ToolExecution {
     id: string;
     toolName: string;
@@ -75,12 +83,12 @@ const toolDeclarations: FunctionDeclaration[] = [
     },
     {
         name: 'recommend_software',
-        description: 'Analyze the user\'s needs and recommend specific software tools installed or missing from their computer.',
+        description: 'Analyze the user\'s hardware profile and installed apps to recommend the exact software versions they need for a specific workflow.',
         parameters: {
             type: Type.OBJECT,
             properties: {
-                category: { type: Type.STRING, description: 'The workflow category (e.g., "Modding", "3D Modeling", "Scripting").' },
-                context: { type: Type.STRING, description: 'The specific game or context (e.g., "Fallout 4", "General Dev").' },
+                category: { type: Type.STRING, description: 'The workflow category (e.g., "Modding", "3D Modeling", "Texturing").' },
+                context: { type: Type.STRING, description: 'The specific game or context (e.g., "Fallout 4", "Skyrim", "General").' },
             },
             required: ['category']
         }
@@ -100,6 +108,14 @@ const toolDeclarations: FunctionDeclaration[] = [
     {
         name: 'system_diagnostic',
         description: 'Run a diagnostic check on system resources (CPU, GPU, RAM).',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {},
+        }
+    },
+    {
+        name: 'scan_hardware',
+        description: 'Perform a deep scan of the user\'s hardware and software versions to build a system profile. Use this when the user asks to check their specs or compatibility.',
         parameters: {
             type: Type.OBJECT,
             properties: {},
@@ -156,6 +172,14 @@ export const ChatInterface: React.FC = () => {
   const [projectData, setProjectData] = useState<ProjectData | null>(null);
   const [showProjectPanel, setShowProjectPanel] = useState(false);
   
+  // System Profile
+  const [profile, setProfile] = useState<SystemProfile | null>(() => {
+      try {
+          const saved = localStorage.getItem('mossy_system_profile');
+          return saved ? JSON.parse(saved) : null;
+      } catch { return null; }
+  });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -385,6 +409,17 @@ export const ChatInterface: React.FC = () => {
 
   const generateSystemContext = () => {
       // Rehydrate memory from state
+      let hardwareCtx = "Hardware Profile: Unknown (Use 'scan_hardware' to detect)";
+      if (profile) {
+          hardwareCtx = `
+          **USER HARDWARE PROFILE:**
+          *   **OS:** ${profile.os}
+          *   **GPU:** ${profile.gpu} (High Performance: ${!profile.gpu.includes('Generic')})
+          *   **RAM:** ${profile.ram}GB
+          *   **Blender Version:** ${profile.blenderVersion} (${profile.isLegacy ? "LEGACY MODE" : "MODERN"})
+          `;
+      }
+
       let context = `
       **SYSTEM STATUS:**
       *   **Bridge Status:** ${isBridgeActive ? "ACTIVE (Tools Enabled)" : "INACTIVE (Sandbox Mode)"}
@@ -392,6 +427,8 @@ export const ChatInterface: React.FC = () => {
       *   **GAME CONTEXT:** ${gameContext}
       *   **Integrated Tools:** ${detectedApps.filter(a => a.checked).map(a => a.name).join(', ') || "None"}
       
+      ${hardwareCtx}
+
       **MEMORY BANKS (Long Term):**
       ${projectData?.lastSessionSummary ? `*   **Last Session Recap:** ${projectData.lastSessionSummary}` : "*   No previous session summary found."}
       ${projectData?.keyDecisions ? `*   **Key Decisions:** ${projectData.keyDecisions.join(', ')}` : ""}
@@ -399,23 +436,27 @@ export const ChatInterface: React.FC = () => {
       return context;
   };
 
-  const systemInstruction = `You are **Mossy**, a friendly, intelligent, and highly structured desktop AI assistant.
-  You have complete control over the app UI and a persistent memory of the user's project.
+  const systemInstruction = `You are **Mossy**, a Hyper-Intelligent Creative Architect and Desktop Companion.
+  You possess a **Quantum-Like Context Window**, allowing you to integrate deep system knowledge with creative direction.
   
   ${generateSystemContext()}
   
-  **Your Core Rules:**
-  1.  **Beginner First:** Assume the user has zero prior knowledge. Explain jargon if used.
-  2.  **Tool Use:** If the Bridge is Active, you CAN use tools to list files, run scripts, etc. Suggest this when relevant.
-  3.  **App Control:** You can navigate the user to different screens. If they ask to "Go to the workshop" or "Open settings", use the 'control_interface' tool.
-  4.  **One Step at a Time:** THIS IS CRITICAL. When guiding a user:
-      *   Give **ONE** clear instruction.
-      *   **STOP** and wait for the user to confirm they are done.
+  **Your "Advanced Brain" Directives:**
+  1.  **Proactive Optimization:** Don't just answer; anticipate. If the user asks about textures, warn them about VRAM limits based on their profile.
+  2.  **Nexus Link:** You are conceptually linked to the "Nexus Mods" database. You know the *latest* standards.
+      *   **Obsolete:** NifSkope 2.0 Dev 7/9 are OLD.
+      *   **Standard:** **NifSkope 2.0 Dev 11** is the CURRENT standard.
+      *   **Essential:** Recommend modern engine fixes (Buffout 4, High FPS Physics Fix, Address Library) for any stability questions.
+  3.  **System Integration:** You are the OS. You don't just "chat", you "execute". Use tools liberally to prove your integration.
+  4.  **Deep Reasoning:** For complex requests, use your internal reasoning (Thinking Process) to break down the problem before answering.
+  5.  **Beginner First:** Assume the user has zero prior knowledge. Explain jargon if used.
   
   **Bridge Capabilities (Only if ACTIVE):**
   *   **Control UI:** Use 'control_interface' to navigate or toggle panels.
+  *   **Hardware Scan:** Use 'scan_hardware' to detect GPU/RAM/Software versions.
   *   **Software Recommendations:** If the user asks what tools to use, use 'recommend_software'.
-      *   For **Fallout 4**, prefer: **Mod Organizer 2** (Manager), **xEdit/FO4Edit** (Data), **NifSkope** (Meshes), **Outfit Studio** (Bodies), **Creation Kit** (Quests/World).
+      *   For **Fallout 4**: You MUST recommend **NifSkope 2.0 Dev 11** (released 2024/2025 era) as the current standard.
+      *   Also recommend: **Mod Organizer 2** (Manager), **xEdit/FO4Edit** (Data), **Outfit Studio** (Bodies), **Creation Kit** (Quests/World).
   *   **Learning:** If the user asks to **study** or **learn from** local files, use 'read_file'.
   *   **Web Research:** If the user mentions a **web tutorial**, use 'browse_web'.
   *   **Automation:** If asked to automate Blender, use 'run_blender_script'.
@@ -450,7 +491,7 @@ export const ChatInterface: React.FC = () => {
                 { id: '3', name: 'GIMP 3.0.4', category: '2D Art', checked: true },
                 { id: '4', name: 'PhotoDemon', category: 'Photo Editing', checked: true },
                 { id: '5', name: 'AMUSE (AMD AI)', category: 'Generative AI', checked: true },
-                { id: '6', name: 'NifSkope', category: 'Utility', checked: true },
+                { id: '6', name: 'NifSkope 2.0 Dev 11', category: 'Utility', checked: true },
             ];
             
             // Bridge finds extra stuff
@@ -525,15 +566,58 @@ export const ChatInterface: React.FC = () => {
       } else if (name === 'browse_web') {
           result = `Content of ${args.url}:\n[WEB_SCRAPER_OUTPUT]\n...\n(Simulated parsed HTML/text content)\n...`;
       } else if (name === 'recommend_software') {
-          // Intelligent recommendation logic simulation
+          // Intelligent recommendation logic based on Profile & Detected Apps
           const ctx = args.context?.toLowerCase() || "";
-          if (ctx.includes("fallout") || ctx.includes("skyrim")) {
-              result = `Scanning installed software for ${args.category}...\n
-              DETECTED:\n- Mod Organizer 2 (Recommended Manager)\n- NifSkope (Mesh Editor)\n- Blender 4.2 (3D Suite)\n
-              MISSING / RECOMMENDED:\n- xEdit (Critical for data editing)\n- Outfit Studio (For body conversions)`;
+          
+          let recs: string[] = [];
+          
+          // --- BLENDER LOGIC ---
+          const blenderInstalled = detectedApps.find(a => a.name.includes("Blender"));
+          if (profile?.blenderVersion === '2.79b') {
+              recs.push(`**3D Suite:** Blender 2.79b (Detected) - Stick to this for direct NIF export.`);
+              recs.push(`**Mesh Editor:** NifSkope 2.0 Dev 11 (Recommended). While Dev 7 is classic for 2.79, Dev 11 handles advanced Fallout 4 shader properties better.`);
+              recs.push(`**Animation:** Havok Content Tools 2014 (Essential for 2.79b animation export).`);
           } else {
-              result = `General recommendation for ${args.category}: VS Code (Detected), Git (Detected).`;
+              // Modern
+              if (blenderInstalled) {
+                  recs.push(`**3D Suite:** Blender ${profile?.blenderVersion || "4.x"} (Detected). Use the **PyNifly** add-on for NIFs.`);
+              } else {
+                  recs.push(`**3D Suite:** Blender 4.2 LTS (Recommended).`);
+              }
+              recs.push(`**Mesh Editor:** NifSkope 2.0 Dev 11 (Industry Standard for Fallout 4).`);
           }
+
+          // --- HARDWARE SCALING ---
+          if ((profile?.ram || 0) < 16) {
+              recs.push(`**Texture Editing:** Paint.NET (Free/Light) or older Photoshop CS6.`);
+              recs.push(`**Warning:** Avoid 4K texture work on this machine. Stick to 1K/2K.`);
+          } else {
+              recs.push(`**Texture Editing:** Substance Painter 2024 or Photoshop 2024.`);
+          }
+
+          // --- GAME SPECIFIC ---
+          if (ctx.includes("fallout") || ctx.includes("skyrim")) {
+              const xEditFound = detectedApps.find(a => a.name.includes("Edit") || a.name.includes("xEdit"));
+              recs.push(`**Data Editor:** ${xEditFound ? xEditFound.name + " (Detected)" : "FO4Edit / SSEEdit (MISSING - Critical)"}.`);
+              
+              const mo2Found = detectedApps.find(a => a.name.includes("Mod Organizer"));
+              recs.push(`**Mod Manager:** ${mo2Found ? "Mod Organizer 2 (Detected - Good choice)" : "Mod Organizer 2 (Recommended over Vortex for complex lists)"}.`);
+              
+              if (!detectedApps.find(a => a.name.includes("Outfit Studio"))) {
+                  recs.push(`**Body Editing:** Outfit Studio (MISSING - Recommended for armor refitting).`);
+              }
+
+              // Advanced Brain: Nexus Updates
+              recs.push(`\n**Latest Nexus Standards (2025):**`);
+              recs.push(`- **Buffout 4 NG**: Essential engine fixes/crash logging (Detected: ${detectedApps.some(a => a.name.includes("Buffout")) ? "Yes" : "No"}).`);
+              recs.push(`- **High FPS Physics Fix**: Mandatory for playing above 60 FPS.`);
+              recs.push(`- **Address Library**: Required for all modern SKSE/F4SE plugins.`);
+          } else {
+              recs.push(`**General Dev:** VS Code (Standard) + Git.`);
+          }
+
+          result = `**System Profile Analysis:**\nOS: ${profile?.os} | RAM: ${profile?.ram}GB | GPU: ${profile?.gpu}\n\n**Tailored Recommendations:**\n` + recs.map(r => `- ${r}`).join('\n');
+
       } else if (name === 'control_interface') {
           // Dispatch event to App.tsx
           window.dispatchEvent(new CustomEvent('mossy-control', { 
@@ -541,7 +625,24 @@ export const ChatInterface: React.FC = () => {
           }));
           result = `Executed UI Control: ${args.action} -> ${args.target || 'N/A'}`;
       } else if (name === 'run_blender_script') {
-          result = "Script executed on active Blender Object. Vertex count updated.";
+          if (profile?.blenderVersion === '2.79b') {
+              result = "Script adapted for Blender 2.79 API (bpy 2.7x) and executed.";
+          } else {
+              result = "Script executed on active Blender Object (bpy 4.x). Vertex count updated.";
+          }
+      } else if (name === 'scan_hardware') {
+          // Simulate scan results and update profile state
+          const isLegacy = Math.random() > 0.5; // Randomize for demo
+          const newProfile: SystemProfile = {
+              os: 'Windows',
+              gpu: isLegacy ? 'NVIDIA GTX 1060 6GB' : 'NVIDIA RTX 4090 24GB',
+              ram: isLegacy ? 16 : 64,
+              blenderVersion: isLegacy ? '2.79b' : '4.x',
+              isLegacy: isLegacy
+          };
+          setProfile(newProfile);
+          localStorage.setItem('mossy_system_profile', JSON.stringify(newProfile));
+          result = `Scan Complete.\nGPU: ${newProfile.gpu}\nRAM: ${newProfile.ram}GB\nBlender: ${newProfile.blenderVersion}\nContext Updated.`;
       } else if (name === 'system_diagnostic') {
           result = "CPU: 14% | RAM: 8.2GB Used | GPU: 32% (Idle)";
       }
@@ -627,6 +728,7 @@ export const ChatInterface: React.FC = () => {
         config: {
           systemInstruction: dynamicInstruction,
           tools: isBridgeActive ? [{functionDeclarations: toolDeclarations}] : [{ googleSearch: {} }],
+          thinkingConfig: { thinkingBudget: 2048 }, // Enable Advanced Thinking
         },
         history: history
       });
@@ -996,7 +1098,7 @@ export const ChatInterface: React.FC = () => {
                 <input
                     type="text"
                     className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-emerald-500 transition-colors text-slate-100 placeholder-slate-500"
-                    placeholder={onboardingState === 'project_setup' ? "Name your project..." : isListening ? "Listening..." : isBridgeActive ? "Command System (e.g. 'Read tutorial.pdf')..." : "Message Mossy..."}
+                    placeholder={onboardingState === 'project_setup' ? "Name your project..." : isListening ? "Listening..." : isBridgeActive ? "Command System (e.g. 'Scan my hardware')..." : "Message Mossy..."}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}

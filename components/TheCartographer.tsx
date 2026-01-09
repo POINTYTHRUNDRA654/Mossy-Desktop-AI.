@@ -36,6 +36,7 @@ const TheCartographer: React.FC = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [zoom, setZoom] = useState(1);
     const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+    const [showPrevis, setShowPrevis] = useState(false);
     
     // Canvas Refs
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -102,6 +103,15 @@ const TheCartographer: React.FC = () => {
 
             ctx.fillRect(room.x * cellSize, room.y * cellSize, room.w * cellSize, room.h * cellSize);
             
+            // Previs/Precombine Overlay (Simulated)
+            if (showPrevis) {
+                ctx.fillStyle = `rgba(255, 0, 255, 0.1)`; // Magenta typical debug color for precombs
+                ctx.fillRect(room.x * cellSize, room.y * cellSize, room.w * cellSize, room.h * cellSize);
+                ctx.strokeStyle = '#d946ef';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(room.x * cellSize + 2, room.y * cellSize + 2, room.w * cellSize - 4, room.h * cellSize - 4);
+            }
+
             // Border
             ctx.strokeStyle = isSelected ? '#fff' : '#94a3b8';
             ctx.lineWidth = isSelected ? 3 : 2;
@@ -137,7 +147,7 @@ const TheCartographer: React.FC = () => {
             ctx.fill();
         });
 
-    }, [levelData, zoom, selectedRoom]);
+    }, [levelData, zoom, selectedRoom, showPrevis]);
 
     const handleCanvasClick = (e: React.MouseEvent) => {
         if (!levelData || !canvasRef.current) return;
@@ -222,10 +232,24 @@ const TheCartographer: React.FC = () => {
                     </h2>
                     <p className="text-xs text-slate-400 font-mono mt-1">Neural Level Design & Layout Engine</p>
                 </div>
-                <div className="flex gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700">
-                    <button onClick={() => setZoom(Math.max(0.5, zoom - 0.2))} className="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><ZoomOut className="w-4 h-4" /></button>
-                    <span className="flex items-center px-2 text-xs font-mono text-slate-500">{Math.round(zoom * 100)}%</span>
-                    <button onClick={() => setZoom(Math.min(3, zoom + 0.2))} className="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><ZoomIn className="w-4 h-4" /></button>
+                
+                <div className="flex items-center gap-4">
+                    {/* Previs Toggle */}
+                    <button 
+                        onClick={() => setShowPrevis(!showPrevis)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                            showPrevis ? 'bg-fuchsia-900/30 border-fuchsia-500/50 text-fuchsia-300' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                        }`}
+                        title="Visualize Precombined Visibility Clusters"
+                    >
+                        <Layers className="w-3 h-3" /> {showPrevis ? 'Previs: ON' : 'Previs: OFF'}
+                    </button>
+
+                    <div className="flex gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700">
+                        <button onClick={() => setZoom(Math.max(0.5, zoom - 0.2))} className="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><ZoomOut className="w-4 h-4" /></button>
+                        <span className="flex items-center px-2 text-xs font-mono text-slate-500">{Math.round(zoom * 100)}%</span>
+                        <button onClick={() => setZoom(Math.min(3, zoom + 0.2))} className="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-white"><ZoomIn className="w-4 h-4" /></button>
+                    </div>
                 </div>
             </div>
 

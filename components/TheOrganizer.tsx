@@ -37,24 +37,34 @@ const initialMods: Mod[] = [
         files: ['Unofficial Fallout 4 Patch.esp', 'Unofficial Fallout 4 Patch - Main.ba2'] 
     },
     { 
-        id: 'cbbe', name: 'Caliente\'s Beautiful Bodies Enhancer', version: '2.6.3', category: 'Models/Textures', enabled: true, priority: 2, 
+        id: 'ppf', name: 'PPF.esm', version: '4.0', category: 'Framework', enabled: true, priority: 2, 
+        conflicts: { overwrites: [], overwrittenBy: [] }, 
+        files: ['PPF.esm'] 
+    },
+    { 
+        id: 'cbbe', name: 'Caliente\'s Beautiful Bodies Enhancer', version: '2.6.3', category: 'Models/Textures', enabled: true, priority: 3, 
         conflicts: { overwrites: [], overwrittenBy: ['skin_texture'] }, 
         files: ['Meshes/Character/Female/FemaleBody.nif', 'Textures/Actors/Character/BaseHumanFemale/FemaleBody_d.dds'] 
     },
     { 
-        id: 'vivid', name: 'Vivid Fallout - All in One', version: '1.9', category: 'Environment', enabled: true, priority: 3, 
+        id: 'vivid', name: 'Vivid Fallout - All in One', version: '1.9', category: 'Environment', enabled: true, priority: 4, 
         conflicts: { overwrites: [], overwrittenBy: ['better_roads'] }, 
         files: ['Textures/Landscape/Ground/Dirt01_d.dds', 'Textures/Landscape/Roads/Road01_d.dds'] 
     },
     { 
-        id: 'better_roads', name: 'Better Roads', version: '1.0', category: 'Environment', enabled: true, priority: 4, 
+        id: 'better_roads', name: 'Better Roads', version: '1.0', category: 'Environment', enabled: true, priority: 5, 
         conflicts: { overwrites: ['vivid'], overwrittenBy: [] }, 
         files: ['Textures/Landscape/Roads/Road01_d.dds'] // This conflicts with vivid
     },
     { 
-        id: 'skin_texture', name: 'Valkyr Female Face Texture', version: '1.0', category: 'Models/Textures', enabled: true, priority: 5, 
+        id: 'skin_texture', name: 'Valkyr Female Face Texture', version: '1.0', category: 'Models/Textures', enabled: true, priority: 6, 
         conflicts: { overwrites: ['cbbe'], overwrittenBy: [] }, 
         files: ['Textures/Actors/Character/BaseHumanFemale/FemaleHead_d.dds'] 
+    },
+    { 
+        id: 'prp', name: 'Previsibines Repair Pack (PRP)', version: '0.69.8', category: 'Optimization', enabled: true, priority: 99, 
+        conflicts: { overwrites: ['vivid', 'better_roads'], overwrittenBy: [] }, 
+        files: ['PRP.esp', 'PRP-Compat.esp'] 
     },
 ];
 
@@ -63,7 +73,7 @@ const initialUtilities: Utility[] = [
     { id: 'ck', name: 'Creation Kit', description: 'Official Editor', isInstalled: false, isRequired: false },
     { id: 'xedit', name: 'FO4Edit', description: 'Conflict Resolution', isInstalled: true, isRequired: true, path: 'Tools/FO4Edit.exe' },
     { id: 'bodyslide', name: 'BodySlide', description: 'Mesh Generator', isInstalled: true, isRequired: true, path: 'Tools/BodySlide x64.exe' },
-    { id: 'nifskope', name: 'NifSkope', description: 'NIF Mesh Editor', isInstalled: false, isRequired: false },
+    { id: 'nifskope', name: 'NifSkope 2.0 Dev 11', description: 'NIF Mesh Editor (Modern)', isInstalled: false, isRequired: false },
     { id: 'loot', name: 'LOOT', description: 'Load Order Tool', isInstalled: false, isRequired: false },
 ];
 
@@ -114,6 +124,8 @@ const TheOrganizer: React.FC = () => {
             1. DLC and Unofficial Patches must be at the top (low priority number).
             2. Large texture packs (Vivid) should be lower than base game but higher than specific small texture replacers (Better Roads).
             3. Body meshes (CBBE) should be overwritten by specific skin textures.
+            4. **CRITICAL:** PRP (Previsibines Repair Pack) MUST be loaded very low (high priority number), AFTER all landscape and worldspace edits, to ensure occlusion culling works correctly.
+            5. PPF.esm should be loaded early, just after Unofficial Patch.
             
             Return JSON: array of mod names in correct order.
             `;
@@ -139,7 +151,7 @@ const TheOrganizer: React.FC = () => {
                 return newMods.map((m, i) => ({ ...m, priority: i }));
             });
             
-            setAnalysisResult("Load order sorted successfully based on semantic categories and overwrite rules.");
+            setAnalysisResult("Load order sorted. PRP prioritized last to prevent Previs flickering.");
 
         } catch (e) {
             console.error(e);

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Bug, AlertTriangle, Activity, Search, FileText, Cpu, ShieldCheck, RefreshCw, CheckCircle2, XCircle, ArrowRight } from 'lucide-react';
+import { Bug, AlertTriangle, Activity, Search, FileText, Cpu, ShieldCheck, RefreshCw, CheckCircle2, XCircle, ArrowRight, Code } from 'lucide-react';
 
 interface CrashLog {
     id: string;
@@ -42,7 +42,7 @@ STACK:
 const TheCrucible: React.FC = () => {
     const [logs, setLogs] = useState<CrashLog[]>(initialLogs);
     const [selectedLog, setSelectedLog] = useState<CrashLog | null>(null);
-    const [analysis, setAnalysis] = useState<{ culprit: string, confidence: string, reason: string, fix: string } | null>(null);
+    const [analysis, setAnalysis] = useState<{ culprit: string, confidence: string, reason: string, fix: string, key_signatures: string[] } | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     const handleSelectLog = (log: CrashLog) => {
@@ -72,8 +72,9 @@ const TheCrucible: React.FC = () => {
             2. Confidence Level (High/Medium/Low).
             3. The Reason (e.g. Tried to access a deleted object, Mesh corruption).
             4. The Fix (e.g. Uninstall mod, check load order).
+            5. Specific technical details from the stack trace (memory addresses, offsets, or function names like "TESObjectREFR" or "Fallout4.exe+..."). Identify the top 3 most relevant technical signatures.
             
-            Return JSON.
+            Return JSON with keys: culprit, confidence, reason, fix, key_signatures (array of strings).
             `;
 
             const response = await ai.models.generateContent({
@@ -90,7 +91,8 @@ const TheCrucible: React.FC = () => {
                     culprit: result.culprit || "Unknown",
                     confidence: result.confidence || "Low",
                     reason: result.reason || "Memory corruption detected.",
-                    fix: result.fix || "Verify game cache."
+                    fix: result.fix || "Verify game cache.",
+                    key_signatures: result.key_signatures || ["0x7FF7B492A1B0 (Fallout4.exe+039A1B0)"]
                 });
                 setIsAnalyzing(false);
             }, 1500);
@@ -101,7 +103,12 @@ const TheCrucible: React.FC = () => {
                 culprit: "BetterMod.esp",
                 confidence: "High",
                 reason: "Null pointer dereference on TESObjectREFR (0x0A001F42). The object 'SuperShotgun' likely has a corrupted mesh or invalid shader property.",
-                fix: "Reinstall 'BetterMod'. Check for NIF corruption in NifSkope."
+                fix: "Reinstall 'BetterMod'. Check for NIF corruption in NifSkope.",
+                key_signatures: [
+                    "0x7FF7B492A1B0 (Fallout4.exe+039A1B0)",
+                    "TESObjectREFR (0x0A001F42)",
+                    "BSLightingShaderProperty"
+                ]
             });
             setIsAnalyzing(false);
         }
@@ -214,6 +221,22 @@ const TheCrucible: React.FC = () => {
                                     }`}>{analysis.confidence}</span>
                                 </div>
                             </div>
+
+                            {/* Stack Signatures */}
+                            {analysis.key_signatures && analysis.key_signatures.length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">
+                                        <Code className="w-3 h-3" /> Key Signatures
+                                    </h4>
+                                    <div className="space-y-1">
+                                        {analysis.key_signatures.map((sig, i) => (
+                                            <div key={i} className="text-[10px] font-mono text-red-300 bg-red-900/10 border border-red-900/30 px-2 py-1 rounded truncate">
+                                                {sig}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Reason */}
                             <div>

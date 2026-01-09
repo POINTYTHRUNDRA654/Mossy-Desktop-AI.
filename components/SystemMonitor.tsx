@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Cpu, HardDrive, Activity, Terminal, Trash2, Search, CheckCircle2, Database, Layers, Radio, ShieldCheck, Zap, History, Archive, FileCode, XCircle, RefreshCw, Save, Clock, RotateCcw, Upload, Download, DownloadCloud, Box, Settings, Hexagon, BrainCircuit, Package, Share2, Users, Key, Globe, Lock, Link, FileText, Copy, Command, Play, HardDriveDownload, Network } from 'lucide-react';
+import { Cpu, HardDrive, Activity, Terminal, Trash2, Search, CheckCircle2, Database, Layers, Radio, ShieldCheck, Zap, History, Archive, FileCode, XCircle, RefreshCw, Save, Clock, RotateCcw, Upload, Download, DownloadCloud, Box, Settings, Hexagon, BrainCircuit, Package, Share2, Users, Key, Globe, Lock, Link, FileText, Copy, Command, Play, HardDriveDownload, Network, Monitor, AlertTriangle } from 'lucide-react';
 
 interface LogEntry {
   id: string;
@@ -15,6 +15,15 @@ interface Integration {
   category: 'AI' | 'Modding' | 'System' | 'Creative' | 'Dev';
   path: string;
   status: 'linked' | 'detected' | 'scanning';
+}
+
+interface SystemProfile {
+    os: 'Windows' | 'Linux' | 'MacOS';
+    gpu: string;
+    ram: number; // GB
+    blenderVersion: '2.79b' | '3.x' | '4.x' | 'None';
+    vram: number; // GB
+    isLegacy: boolean;
 }
 
 interface SystemModule {
@@ -41,7 +50,7 @@ const modulesList: SystemModule[] = [
 ];
 
 const SystemMonitor: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'telemetry' | 'deploy'>('telemetry');
+  const [activeTab, setActiveTab] = useState<'telemetry' | 'deploy' | 'hardware'>('telemetry');
   
   // Telemetry State - Initialize from LocalStorage if available
   const [integrations, setIntegrations] = useState<Integration[]>(() => {
@@ -49,6 +58,14 @@ const SystemMonitor: React.FC = () => {
           const saved = localStorage.getItem('mossy_integrations');
           return saved ? JSON.parse(saved) : [];
       } catch { return []; }
+  });
+
+  // System Profile State
+  const [profile, setProfile] = useState<SystemProfile | null>(() => {
+      try {
+          const saved = localStorage.getItem('mossy_system_profile');
+          return saved ? JSON.parse(saved) : null;
+      } catch { return null; }
   });
 
   const [data, setData] = useState<any[]>([]);
@@ -76,11 +93,16 @@ const SystemMonitor: React.FC = () => {
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const buildLogRef = useRef<HTMLDivElement>(null);
   const installLogRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Persist Integrations whenever they change
+  // Persist Integrations & Profile
   useEffect(() => {
       localStorage.setItem('mossy_integrations', JSON.stringify(integrations));
   }, [integrations]);
+
+  useEffect(() => {
+      if (profile) localStorage.setItem('mossy_system_profile', JSON.stringify(profile));
+  }, [profile]);
 
   // Robust Fallback: If bridge is active, ensure we have integrations populated
   useEffect(() => {
@@ -166,33 +188,65 @@ const SystemMonitor: React.FC = () => {
     if (isScanning) return;
     setIsScanning(true);
     setScanProgress(0);
-    setIntegrations([]); // Clear visual list for dramatic effect, will repopulate
-    addLog("[CORE] Initiating Deep System Scan...", 'info');
+    
+    // Switch to Hardware tab to show scan process
+    setActiveTab('hardware');
+    
+    addLog("[CORE] Initiating Deep Hardware Scan...", 'info');
 
     let step = 0;
     const scanInterval = setInterval(() => {
         step += 2;
         setScanProgress(step);
 
-        if (step === 10) addLog("[SCAN] Verifying Neural Subsystems...", 'info');
-        if (step === 50) addLog("[SCAN] Checking Localhost Bridge...", 'warning');
-        if (step === 80) addLog("[SCAN] Syncing Knowledge Graph...", 'info');
+        if (step === 10) addLog("[SCAN] Probing PCI-E Bus...", 'info');
+        if (step === 30) addLog("[SCAN] Analyzing Memory Topology...", 'info');
+        if (step === 50) addLog("[SCAN] Checking Installed Software Libraries...", 'warning');
+        if (step === 80) addLog("[SCAN] Verifying 3D Engine Capabilities...", 'info');
 
         if (step >= 100) {
             clearInterval(scanInterval);
             setIsScanning(false);
-            addLog("[CORE] Scan Complete. All modules nominal.", 'info');
-            // Restore integrations + some random noise if user clicks manual scan
-            const restored: Integration[] = [
-                { id: '1', name: 'Blender 4.2', category: 'Creative', path: '/usr/bin/blender', status: 'linked' },
-                { id: '2', name: 'Ollama', category: 'AI', path: 'localhost:11434', status: 'linked' },
-                { id: '3', name: 'VS Code', category: 'Dev', path: 'code.exe', status: 'linked' },
-                { id: '4', name: 'KoboldCPP', category: 'AI', path: 'koboldcpp.exe', status: 'linked' },
-                { id: '5', name: 'Stable Diffusion', category: 'AI', path: 'webui-user.bat', status: 'linked' }
-            ];
-            setIntegrations(restored);
+            addLog("[CORE] Scan Complete. Hardware Profile Updated.", 'success');
+            
+            // Generate a random but realistic profile
+            // Randomly assign legacy blender to show feature
+            const isLegacy = Math.random() > 0.7; 
+            const newProfile: SystemProfile = {
+                os: 'Windows',
+                gpu: isLegacy ? 'NVIDIA GTX 1060 6GB' : 'NVIDIA RTX 4090 24GB',
+                ram: isLegacy ? 16 : 64,
+                blenderVersion: isLegacy ? '2.79b' : '4.x',
+                vram: isLegacy ? 6 : 24,
+                isLegacy: isLegacy
+            };
+            setProfile(newProfile);
         }
     }, 50);
+  };
+
+  const handleManualUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          try {
+              const json = JSON.parse(event.target?.result as string);
+              setProfile({
+                  os: json.os || 'Windows',
+                  gpu: json.gpu || 'Generic GPU',
+                  ram: json.ram || 16,
+                  blenderVersion: json.blenderVersion || 'None',
+                  vram: json.vram || 4,
+                  isLegacy: json.blenderVersion === '2.79b'
+              });
+              addLog("Manual System Profile Imported.", 'success');
+          } catch (e) {
+              addLog("Failed to parse system profile.", 'error');
+          }
+      };
+      reader.readAsText(file);
   };
 
   // --- Deployment Logic ---
@@ -238,42 +292,12 @@ const SystemMonitor: React.FC = () => {
       setInstallLog(['> Initializing Setup Wizard v2.4.2', '> Checking Permissions... OK', '> Mounting Local File System...']);
       setFoundTools([]);
 
-      // Enhanced Simulation Sequence - Huge List
+      // Enhanced Simulation Sequence
       const scanSequence = [
-          // OS / Drivers
-          { path: 'C:/Windows/System32/drivers/etc/hosts', found: true, name: 'System32 Host', cat: 'System' },
           { path: 'C:/Windows/System32/nvidia-smi.exe', found: true, name: 'NVIDIA Drivers', cat: 'System' },
-          { path: 'C:/Windows/System32/wsl.exe', found: true, name: 'WSL 2 (Ubuntu)', cat: 'System' },
-          
-          // Creative
-          { path: 'C:/Program Files/Adobe/Adobe Photoshop 2024/Photoshop.exe', found: true, name: 'Photoshop 2024', cat: 'Creative' },
-          { path: 'C:/Program Files/Adobe/Adobe Illustrator 2024/Support Files/Contents/Windows/Illustrator.exe', found: false, name: '', cat: '' },
+          { path: 'C:/Program Files/Blender Foundation/Blender 2.79/blender.exe', found: Math.random() > 0.5, name: 'Blender 2.79b', cat: 'Creative' },
           { path: 'C:/Program Files/Blender Foundation/Blender 4.0/blender.exe', found: true, name: 'Blender 4.0', cat: 'Creative' },
-          { path: 'C:/Program Files/Pixologic/ZBrush 2022/ZBrush.exe', found: true, name: 'ZBrush 2022', cat: 'Creative' },
-          
-          // AI & Neural Services - NETWORK SCAN
           { path: 'tcp://localhost:11434', found: true, name: 'Ollama (Active Service)', cat: 'AI' },
-          { path: 'tcp://localhost:5000', found: true, name: 'KoboldCPP (API)', cat: 'AI' },
-          { path: 'tcp://localhost:7860', found: true, name: 'Stable Diffusion WebUI', cat: 'AI' },
-          { path: 'tcp://localhost:8188', found: true, name: 'ComfyUI Server', cat: 'AI' },
-
-          // AI - FILESYSTEM SCAN
-          { path: 'C:/Program Files/LM Studio/LM Studio.exe', found: true, name: 'LM Studio', cat: 'AI' },
-          { path: 'C:/Program Files/GPT4All/bin/chat.exe', found: true, name: 'GPT4All', cat: 'AI' },
-          { path: 'D:/AI/text-generation-webui/start_windows.bat', found: true, name: 'Oobabooga WebUI', cat: 'AI' },
-          { path: 'D:/AI/LocalAI/local-ai.exe', found: true, name: 'LocalAI', cat: 'AI' },
-
-          // Dev
-          { path: 'C:/Users/User/AppData/Local/Programs/Microsoft VS Code/Code.exe', found: true, name: 'VS Code', cat: 'Dev' },
-          { path: 'C:/Program Files/Git/bin/git.exe', found: true, name: 'Git', cat: 'Dev' },
-          { path: 'C:/Program Files/Docker/Docker/Docker Desktop.exe', found: true, name: 'Docker Desktop', cat: 'Dev' },
-          { path: 'C:/Python311/python.exe', found: true, name: 'Python 3.11', cat: 'Dev' },
-
-          // Modding
-          { path: 'C:/Program Files (x86)/Steam/steamapps/common/Fallout 4/Fallout4.exe', found: true, name: 'Fallout 4', cat: 'Modding' },
-          { path: 'D:/Modding/MO2/ModOrganizer.exe', found: true, name: 'Mod Organizer 2', cat: 'Modding' },
-          { path: 'D:/Tools/xEdit/FO4Edit.exe', found: true, name: 'FO4Edit', cat: 'Modding' },
-          { path: 'D:/Tools/NifSkope/NifSkope.exe', found: true, name: 'NifSkope', cat: 'Modding' },
       ];
 
       let i = 0;
@@ -297,50 +321,33 @@ const SystemMonitor: React.FC = () => {
           }
           const item = scanSequence[i];
           
-          // Enhanced log messages for Network/AI scans
           let logMsg = `Scanning: ${item.path.substring(0, 40)}...`;
-          if (item.path.startsWith('tcp://')) {
-              logMsg = `Port Probe: ${item.path} [NET]...`;
-          }
-          
-          // Show skipped items less frequently to avoid clutter but keep speed
-          if (item.found || Math.random() > 0.7) {
-              setInstallLog(prev => [...prev, `${logMsg} ${item.found ? 'DETECTED' : 'Not Found'}`]);
-          }
-          
-          if (item.found && item.name) {
-              setFoundTools(prev => [...prev, { name: item.name!, category: item.cat! }]);
+          if (item.found) {
+              setInstallLog(prev => [...prev, `${logMsg} DETECTED`]);
+              if (item.name) setFoundTools(prev => [...prev, { name: item.name, category: item.cat }]);
+          } else {
+              if (Math.random() > 0.8) setInstallLog(prev => [...prev, `${logMsg} Not Found`]);
           }
           i++;
-      }, 30); // Faster scan
+      }, 100);
   };
 
   const handleFinishInstaller = () => {
       setShowInstaller(false);
       setActiveTab('telemetry');
-      
-      // Auto-populate integrations based on what we found in the wizard
       const newIntegrations: Integration[] = foundTools.map((tool, index) => ({
           id: `linked-${index}`,
           name: tool.name,
           category: tool.category as any,
-          path: 'C:/Program Files/...', // Mock path
+          path: 'C:/Program Files/...', 
           status: 'linked'
       }));
-      
-      // Add a couple default ones if list is empty (fallback)
       if (newIntegrations.length === 0) {
           newIntegrations.push({ id: 'def-1', name: 'Blender 4.0', category: 'Creative', path: '...', status: 'linked' });
-          newIntegrations.push({ id: 'def-2', name: 'VS Code', category: 'Dev', path: '...', status: 'linked' });
-          newIntegrations.push({ id: 'def-3', name: 'Ollama', category: 'AI', path: '...', status: 'linked' });
       }
-
       setIntegrations(newIntegrations);
-      
-      // Sync with Chat Interface's memory (so Chat knows what apps are available)
       const chatApps = newIntegrations.map(i => ({ id: i.id, name: i.name, category: i.category, checked: true }));
       localStorage.setItem('mossy_apps', JSON.stringify(chatApps));
-      
       addLog(`Desktop Bridge linked with ${newIntegrations.length} applications.`, 'success');
   };
 
@@ -469,6 +476,16 @@ const SystemMonitor: React.FC = () => {
               <Activity className="w-4 h-4" /> Telemetry
           </button>
           <button 
+            onClick={() => setActiveTab('hardware')}
+            className={`px-6 py-3 rounded-t-lg font-bold text-sm transition-colors flex items-center gap-2 ${
+                activeTab === 'hardware' 
+                ? 'bg-slate-800 text-amber-400 border-t border-x border-slate-700' 
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+              <Monitor className="w-4 h-4" /> Hardware Profile
+          </button>
+          <button 
             onClick={() => setActiveTab('deploy')}
             className={`px-6 py-3 rounded-t-lg font-bold text-sm transition-colors flex items-center gap-2 ${
                 activeTab === 'deploy' 
@@ -536,22 +553,6 @@ const SystemMonitor: React.FC = () => {
                 </div>
             )}
 
-            {/* Scan Progress */}
-            {isScanning && (
-                <div className="mb-10 px-1">
-                    <div className="flex justify-between text-xs text-slate-500 mb-2 font-mono uppercase tracking-wider">
-                    <span className="animate-pulse">System Analysis In Progress</span>
-                    <span className="text-forge-accent">{scanProgress}%</span>
-                    </div>
-                    <div className="relative w-full h-3 bg-slate-800 rounded-full">
-                    <div 
-                        className="absolute top-0 left-0 h-full bg-forge-accent shadow-[0_0_15px_#38bdf8] transition-all duration-100 ease-linear rounded-full opacity-80"
-                        style={{ width: `${scanProgress}%` }}
-                    />
-                    </div>
-                </div>
-            )}
-
             {/* Module Grid */}
             <div className="mb-8">
                 <h3 className="text-sm font-bold text-slate-500 mb-3 flex items-center gap-2 uppercase tracking-widest">
@@ -573,36 +574,6 @@ const SystemMonitor: React.FC = () => {
                             <div className="text-[10px] text-slate-500 text-right">{mod.load.toFixed(0)}% Load</div>
                         </div>
                     ))}
-                </div>
-            </div>
-
-            {/* Privacy & Security Card */}
-            <div className="bg-slate-900/50 rounded-xl border border-red-900/30 p-4 mb-6">
-                <h3 className="text-sm font-bold text-red-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4" /> Privacy & Data Sovereignty
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-slate-900 p-3 rounded border border-slate-800 flex items-center gap-3">
-                        <Lock className="w-5 h-5 text-emerald-500" />
-                        <div>
-                            <div className="text-xs font-bold text-white">User Data Air-Gap</div>
-                            <div className="text-[10px] text-slate-500">Personal Info Local Only</div>
-                        </div>
-                    </div>
-                    <div className="bg-slate-900 p-3 rounded border border-slate-800 flex items-center gap-3">
-                        <Share2 className="w-5 h-5 text-yellow-500" />
-                        <div>
-                            <div className="text-xs font-bold text-white">Federated Learning</div>
-                            <div className="text-[10px] text-slate-500">Abstract Patterns Shared</div>
-                        </div>
-                    </div>
-                    <div className="bg-slate-900 p-3 rounded border border-slate-800 flex items-center gap-3">
-                        <Key className="w-5 h-5 text-blue-500" />
-                        <div>
-                            <div className="text-xs font-bold text-white">PII Redaction</div>
-                            <div className="text-[10px] text-slate-500">Active Filter</div>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -677,6 +648,141 @@ const SystemMonitor: React.FC = () => {
                 </div>
             </div>
         </div>
+      )}
+
+      {/* HARDWARE PROFILE TAB */}
+      {activeTab === 'hardware' && (
+          <div className="max-w-6xl mx-auto space-y-8 animate-fade-in">
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+                  <div className="flex justify-between items-start mb-6">
+                      <div>
+                          <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                              <Monitor className="w-6 h-6 text-amber-400" />
+                              Hardware Architecture
+                          </h3>
+                          <p className="text-sm text-slate-400 mt-1">Configure user environment for tailored assistance.</p>
+                      </div>
+                      <div className="flex gap-2">
+                          <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleManualUpload} />
+                          <button 
+                              onClick={() => fileInputRef.current?.click()}
+                              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
+                          >
+                              <Upload className="w-4 h-4" /> Upload Spec JSON
+                          </button>
+                          <button 
+                              onClick={startScan}
+                              disabled={isScanning}
+                              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-slate-900 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors disabled:opacity-50"
+                          >
+                              {isScanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                              {isScanning ? 'Scanning...' : 'Detect Hardware'}
+                          </button>
+                      </div>
+                  </div>
+
+                  {/* Scan Progress */}
+                  {isScanning && (
+                    <div className="mb-8 px-1">
+                        <div className="flex justify-between text-xs text-slate-500 mb-2 font-mono uppercase tracking-wider">
+                        <span className="animate-pulse">Hardware Analysis In Progress</span>
+                        <span className="text-amber-400">{scanProgress}%</span>
+                        </div>
+                        <div className="relative w-full h-3 bg-slate-900 rounded-full">
+                        <div 
+                            className="absolute top-0 left-0 h-full bg-amber-500 shadow-[0_0_15px_#f59e0b] transition-all duration-100 ease-linear rounded-full opacity-80"
+                            style={{ width: `${scanProgress}%` }}
+                        />
+                        </div>
+                    </div>
+                  )}
+
+                  {profile ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 relative overflow-hidden">
+                              <div className="absolute top-0 right-0 p-3 opacity-10"><Cpu className="w-16 h-16 text-amber-400" /></div>
+                              <div className="text-xs text-slate-500 uppercase font-bold mb-2">GPU / Graphics</div>
+                              <div className="text-lg font-bold text-white">{profile.gpu}</div>
+                              <div className="text-sm text-slate-400">{profile.vram} GB VRAM</div>
+                          </div>
+                          
+                          <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 relative overflow-hidden">
+                              <div className="absolute top-0 right-0 p-3 opacity-10"><HardDrive className="w-16 h-16 text-blue-400" /></div>
+                              <div className="text-xs text-slate-500 uppercase font-bold mb-2">System Memory</div>
+                              <div className="text-lg font-bold text-white">{profile.ram} GB RAM</div>
+                              <div className="text-sm text-slate-400">DDR4 / DDR5</div>
+                          </div>
+
+                          <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 relative overflow-hidden">
+                              <div className="absolute top-0 right-0 p-3 opacity-10"><Box className="w-16 h-16 text-orange-400" /></div>
+                              <div className="text-xs text-slate-500 uppercase font-bold mb-2">3D Software</div>
+                              <div className="text-lg font-bold text-white">Blender {profile.blenderVersion}</div>
+                              {profile.blenderVersion === '2.79b' && (
+                                  <div className="mt-2 inline-flex items-center gap-1 text-[10px] bg-orange-900/30 text-orange-400 px-2 py-1 rounded border border-orange-500/30">
+                                      <AlertTriangle className="w-3 h-3" /> Legacy Modding Mode
+                                  </div>
+                              )}
+                          </div>
+                      </div>
+                  ) : (
+                      <div className="text-center py-12 border-2 border-dashed border-slate-700 rounded-xl bg-slate-900/50 text-slate-500">
+                          <Monitor className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                          <p className="mb-2">No hardware profile detected.</p>
+                          <p className="text-xs">Run a scan or upload a profile to enable adaptive assistance.</p>
+                      </div>
+                  )}
+              </div>
+
+              {/* Compatibility Report */}
+              {profile && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+                          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                              <ShieldCheck className="w-5 h-5 text-emerald-400" /> Capability Report
+                          </h3>
+                          <div className="space-y-3 text-sm text-slate-300">
+                              <div className="flex items-center justify-between p-2 bg-slate-900 rounded">
+                                  <span>2K Texture Baking</span>
+                                  {profile.vram >= 6 ? <span className="text-emerald-400">Supported</span> : <span className="text-red-400">Low VRAM</span>}
+                              </div>
+                              <div className="flex items-center justify-between p-2 bg-slate-900 rounded">
+                                  <span>Neural Rendering (AI)</span>
+                                  {profile.vram >= 8 ? <span className="text-emerald-400">Supported</span> : <span className="text-yellow-400">Slow Mode</span>}
+                              </div>
+                              <div className="flex items-center justify-between p-2 bg-slate-900 rounded">
+                                  <span>Creation Kit Multitasking</span>
+                                  {profile.ram >= 16 ? <span className="text-emerald-400">Optimal</span> : <span className="text-red-400">Memory Risk</span>}
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+                          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                              <Settings className="w-5 h-5 text-purple-400" /> Mossy Tuning
+                          </h3>
+                          <p className="text-sm text-slate-400 mb-4">
+                              Assistant behavior adjusted based on detected hardware:
+                          </p>
+                          <ul className="space-y-2 text-xs text-slate-300 list-disc pl-4">
+                              {profile.blenderVersion === '2.79b' ? (
+                                  <>
+                                    <li className="text-orange-300">Legacy Blender knowledge active (NifTools 2.0.dev focus).</li>
+                                    <li>Preferring 'Internal' renderer tips over 'Eevee'.</li>
+                                  </>
+                              ) : (
+                                  <>
+                                    <li className="text-blue-300">Modern Blender workflow active (Geometry Nodes enabled).</li>
+                                    <li className="text-emerald-300">NifSkope Dev 11 detected: Advanced Shader Editing Enabled.</li>
+                                    <li>PyNifly integration enabled.</li>
+                                  </>
+                              )}
+                              {profile.ram < 16 && <li>Asset caching disabled to save RAM.</li>}
+                              <li>Local LLM inference set to {profile.vram > 8 ? 'High' : 'Low'} Precision.</li>
+                          </ul>
+                      </div>
+                  </div>
+              )}
+          </div>
       )}
 
       {/* DEPLOY TAB */}
