@@ -3,6 +3,7 @@ import { GoogleGenAI, Modality, FunctionDeclaration, Type } from "@google/genai"
 import ReactMarkdown from 'react-markdown';
 import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight, Wrench, Radio, Lock, Square, Map, Scroll, Flag, PenTool, Database, Activity } from 'lucide-react';
 import { Message } from '../types';
+import { useLive } from './LiveContext';
 
 type OnboardingState = 'init' | 'scanning' | 'integrating' | 'ready' | 'project_setup';
 
@@ -342,6 +343,9 @@ export const ChatInterface: React.FC = () => {
   // Bridge State
   const [isBridgeActive, setIsBridgeActive] = useState(false);
   
+  // Global Live State
+  const { isActive: isLiveActive, disconnect: disconnectLive } = useLive();
+  
   // Tool Execution State
   const [activeTool, setActiveTool] = useState<ToolExecution | null>(null);
 
@@ -452,6 +456,15 @@ export const ChatInterface: React.FC = () => {
     else localStorage.removeItem('mossy_project');
   }, [onboardingState, detectedApps, projectData, isVoiceEnabled]);
 
+  // Conflict Resolution for Audio
+  useEffect(() => {
+      if (isLiveActive) {
+          // If live is active, disable local voice features to prevent overlap
+          if (isVoiceEnabled) setIsVoiceEnabled(false);
+          if (isPlayingAudio) stopAudio();
+      }
+  }, [isLiveActive]);
+
   const initMossy = () => {
       setMessages([{ id: 'init', role: 'model', text: "Welcome, **Vault Dweller**. I'm **Mossy**, your specialized AI for Fallout 4 modding and architecture.\n\nI need to scan your Pip-Boy... err, system, to check your modding tools. Ready?" }]);
       setOnboardingState('init');
@@ -471,6 +484,7 @@ export const ChatInterface: React.FC = () => {
 
   // --- VOICE LOGIC ---
   const toggleVoiceMode = () => {
+      if (isLiveActive) return; // Can't toggle if live is active
       if (isVoiceEnabled) stopAudio();
       setIsVoiceEnabled(!isVoiceEnabled);
   };
@@ -484,6 +498,11 @@ export const ChatInterface: React.FC = () => {
   };
 
   const startListening = () => {
+      if (isLiveActive) {
+          alert("Live Voice is currently active. Please disconnect Live Voice to use the chat microphone.");
+          return;
+      }
+      
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
           alert("Audio receptors damaged. (Browser not supported)");
@@ -501,7 +520,7 @@ export const ChatInterface: React.FC = () => {
   };
 
   const speakText = async (textToSpeak: string) => {
-      if (!textToSpeak) return;
+      if (!textToSpeak || isLiveActive) return;
       // Optimization: truncate excessively long text to prevent freeze
       const cleanText = textToSpeak.replace(/[*#]/g, '').substring(0, 500); 
       setIsPlayingAudio(true);
@@ -848,15 +867,25 @@ export const ChatInterface: React.FC = () => {
                 <Lock className="w-3 h-3 text-slate-500 ml-2" />
             </div>
 
-            <button
-                onClick={toggleVoiceMode}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                    isVoiceEnabled ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                }`}
-            >
-                {isVoiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                {isVoiceEnabled ? 'Voice: ON' : 'Voice: OFF'}
-            </button>
+            {isLiveActive ? (
+                <button
+                    onClick={disconnectLive}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-red-500/50 bg-red-900/20 text-red-400 animate-pulse hover:bg-red-900/40 text-xs font-bold transition-all"
+                    title="Live Voice is handling audio. Click to disconnect."
+                >
+                    <Activity className="w-4 h-4" /> Live Active (Stop)
+                </button>
+            ) : (
+                <button
+                    onClick={toggleVoiceMode}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                        isVoiceEnabled ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                >
+                    {isVoiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                    {isVoiceEnabled ? 'Voice: ON' : 'Voice: OFF'}
+                </button>
+            )}
             
             <button onClick={resetMemory} className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition-colors">
                 <Trash2 className="w-4 h-4" />
@@ -955,7 +984,18 @@ export const ChatInterface: React.FC = () => {
                             <Paperclip className="w-5 h-5" />
                         </label>
                         
-                        <button onClick={startListening} disabled={isListening} className={`p-3 rounded-xl transition-all border ${isListening ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse' : 'bg-slate-800 text-slate-400 hover:text-white border-transparent hover:border-slate-600 hover:bg-slate-700'}`}>
+                        <button 
+                            onClick={startListening} 
+                            disabled={isListening || isLiveActive} 
+                            className={`p-3 rounded-xl transition-all border ${
+                                isListening 
+                                ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse' 
+                                : isLiveActive
+                                ? 'bg-slate-900 text-slate-600 cursor-not-allowed border-transparent'
+                                : 'bg-slate-800 text-slate-400 hover:text-white border-transparent hover:border-slate-600 hover:bg-slate-700'
+                            }`}
+                            title={isLiveActive ? "Microphone in use by Live Interface" : "Voice Input"}
+                        >
                             <Mic className="w-5 h-5" />
                         </button>
 
