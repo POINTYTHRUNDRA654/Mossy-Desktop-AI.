@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleGenAI } from "@google/genai";
-import { Search, Command, Zap, ArrowRight, CornerDownLeft, BrainCircuit, Loader2, FileCode, LayoutDashboard, Terminal, MessageSquare, Activity, Image, Mic2, Hexagon, Layers, Box, Settings, Sparkles, RefreshCw } from 'lucide-react';
+import { Search, Command, Zap, ArrowRight, CornerDownLeft, BrainCircuit, Loader2, FileCode, LayoutDashboard, Terminal, MessageSquare, Activity, Image, Mic2, Hexagon, Layers, Box, Settings, Sparkles, RefreshCw, Dna, Database, Shield, Radio, Map, Container, Camera, Aperture, Network, GitBranch, PenTool, FlaskConical, Bug, Package, Globe, Smartphone, Heart, Lock, Gamepad2, Monitor } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface Action {
@@ -27,20 +27,50 @@ const CommandPalette: React.FC = () => {
 
     // --- Actions Definition ---
     const actions: Action[] = [
-        // Navigation
-        { id: 'nav-home', title: 'Go to Nexus', subtitle: 'Dashboard & Overview', icon: LayoutDashboard, group: 'Navigation', action: () => navigate('/') },
-        { id: 'nav-chat', title: 'Open Chat', subtitle: 'Talk to Mossy', icon: MessageSquare, group: 'Navigation', action: () => navigate('/chat') },
+        // Core
+        { id: 'nav-home', title: 'The Nexus', subtitle: 'Dashboard & Overview', icon: LayoutDashboard, group: 'Navigation', action: () => navigate('/') },
+        { id: 'nav-chat', title: 'Chat Interface', subtitle: 'Talk to Mossy', icon: MessageSquare, group: 'Navigation', action: () => navigate('/chat') },
         { id: 'nav-monitor', title: 'System Monitor', subtitle: 'Resource Usage & Logs', icon: Activity, group: 'Navigation', action: () => navigate('/monitor') },
-        { id: 'nav-terminal', title: 'HyperTerminal', subtitle: 'CLI Interface', icon: Terminal, group: 'Navigation', action: () => navigate('/terminal') },
-        { id: 'nav-workshop', title: 'The Workshop', subtitle: 'Scripting & Logic', icon: FileCode, group: 'Navigation', action: () => navigate('/workshop') },
-        { id: 'nav-splicer', title: 'The Splicer', subtitle: 'Binary Analysis', icon: Hexagon, group: 'Navigation', action: () => navigate('/splicer') },
-        { id: 'nav-images', title: 'Image Suite', subtitle: 'Generation & PBR', icon: Image, group: 'Navigation', action: () => navigate('/images') },
-        { id: 'nav-audio', title: 'Audio Studio', subtitle: 'TTS & SFX', icon: Mic2, group: 'Navigation', action: () => navigate('/tts') },
         
-        // System Actions (Simulated)
-        { id: 'sys-purge', title: 'Purge Memory Cache', subtitle: 'Free up simulated RAM', icon: Zap, group: 'System', action: () => alert('Memory Cache Purged: 1.2GB Freed') },
-        { id: 'sys-voice', title: 'Toggle Voice Mode', subtitle: 'Enable/Disable TTS', icon: Mic2, group: 'System', action: () => { /* Logic would integrate with ChatInterface context */ alert('Voice Mode Toggled'); } },
-        { id: 'sys-theme', title: 'Refresh UI Theme', subtitle: 'Reload CSS Variables', icon: RefreshCw, group: 'System', action: () => window.location.reload() },
+        // Creative Suite
+        { id: 'nav-images', title: 'Image Suite', subtitle: 'Generation & PBR Textures', icon: Image, group: 'Navigation', action: () => navigate('/images') },
+        { id: 'nav-audio', title: 'Audio Studio', subtitle: 'TTS & SFX Synthesis', icon: Mic2, group: 'Navigation', action: () => navigate('/tts') },
+        { id: 'nav-fabric', title: 'The Fabric', subtitle: 'UI/UX Interface Synthesizer', icon: PenTool, group: 'Navigation', action: () => navigate('/fabric') },
+        { id: 'nav-holo', title: 'The Holodeck', subtitle: 'Interactive Simulation Engine', icon: Gamepad2, group: 'Navigation', action: () => navigate('/holo') },
+
+        // Logic & Code
+        { id: 'nav-workshop', title: 'The Workshop', subtitle: 'Scripting & Visual Graphs', icon: FileCode, group: 'Navigation', action: () => navigate('/workshop') },
+        { id: 'nav-terminal', title: 'HyperTerminal', subtitle: 'CLI & Shell Bridge', icon: Terminal, group: 'Navigation', action: () => navigate('/terminal') },
+        { id: 'nav-splicer', title: 'The Splicer', subtitle: 'Binary & Havok Analysis', icon: Hexagon, group: 'Navigation', action: () => navigate('/splicer') },
+        { id: 'nav-blueprint', title: 'The Blueprint', subtitle: 'System Architecture Planner', icon: Layers, group: 'Navigation', action: () => navigate('/blueprint') },
+
+        // Data & Knowledge
+        { id: 'nav-cortex', title: 'The Cortex', subtitle: 'RAG Knowledge Base', icon: BrainCircuit, group: 'Navigation', action: () => navigate('/cortex') },
+        { id: 'nav-lore', title: 'The Lorekeeper', subtitle: 'Worldbuilding Graph', icon: Network, group: 'Navigation', action: () => navigate('/lore') },
+        { id: 'nav-vault', title: 'The Vault', subtitle: 'Asset Management', icon: Container, group: 'Navigation', action: () => navigate('/vault') },
+        { id: 'nav-registry', title: 'The Registry', subtitle: 'Plugin Conflict Resolution', icon: Database, group: 'Navigation', action: () => navigate('/registry') },
+
+        // Neural / Abstract
+        { id: 'nav-anima', title: 'The Anima', subtitle: 'Personality & Memory Core', icon: Heart, group: 'Navigation', action: () => navigate('/anima') },
+        { id: 'nav-genome', title: 'The Genome', subtitle: 'Self-Evolution Engine', icon: Dna, group: 'Navigation', action: () => navigate('/genome') },
+        { id: 'nav-prism', title: 'The Prism', subtitle: 'Multi-Perspective Analysis', icon: RefreshCw, group: 'Navigation', action: () => navigate('/prism') },
+        { id: 'nav-hive', title: 'The Hive', subtitle: 'Multi-Agent Swarm', icon: Hexagon, group: 'Navigation', action: () => navigate('/hive') },
+        { id: 'nav-reverie', title: 'The Reverie', subtitle: 'Subconscious Processing', icon: Sparkles, group: 'Navigation', action: () => navigate('/reverie') },
+
+        // Tools
+        { id: 'nav-lens', title: 'The Lens', subtitle: 'Visual Context Analysis', icon: Aperture, group: 'Navigation', action: () => navigate('/lens') },
+        { id: 'nav-conduit', title: 'The Conduit', subtitle: 'API & Webhook Gateway', icon: Radio, group: 'Navigation', action: () => navigate('/conduit') },
+        { id: 'nav-catalyst', title: 'The Catalyst', subtitle: 'Prompt Engineering Lab', icon: FlaskConical, group: 'Navigation', action: () => navigate('/catalyst') },
+        { id: 'nav-cartographer', title: 'The Cartographer', subtitle: 'Level Design & Mapping', icon: Map, group: 'Navigation', action: () => navigate('/cartographer') },
+        { id: 'nav-organizer', title: 'The Organizer', subtitle: 'Mod Load Order Tool', icon: Layers, group: 'Navigation', action: () => navigate('/organizer') },
+        { id: 'nav-crucible', title: 'The Crucible', subtitle: 'Crash Log Forensics', icon: Bug, group: 'Navigation', action: () => navigate('/crucible') },
+        { id: 'nav-assembler', title: 'The Assembler', subtitle: 'FOMOD Installer Creator', icon: Package, group: 'Navigation', action: () => navigate('/assembler') },
+        { id: 'nav-orchestrator', title: 'The Orchestrator', subtitle: 'Automated Workflow Pipelines', icon: GitBranch, group: 'Navigation', action: () => navigate('/orchestrator') },
+        
+        // System Actions
+        { id: 'sys-voice', title: 'Toggle Voice Mode', subtitle: 'Enable/Disable TTS', icon: Mic2, group: 'System', action: () => { /* Logic integrated via context or event bus in real app */ alert('Voice Toggled'); } },
+        { id: 'sys-bridge', title: 'Desktop Bridge Status', subtitle: 'Check Localhost Connection', icon: Monitor, group: 'System', action: () => navigate('/bridge') },
+        { id: 'sys-reload', title: 'Reboot Core', subtitle: 'Reload Application', icon: RefreshCw, group: 'System', action: () => window.location.reload() },
     ];
 
     // Filtered List
@@ -49,7 +79,7 @@ const CommandPalette: React.FC = () => {
         action.subtitle?.toLowerCase().includes(query.toLowerCase())
     );
 
-    // Add "Ask Mossy" option if query exists and doesn't match perfectly
+    // Add "Ask Mossy" option if query exists
     const showAskOption = query.length > 0;
     
     // --- Keyboard Listeners ---
@@ -74,8 +104,6 @@ const CommandPalette: React.FC = () => {
         const handleNav = (e: KeyboardEvent) => {
             if (!isOpen) return;
             
-            const maxIndex = filteredActions.length + (showAskOption ? 0 : -1); // Ask option is index 0 if present logic handles it below
-
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 setSelectedIndex(prev => (prev + 1) % (filteredActions.length + (showAskOption ? 1 : 0)));
@@ -99,16 +127,11 @@ const CommandPalette: React.FC = () => {
     }, [isOpen]);
 
     const executeSelection = async () => {
-        // If Ask Mossy is selected (it's always the first item if showing, or last? Let's make it first for visibility if no direct match, otherwise last)
-        // Strategy: Actions first, Ask last.
-        
         const actionIndex = selectedIndex;
         
         if (showAskOption && actionIndex === filteredActions.length) {
-            // Ask Mossy
             await askMossy(query);
         } else {
-            // Execute Action
             const action = filteredActions[actionIndex];
             if (action) {
                 action.action();
@@ -137,8 +160,8 @@ const CommandPalette: React.FC = () => {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] bg-black/60 backdrop-blur-sm animate-fade-in">
-            <div className="w-full max-w-2xl bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[70vh] relative animate-scale-in">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[10vh] bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-2xl bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] relative animate-scale-in">
                 
                 {/* Search Bar */}
                 <div className="flex items-center px-4 py-4 border-b border-slate-700 bg-slate-900/50">
@@ -152,7 +175,7 @@ const CommandPalette: React.FC = () => {
                             setSelectedIndex(0);
                             setAiResult(null);
                         }}
-                        placeholder="Type a command or ask a question..."
+                        placeholder="Type a command, jump to module, or ask Mossy..."
                         className="flex-1 bg-transparent border-none text-lg text-white placeholder-slate-500 focus:outline-none focus:ring-0"
                     />
                     <div className="text-xs font-mono text-slate-500 bg-slate-800 px-2 py-1 rounded">ESC</div>
@@ -164,7 +187,7 @@ const CommandPalette: React.FC = () => {
                     {/* Actions List */}
                     {filteredActions.length > 0 && (
                         <div className="mb-2">
-                            <div className="text-[10px] uppercase font-bold text-slate-500 px-3 py-2">Suggested Actions</div>
+                            <div className="text-[10px] uppercase font-bold text-slate-500 px-3 py-2">System Commands</div>
                             {filteredActions.map((action, i) => (
                                 <button
                                     key={action.id}
