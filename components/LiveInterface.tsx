@@ -1,17 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Mic, MicOff, Volume2, Activity, Wifi, Cpu, Disc, Power, Maximize2, Minimize2, Sparkles, Image as ImageIcon, Upload, Trash2 } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Mic, MicOff, Wifi, Cpu, Power, Maximize2, Minimize2, Sparkles, Image as ImageIcon, Upload, Trash2 } from 'lucide-react';
 import { useLive } from './LiveContext';
+import AvatarCore from './AvatarCore';
 
 const LiveInterface: React.FC = () => {
   const { isActive, status, volume, mode, transcription, connect, disconnect, customAvatar, updateAvatar, clearAvatar } = useLive();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Canvas Refs
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>(0);
-  const mousePos = useRef({ x: 0, y: 0 });
 
   // Handle Image Upload
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,176 +30,6 @@ const LiveInterface: React.FC = () => {
           updateAvatar(file);
       }
   };
-
-  // --- VISUALIZATION ENGINE ---
-  useEffect(() => {
-    // Only run canvas if no custom avatar
-    if (customAvatar) {
-        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-        return;
-    }
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Procedural Avatar Configuration
-    const rings = [
-        { radius: 80, speed: 0.02, angle: 0, width: 4, color: 'rgba(255,255,255,0.1)' },
-        { radius: 120, speed: -0.015, angle: 1, width: 2, color: 'rgba(255,255,255,0.05)' },
-        { radius: 160, speed: 0.01, angle: 2, width: 1, color: 'rgba(255,255,255,0.03)' },
-    ];
-
-    let time = 0;
-
-    const render = () => {
-        if (!canvas || !ctx) return;
-        
-        // Resize handling
-        const parent = canvas.parentElement;
-        if (parent) {
-            canvas.width = parent.clientWidth;
-            canvas.height = parent.clientHeight;
-        }
-
-        const cx = canvas.width / 2;
-        const cy = canvas.height / 2;
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // --- 1. DETERMINE COLORS & STATE ---
-        let baseHue = 150; // Emerald
-        if (mode === 'listening') baseHue = 35; // Amber
-        if (mode === 'processing') baseHue = 270; // Purple
-        if (mode === 'speaking') baseHue = 150; // Emerald (Active)
-
-        // Audio reactivity factor (0.0 to 1.0)
-        const audioLevel = Math.min(1, volume / 100);
-        const pulse = 1 + audioLevel * 0.5;
-
-        // --- 2. DRAW BACKGROUND AMBIENCE (Neural Network) ---
-        // Faint connections in background
-        ctx.strokeStyle = `hsla(${baseHue}, 50%, 50%, 0.05)`;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        const nodeCount = 20; // Reduced for performance
-        const radius = 300 + audioLevel * 50;
-        
-        for (let i = 0; i < nodeCount; i++) {
-            const angle = (i / nodeCount) * Math.PI * 2 + time * 0.05;
-            const x = cx + Math.cos(angle) * radius;
-            const y = cy + Math.sin(angle) * radius;
-            // Draw line to center
-            ctx.moveTo(x, y);
-            ctx.lineTo(cx, cy);
-        }
-        ctx.stroke();
-
-
-        // --- 3. DRAW ORBITAL RINGS ---
-        rings.forEach((ring, i) => {
-            ring.angle += ring.speed * (mode === 'processing' ? 4 : 1); // Spin fast when thinking
-            
-            ctx.beginPath();
-            ctx.ellipse(cx, cy, ring.radius * pulse, ring.radius * pulse * 0.8, ring.angle, 0, Math.PI * 2);
-            ctx.strokeStyle = `hsla(${baseHue}, 70%, 60%, ${0.2 - i * 0.05})`;
-            ctx.lineWidth = ring.width;
-            ctx.stroke();
-            
-            // Add a "satellite" on the ring
-            const satX = cx + Math.cos(ring.angle) * ring.radius * pulse * Math.cos(ring.angle) - Math.sin(ring.angle) * ring.radius * pulse * 0.8 * Math.sin(ring.angle);
-            const satY = cy + Math.sin(ring.angle) * ring.radius * pulse * Math.cos(ring.angle) + Math.cos(ring.angle) * ring.radius * pulse * 0.8 * Math.sin(ring.angle);
-            
-            ctx.fillStyle = `hsla(${baseHue}, 100%, 80%, 0.8)`;
-            ctx.beginPath();
-            ctx.arc(satX, satY, 3, 0, Math.PI * 2);
-            ctx.fill();
-        });
-
-
-        // --- 4. DRAW CENTRAL CORE (The Avatar) ---
-        
-        // Inner Glow
-        const gradient = ctx.createRadialGradient(cx, cy, 10, cx, cy, 100 * pulse);
-        gradient.addColorStop(0, `hsla(${baseHue}, 90%, 60%, 0.8)`);
-        gradient.addColorStop(0.5, `hsla(${baseHue}, 80%, 40%, 0.2)`);
-        gradient.addColorStop(1, `hsla(${baseHue}, 80%, 20%, 0)`);
-        
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 120 * pulse, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Waveform Surface (Spikes based on audio)
-        ctx.strokeStyle = `hsla(${baseHue}, 100%, 85%, 0.9)`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        
-        const coreRadius = 50;
-        const numPoints = 60;
-        
-        for (let i = 0; i <= numPoints; i++) {
-            const angle = (i / numPoints) * Math.PI * 2;
-            const smoothVol = audioLevel * 0.8; // Smoothing factor
-            
-            // Create "spikes" that rotate
-            const waveOffset = Math.sin(angle * 8 + time * 5) * 10 * smoothVol;
-            const noiseOffset = Math.random() * 5 * smoothVol;
-            
-            const r = coreRadius + waveOffset + noiseOffset + (audioLevel * 20);
-            
-            const x = cx + Math.cos(angle) * r;
-            const y = cy + Math.sin(angle) * r;
-            
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.stroke();
-        
-        // Solid Center Eye
-        ctx.fillStyle = `hsla(${baseHue}, 100%, 95%, 1)`;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 10 + (audioLevel * 10), 0, Math.PI * 2);
-        ctx.fill();
-
-
-        // --- 5. TEXT OVERLAY (Status) ---
-        if (isActive) {
-            ctx.font = '10px "JetBrains Mono", monospace';
-            ctx.fillStyle = `hsla(${baseHue}, 50%, 50%, 0.7)`;
-            ctx.textAlign = 'center';
-            ctx.fillText(mode.toUpperCase(), cx, cy + 140);
-        }
-
-        time += 0.01;
-        animationFrameRef.current = requestAnimationFrame(render);
-    };
-
-    render();
-    return () => cancelAnimationFrame(animationFrameRef.current);
-  }, [mode, volume, isActive, customAvatar]);
-
-  // Track Mouse
-  useEffect(() => {
-      const handleMouseMove = (e: MouseEvent) => {
-          mousePos.current = { x: e.clientX, y: e.clientY };
-      };
-      window.addEventListener('mousemove', handleMouseMove);
-      return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
-
-  // Calculate glow color based on mode
-  const glowColor = mode === 'speaking' ? 'rgba(16, 185, 129, 0.6)' : 
-                    mode === 'listening' ? 'rgba(245, 158, 11, 0.6)' : 
-                    mode === 'processing' ? 'rgba(168, 85, 247, 0.6)' : 
-                    'rgba(56, 189, 248, 0.3)';
-  
-  const borderColor = mode === 'speaking' ? 'border-emerald-500' : 
-                      mode === 'listening' ? 'border-amber-500' : 
-                      mode === 'processing' ? 'border-purple-500' : 
-                      'border-slate-700';
 
   return (
     <div 
@@ -280,37 +106,17 @@ const LiveInterface: React.FC = () => {
       {/* Main Hologram Stage */}
       <div className="flex-1 relative z-10 flex items-center justify-center">
           
-          {customAvatar ? (
-              <div className="relative flex items-center justify-center">
-                  {/* Status Ring */}
-                  <div 
-                      className={`absolute inset-0 rounded-full border-2 opacity-50 transition-all duration-300 ${borderColor}`}
-                      style={{ 
-                          transform: `scale(${1 + (volume/100) * 0.3})`,
-                          boxShadow: `0 0 ${volume + 20}px ${glowColor}` 
-                      }}
-                  ></div>
-                  
-                  {/* The Image */}
-                  <img 
-                      src={customAvatar} 
-                      alt="Avatar" 
-                      className="w-64 h-64 rounded-full object-cover border-4 border-slate-900 shadow-2xl relative z-10 transition-transform duration-100"
-                      style={{ 
-                          transform: `scale(${1 + (volume/200) * 0.1})` 
-                      }}
-                  />
-                  
-                  {/* Status Overlay Text */}
-                  {isActive && (
-                      <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 text-xs font-mono text-slate-400 uppercase tracking-widest bg-black/50 px-3 py-1 rounded-full backdrop-blur">
-                          {mode}
-                      </div>
-                  )}
-              </div>
-          ) : (
-              <canvas ref={canvasRef} className="w-full h-full absolute inset-0 z-10" />
-          )}
+          {/* Avatar Rendering Core */}
+          <div className="w-full h-full flex items-center justify-center relative">
+              <AvatarCore className="w-full h-full max-w-2xl max-h-2xl" showRings={true} />
+              
+              {/* Status Overlay Text */}
+              {isActive && (
+                  <div className="absolute bottom-20 left-1/2 -translate-x-1/2 text-xs font-mono text-slate-400 uppercase tracking-widest bg-black/50 px-3 py-1 rounded-full backdrop-blur">
+                      {mode}
+                  </div>
+              )}
+          </div>
           
           {/* Start Button Overlay (if inactive) */}
           {!isActive && (
@@ -351,6 +157,13 @@ const LiveInterface: React.FC = () => {
           {/* Controls */}
           {isActive && (
               <div className="flex gap-4">
+                  <button 
+                      className={`p-4 rounded-full border transition-all duration-300 ${
+                          mode === 'listening' ? 'bg-amber-500/10 border-amber-500 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-400'
+                      }`}
+                  >
+                      {mode === 'listening' ? <Mic className="w-6 h-6 animate-pulse" /> : <MicOff className="w-6 h-6" />}
+                  </button>
                   <button 
                       onClick={disconnect}
                       className="p-4 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500 text-red-400 transition-all hover:scale-105"
