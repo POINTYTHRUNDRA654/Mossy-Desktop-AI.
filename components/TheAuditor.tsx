@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Scan, FileWarning, CheckCircle2, AlertTriangle, FileImage, Box, FileCode, Search, Wrench, ArrowRight, ShieldCheck, RefreshCw, XCircle, File } from 'lucide-react';
+import { Scan, FileWarning, CheckCircle2, AlertTriangle, FileImage, Box, FileCode, Search, Wrench, ArrowRight, ShieldCheck, RefreshCw, XCircle, File, MessageSquare } from 'lucide-react';
 
 interface AuditIssue {
     id: string;
@@ -177,6 +177,11 @@ const TheAuditor: React.FC = () => {
         }, 1000);
     };
 
+    const discussWithMossy = () => {
+        // Trigger navigation to Chat
+        window.dispatchEvent(new CustomEvent('mossy-control', { detail: { action: 'navigate', payload: { path: '/chat' } } }));
+    };
+
     return (
         <div className="h-full flex flex-col bg-[#0d1117] text-slate-200 font-sans overflow-hidden">
             {/* Header */}
@@ -271,13 +276,23 @@ const TheAuditor: React.FC = () => {
                                             <span>Size: {selectedFile.size}</span>
                                         </div>
                                     </div>
-                                    <div className={`px-4 py-2 rounded-lg font-bold text-sm border ${
-                                        selectedFile.status === 'clean' ? 'bg-emerald-900/20 text-emerald-400 border-emerald-500/30' :
-                                        selectedFile.status === 'error' ? 'bg-red-900/20 text-red-400 border-red-500/30' :
-                                        selectedFile.status === 'warning' ? 'bg-yellow-900/20 text-yellow-400 border-yellow-500/30' :
-                                        'bg-slate-800 text-slate-400 border-slate-700'
-                                    }`}>
-                                        STATUS: {selectedFile.status.toUpperCase()}
+                                    <div className="flex items-center gap-2">
+                                        {selectedFile.issues.length > 0 && (
+                                            <button 
+                                                onClick={discussWithMossy}
+                                                className="flex items-center gap-2 px-4 py-2 bg-purple-900/30 hover:bg-purple-900/50 border border-purple-500/30 rounded-lg text-sm text-purple-300 font-bold transition-colors"
+                                            >
+                                                <MessageSquare className="w-4 h-4" /> Discuss with Mossy
+                                            </button>
+                                        )}
+                                        <div className={`px-4 py-2 rounded-lg font-bold text-sm border ${
+                                            selectedFile.status === 'clean' ? 'bg-emerald-900/20 text-emerald-400 border-emerald-500/30' :
+                                            selectedFile.status === 'error' ? 'bg-red-900/20 text-red-400 border-red-500/30' :
+                                            selectedFile.status === 'warning' ? 'bg-yellow-900/20 text-yellow-400 border-yellow-500/30' :
+                                            'bg-slate-800 text-slate-400 border-slate-700'
+                                        }`}>
+                                            STATUS: {selectedFile.status.toUpperCase()}
+                                        </div>
                                     </div>
                                 </div>
                             </div>

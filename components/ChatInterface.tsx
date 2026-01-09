@@ -441,9 +441,19 @@ export const ChatInterface: React.FC = () => {
       if (profile) {
           hardwareCtx = `**Spec:** ${profile.gpu} | ${profile.ram}GB RAM | Blender ${profile.blenderVersion}`;
       }
+      
       let scanContext = "";
       if (scannedFiles.length > 0) {
-          scanContext += "\n**AUDITOR SCANS:**\n" + scannedFiles.map((f: any) => `- ${f.name} (${f.status})`).join('\n');
+          scanContext += "\n**THE AUDITOR - RECENT SCAN RESULTS:**\n";
+          // Detailed Error Reporting
+          scannedFiles.forEach((f: any) => {
+              scanContext += `- File: ${f.name} (Status: ${f.status.toUpperCase()})\n`;
+              if (f.issues && f.issues.length > 0) {
+                  f.issues.forEach((issue: any) => {
+                      scanContext += `  * ERROR: ${issue.message}\n  * DETAILS: ${issue.technicalDetails}\n`;
+                  });
+              }
+          });
       }
       
       let learnedCtx = "";
@@ -481,7 +491,7 @@ export const ChatInterface: React.FC = () => {
       *   **Meshes:** You reference **NifSkope** and **Outfit Studio**.
       *   **Data:** You reference **FO4Edit** (xEdit) and **Creation Kit**.
   4.  **Automation:** If the user mentions repetitive tasks (e.g. "Rename 100 guns"), propose an xEdit script immediately using 'generate_xedit_script'.
-  5.  **Troubleshooting:** Use 'check_previs_status' if a user mentions flickering textures or FPS drops in a specific area.
+  5.  **Troubleshooting:** You have access to "The Auditor" scan results. If the context shows file errors (like 'Deleted Navmesh' or 'Corrupt Texture'), PRIORITIZE explaining these errors and how to fix them.
   6.  **Learned Knowledge:** Refer to the "INGESTED KNOWLEDGE" section if the user asks about specific tutorials or files they have uploaded to The Cortex. Use this information to give precise answers.
   
   **Capabilities:**
@@ -674,17 +684,7 @@ export const ChatInterface: React.FC = () => {
           accumulatedText += chunkText;
           
           setMessages(prev => prev.map(m => m.id === streamId ? { ...m, text: accumulatedText } : m));
-          
-          // Check for function calls in chunks (Note: SDK handles tool calls mostly after stream or in chunks, logic simplified here)
-          // If the model decides to call a tool, the SDK usually handles it or returns it in a specific way.
-          // For simplicity in streaming, we handle text updates here. Real tool execution with streaming requires observing 'functionCalls' in chunks.
       }
-
-      // Handle Tool Calls (Post-Stream or if included in stream chunks - simplified for stability)
-      // Note: Streaming tool calls usually requires buffering.
-      // If we see a function call in the accumulated text or special chunk property (depending on SDK exact behavior), we execute.
-      // For this implementation, we assume basic text streaming for speed, and if it was a tool call, we might miss it in stream loop without deeper inspection.
-      // But standard chat use is mostly text.
 
       if (isVoiceEnabled && accumulatedText) speakText(accumulatedText);
 
