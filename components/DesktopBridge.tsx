@@ -1,238 +1,265 @@
-import React, { useState, useEffect } from 'react';
-import { Download, Monitor, CheckCircle, Loader2, Wifi, Shield, Cpu, HardDrive, AlertTriangle, RefreshCw, Terminal, Power } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon } from 'lucide-react';
+
+interface Driver {
+    id: string;
+    name: string;
+    icon: React.ElementType;
+    status: 'active' | 'inactive' | 'mounting' | 'error';
+    version: string;
+    latency: number;
+    permissions: string[];
+}
+
+interface LogEntry {
+    id: string;
+    timestamp: string;
+    source: string;
+    event: string;
+    status: 'ok' | 'warn' | 'err';
+}
+
+const initialDrivers: Driver[] = [
+    { id: 'os_shell', name: 'Windows Shell', icon: Terminal, status: 'inactive', version: '10.0.19045', latency: 0, permissions: ['fs.read', 'fs.write', 'exec'] },
+    { id: 'blender', name: 'Blender 4.0 API', icon: Box, status: 'inactive', version: '4.0.2', latency: 0, permissions: ['bpy.ops', 'bpy.data'] },
+    { id: 'vscode', name: 'VS Code Host', icon: Code, status: 'inactive', version: '1.85.1', latency: 0, permissions: ['editor.action', 'workspace'] },
+    { id: 'adobe', name: 'Photoshop Remote', icon: ImageIcon, status: 'inactive', version: '25.0.0', latency: 0, permissions: ['jsx.eval', 'layer.mod'] },
+    { id: 'discord', name: 'Discord RPC', icon: MessageSquare, status: 'inactive', version: 'Gateway v9', latency: 0, permissions: ['rpc.activity'] },
+];
 
 const DesktopBridge: React.FC = () => {
-  const [status, setStatus] = useState<'disconnected' | 'downloading' | 'waiting' | 'connected'>('disconnected');
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [connectionAttempts, setConnectionAttempts] = useState(0);
+  const [drivers, setDrivers] = useState<Driver[]>(initialDrivers);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const logEndRef = useRef<HTMLDivElement>(null);
 
+  // Auto-connect simulates simulated local bridge existing
   useEffect(() => {
       const active = localStorage.getItem('mossy_bridge_active') === 'true';
       if (active) {
-          setStatus('connected');
+          toggleDriver('os_shell', true);
       }
   }, []);
 
-  const handleDownload = () => {
-      setStatus('downloading');
-      let p = 0;
+  useEffect(() => {
+      logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
+
+  // Simulate telemetry
+  useEffect(() => {
       const interval = setInterval(() => {
-          p += Math.floor(Math.random() * 15);
-          if (p >= 100) {
-              p = 100;
-              clearInterval(interval);
+          setDrivers(prev => prev.map(d => {
+              if (d.status === 'active') {
+                  return { ...d, latency: Math.floor(Math.random() * 15) + 5 };
+              }
+              return d;
+          }));
+      }, 1000);
+      return () => clearInterval(interval);
+  }, []);
+
+  const addLog = (source: string, event: string, status: 'ok' | 'warn' | 'err' = 'ok') => {
+      setLogs(prev => [...prev.slice(-19), {
+          id: Date.now().toString() + Math.random(),
+          timestamp: new Date().toLocaleTimeString(),
+          source,
+          event,
+          status
+      }]);
+  };
+
+  const toggleDriver = (id: string, forceState?: boolean) => {
+      setDrivers(prev => prev.map(d => {
+          if (d.id !== id) return d;
+          
+          const newState = forceState !== undefined ? (forceState ? 'active' : 'inactive') : (d.status === 'active' ? 'inactive' : 'mounting');
+          
+          if (newState === 'mounting') {
+              // Simulate mounting process
               setTimeout(() => {
-                  setStatus('waiting');
-                  // Auto-download simulation (saving file)
-                  const link = document.createElement("a");
-                  link.href = "data:text/plain;charset=utf-8,Mossy_Installer_Dummy_File";
-                  link.download = "MossyBridge_Setup_v2.2.exe";
-                  link.click();
-              }, 800);
+                  setDrivers(curr => curr.map(cd => cd.id === id ? { ...cd, status: 'active' } : cd));
+                  addLog(d.name, 'Socket handshake established', 'ok');
+                  addLog(d.name, `PID Attached. Latency: 12ms`, 'ok');
+                  
+                  // If shell, update global state
+                  if (id === 'os_shell') localStorage.setItem('mossy_bridge_active', 'true');
+              }, 1500);
+              addLog('Bridge', `Mounting driver: ${d.name}...`, 'warn');
+          } else if (newState === 'inactive') {
+              addLog(d.name, 'SIGTERM sent. Connection closed.', 'warn');
+              if (id === 'os_shell') localStorage.removeItem('mossy_bridge_active');
           }
-          setDownloadProgress(p);
-      }, 300);
-  };
 
-  const attemptHandshake = () => {
-      setConnectionAttempts(prev => prev + 1);
-      setTimeout(() => {
-          // Simulate successful connection
-          localStorage.setItem('mossy_bridge_active', 'true');
-          setStatus('connected');
-      }, 2000);
-  };
-
-  const disconnect = () => {
-      localStorage.removeItem('mossy_bridge_active');
-      setStatus('disconnected');
-      setConnectionAttempts(0);
+          return { ...d, status: newState };
+      }));
   };
 
   return (
-    <div className="h-full bg-forge-dark p-8 overflow-y-auto">
-      <div className="max-w-4xl mx-auto">
+    <div className="h-full bg-[#050910] p-8 overflow-y-auto font-sans text-slate-200">
+      <div className="max-w-6xl mx-auto flex flex-col h-full">
         
         {/* Header */}
-        <div className="flex items-center justify-between mb-10 border-b border-slate-700 pb-6">
+        <div className="flex items-center justify-between mb-8 border-b border-slate-800 pb-6">
             <div>
                 <h2 className="text-3xl font-bold text-white flex items-center gap-3">
                     <Monitor className="w-8 h-8 text-emerald-400" />
-                    Mossy Desktop Bridge
+                    Neural Interconnect
                 </h2>
-                <p className="text-slate-400 mt-2">
-                    Enable deep system integration, local file access, and hardware acceleration.
+                <p className="text-slate-400 mt-2 font-mono text-sm">
+                    Localhost Bridge Service v2.4.0 <span className="text-slate-600">|</span> Port: 21337
                 </p>
             </div>
-            <div className={`px-4 py-2 rounded-full border flex items-center gap-2 font-mono text-sm ${
-                status === 'connected' 
-                ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' 
-                : 'bg-slate-800 border-slate-600 text-slate-400'
-            }`}>
-                <Wifi className={`w-4 h-4 ${status === 'connected' ? 'animate-pulse' : ''}`} />
-                {status === 'connected' ? 'BRIDGE ACTIVE' : 'DISCONNECTED'}
+            <div className="flex gap-4">
+                <div className="text-right">
+                    <div className="text-xs font-bold text-slate-500 uppercase">Total Throughput</div>
+                    <div className="text-emerald-400 font-mono text-lg">128 MB/s</div>
+                </div>
+                <div className="h-10 w-px bg-slate-800"></div>
+                <div className="text-right">
+                    <div className="text-xs font-bold text-slate-500 uppercase">Active Threads</div>
+                    <div className="text-blue-400 font-mono text-lg">{drivers.filter(d => d.status === 'active').length}</div>
+                </div>
             </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Main Action Card */}
-            <div className="lg:col-span-2 space-y-6">
-                
-                {/* Status: Disconnected */}
-                {status === 'disconnected' && (
-                    <div className="bg-forge-panel border border-slate-700 rounded-2xl p-8 text-center shadow-2xl">
-                        <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-slate-700">
-                            <Download className="w-10 h-10 text-slate-400" />
-                        </div>
-                        <h3 className="text-2xl font-bold text-white mb-2">Install Local Client</h3>
-                        <p className="text-slate-400 mb-8 max-w-md mx-auto">
-                            To allow Mossy to edit files, manage mods, and scan your registry, you need to install the companion executable.
-                        </p>
-                        <button 
-                            onClick={handleDownload}
-                            className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 mx-auto transition-all shadow-lg shadow-emerald-900/20 hover:scale-105"
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1 min-h-0">
+            {/* Driver Grid */}
+            <div className="lg:col-span-2 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {drivers.map(driver => (
+                        <div 
+                            key={driver.id}
+                            className={`relative overflow-hidden rounded-2xl border transition-all duration-300 p-5 ${
+                                driver.status === 'active' 
+                                ? 'bg-slate-900/80 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]' 
+                                : driver.status === 'mounting'
+                                ? 'bg-slate-900 border-yellow-500/50'
+                                : 'bg-slate-950 border-slate-800 opacity-60 hover:opacity-100'
+                            }`}
                         >
-                            <Download className="w-5 h-5" />
-                            Download Installer (64MB)
-                        </button>
-                        <p className="mt-4 text-xs text-slate-500">Windows 10/11 • 64-bit • v2.2.1 Stable</p>
-                    </div>
-                )}
-
-                {/* Status: Downloading */}
-                {status === 'downloading' && (
-                    <div className="bg-forge-panel border border-slate-700 rounded-2xl p-12 text-center">
-                         <h3 className="text-xl font-bold text-white mb-4">Downloading Installer...</h3>
-                         <div className="w-full h-4 bg-slate-800 rounded-full overflow-hidden mb-2">
-                             <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${downloadProgress}%` }}></div>
-                         </div>
-                         <p className="text-mono text-emerald-400 text-sm">{downloadProgress}%</p>
-                    </div>
-                )}
-
-                {/* Status: Waiting for Install */}
-                {status === 'waiting' && (
-                    <div className="bg-forge-panel border border-slate-700 rounded-2xl p-8 text-center animate-pulse-border border-emerald-500/30">
-                        <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <Loader2 className="w-10 h-10 text-emerald-400 animate-spin" />
-                        </div>
-                        <h3 className="text-2xl font-bold text-white mb-2">Waiting for Connection...</h3>
-                        <p className="text-slate-400 mb-6">
-                            Please run <strong>MossyBridge_Setup.exe</strong> to complete installation.<br/>
-                            We are listening on <span className="font-mono text-slate-300">ws://localhost:21337</span>
-                        </p>
-                        <div className="flex justify-center gap-4">
-                            <button 
-                                onClick={attemptHandshake}
-                                className="px-6 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-white font-bold flex items-center gap-2"
-                            >
-                                <RefreshCw className={`w-4 h-4 ${connectionAttempts > 0 ? 'animate-spin' : ''}`} />
-                                {connectionAttempts > 0 ? 'Retrying...' : 'I have installed it'}
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Status: Connected */}
-                {status === 'connected' && (
-                    <div className="bg-emerald-900/10 border border-emerald-500/30 rounded-2xl p-8">
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="p-3 bg-emerald-500 rounded-lg shadow-lg shadow-emerald-500/20">
-                                <CheckCircle className="w-8 h-8 text-white" />
+                            <div className="flex justify-between items-start mb-4">
+                                <div className={`p-3 rounded-xl ${
+                                    driver.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 
+                                    driver.status === 'mounting' ? 'bg-yellow-500/20 text-yellow-400 animate-pulse' :
+                                    'bg-slate-800 text-slate-500'
+                                }`}>
+                                    <driver.icon className="w-6 h-6" />
+                                </div>
+                                <button 
+                                    onClick={() => toggleDriver(driver.id)}
+                                    className={`p-2 rounded-lg border transition-all ${
+                                        driver.status === 'active' 
+                                        ? 'bg-emerald-900/30 border-emerald-500/50 text-emerald-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-400'
+                                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                                    }`}
+                                >
+                                    <Power className="w-4 h-4" />
+                                </button>
                             </div>
-                            <div>
-                                <h3 className="text-2xl font-bold text-white">Bridge Operational</h3>
-                                <p className="text-emerald-400 text-sm font-mono">Secure Tunnel Established</p>
-                            </div>
-                        </div>
 
-                        <div className="grid grid-cols-2 gap-4 mb-6">
-                            <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50">
-                                <div className="text-xs text-slate-500 uppercase font-bold mb-1">Latency</div>
-                                <div className="text-2xl font-mono text-emerald-400">12ms</div>
-                            </div>
-                            <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50">
-                                <div className="text-xs text-slate-500 uppercase font-bold mb-1">Permissions</div>
-                                <div className="text-2xl font-mono text-emerald-400">RWX</div>
-                            </div>
-                        </div>
+                            <h3 className="text-lg font-bold text-white mb-1">{driver.name}</h3>
+                            <div className="text-xs text-slate-500 font-mono mb-4">v{driver.version}</div>
 
-                        <div className="bg-black/40 rounded-lg p-4 font-mono text-xs text-slate-300 h-40 overflow-hidden relative">
-                            <div className="absolute top-0 right-0 p-2 text-slate-600"><Terminal className="w-4 h-4" /></div>
-                            <p className="text-emerald-500">$ mossy-bridge status</p>
-                            <p>> Service Active (PID: 9422)</p>
-                            <p>> Filesystem Watcher: ACTIVE (D:/Modding/)</p>
-                            <p>> Registry Hook: ACTIVE</p>
-                            <p>> GPU Acceleration: CUDA 12.1 Detected</p>
-                            <p>> Ready for instruction...</p>
-                            <div className="animate-pulse mt-1">_</div>
-                        </div>
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-400">Status</span>
+                                    <span className={`font-bold uppercase tracking-wider ${
+                                        driver.status === 'active' ? 'text-emerald-400' : 
+                                        driver.status === 'mounting' ? 'text-yellow-400' : 'text-slate-600'
+                                    }`}>
+                                        {driver.status}
+                                    </span>
+                                </div>
+                                
+                                {driver.status === 'active' && (
+                                    <>
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-slate-400">Latency</span>
+                                            <span className="text-blue-400 font-mono">{driver.latency}ms</span>
+                                        </div>
+                                        <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden mt-2">
+                                            <div className="h-full bg-emerald-500 animate-pulse" style={{ width: '100%' }}></div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
 
-                        <button onClick={disconnect} className="mt-6 text-sm text-red-400 hover:text-red-300 flex items-center gap-2">
-                            <Power className="w-4 h-4" /> Disconnect Bridge
-                        </button>
-                    </div>
-                )}
+                            {driver.status === 'active' && (
+                                <div className="mt-4 pt-4 border-t border-slate-800 flex flex-wrap gap-1">
+                                    {driver.permissions.map(perm => (
+                                        <span key={perm} className="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-400 border border-slate-700">
+                                            {perm}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
             </div>
 
-            {/* Feature Sidebar */}
-            <div className="space-y-4">
-                <div className="bg-forge-panel p-6 rounded-xl border border-slate-700">
-                    <h4 className="font-bold text-white mb-4 flex items-center gap-2">
-                        <Shield className="w-5 h-5 text-forge-accent" /> Integration Level
-                    </h4>
-                    <ul className="space-y-3">
-                        <li className={`flex items-center gap-3 text-sm ${status === 'connected' ? 'text-slate-200' : 'text-slate-500'}`}>
-                            <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-500' : 'bg-slate-700'}`} />
-                            Direct File System Access
-                        </li>
-                        <li className={`flex items-center gap-3 text-sm ${status === 'connected' ? 'text-slate-200' : 'text-slate-500'}`}>
-                            <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-500' : 'bg-slate-700'}`} />
-                            Registry & Environment Sync
-                        </li>
-                        <li className={`flex items-center gap-3 text-sm ${status === 'connected' ? 'text-slate-200' : 'text-slate-500'}`}>
-                            <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-500' : 'bg-slate-700'}`} />
-                            Hardware Control (RGB/Fans)
-                        </li>
-                        <li className={`flex items-center gap-3 text-sm ${status === 'connected' ? 'text-slate-200' : 'text-slate-500'}`}>
-                            <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-500' : 'bg-slate-700'}`} />
-                            Local LLM Inference
-                        </li>
-                    </ul>
-                </div>
-
-                <div className="bg-forge-panel p-6 rounded-xl border border-slate-700">
-                    <h4 className="font-bold text-white mb-4 flex items-center gap-2">
-                        <Cpu className="w-5 h-5 text-forge-accent" /> System Requirements
-                    </h4>
-                    <div className="space-y-3 text-sm text-slate-400">
-                        <div className="flex justify-between border-b border-slate-700/50 pb-2">
-                            <span>OS</span>
-                            <span className="text-slate-200">Windows 10/11</span>
+            {/* Right: Telemetry & Log */}
+            <div className="flex flex-col gap-6">
+                {/* Security Card */}
+                <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <Shield className="w-4 h-4" /> Security Protocols
+                    </h3>
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3 text-sm text-slate-300">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            <span>Localhost Loopback Only</span>
                         </div>
-                        <div className="flex justify-between border-b border-slate-700/50 pb-2">
-                            <span>RAM</span>
-                            <span className="text-slate-200">8GB Min</span>
+                        <div className="flex items-center gap-3 text-sm text-slate-300">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            <span>Process Isolation</span>
                         </div>
-                        <div className="flex justify-between border-b border-slate-700/50 pb-2">
-                            <span>Storage</span>
-                            <span className="text-slate-200">200MB</span>
+                        <div className="flex items-center gap-3 text-sm text-slate-300">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            <span>Read-Only Default</span>
                         </div>
-                        <div className="flex justify-between">
-                            <span>Network</span>
-                            <span className="text-slate-200">Localhost Only</span>
+                        <div className="mt-4 p-3 bg-red-900/10 border border-red-900/30 rounded-lg flex gap-3">
+                            <AlertOctagon className="w-5 h-5 text-red-500 shrink-0" />
+                            <div className="text-xs text-red-200">
+                                <span className="font-bold block mb-1">Sandbox Warning</span>
+                                Drivers have direct memory access to target applications. Ensure plugins are trusted.
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {status !== 'connected' && (
-                    <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl flex gap-3">
-                        <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" />
-                        <div className="text-xs text-yellow-200/80">
-                            Without the bridge, Mossy runs in <strong>Sandbox Mode</strong>. She can generate text and images but cannot directly edit files on your hard drive.
+                {/* Live Log */}
+                <div className="flex-1 bg-black border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+                    <div className="p-3 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                            <Activity className="w-3 h-3" /> Neural Event Bus
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                            <span className="text-[10px] text-emerald-500">LIVE</span>
                         </div>
                     </div>
-                )}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-[10px]">
+                        {logs.length === 0 && (
+                            <div className="text-slate-700 italic text-center mt-10">Awaiting IPC traffic...</div>
+                        )}
+                        {logs.map(log => (
+                            <div key={log.id} className="flex gap-3 animate-fade-in">
+                                <span className="text-slate-600 shrink-0">[{log.timestamp}]</span>
+                                <span className={`font-bold shrink-0 w-20 truncate ${
+                                    log.status === 'err' ? 'text-red-500' : 'text-blue-400'
+                                }`}>{log.source}</span>
+                                <span className={`break-all ${
+                                    log.status === 'warn' ? 'text-yellow-400' :
+                                    log.status === 'err' ? 'text-red-400' :
+                                    'text-slate-300'
+                                }`}>
+                                    {log.event}
+                                </span>
+                            </div>
+                        ))}
+                        <div ref={logEndRef} />
+                    </div>
+                </div>
             </div>
         </div>
       </div>

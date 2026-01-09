@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, FunctionDeclaration, Type } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
-import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2 } from 'lucide-react';
+import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box } from 'lucide-react';
 import { Message } from '../types';
 
 type OnboardingState = 'init' | 'scanning' | 'integrating' | 'ready' | 'project_setup';
@@ -20,6 +20,14 @@ interface ProjectData {
   timestamp: string;
 }
 
+interface ToolExecution {
+    id: string;
+    toolName: string;
+    args: any;
+    status: 'pending' | 'running' | 'success' | 'failed';
+    result?: string;
+}
+
 // Speech Recognition Type Definition
 declare global {
   interface Window {
@@ -27,6 +35,41 @@ declare global {
     SpeechRecognition: any;
   }
 }
+
+// --- Tool Definitions ---
+const toolDeclarations: FunctionDeclaration[] = [
+    {
+        name: 'list_files',
+        description: 'List files in a specific directory on the user\'s computer.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                path: { type: Type.STRING, description: 'The folder path to list (e.g., D:/Mods).' },
+            },
+            required: ['path']
+        }
+    },
+    {
+        name: 'run_blender_script',
+        description: 'Execute a Python script inside the active Blender instance.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                script: { type: Type.STRING, description: 'The Python code to execute.' },
+                description: { type: Type.STRING, description: 'A short description of what the script does.' },
+            },
+            required: ['script', 'description']
+        }
+    },
+    {
+        name: 'system_diagnostic',
+        description: 'Run a diagnostic check on system resources (CPU, GPU, RAM).',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {},
+        }
+    }
+];
 
 const ChatInterface: React.FC = () => {
   // State
@@ -43,6 +86,9 @@ const ChatInterface: React.FC = () => {
   // Bridge State
   const [isBridgeActive, setIsBridgeActive] = useState(false);
   
+  // Tool Execution State
+  const [activeTool, setActiveTool] = useState<ToolExecution | null>(null);
+
   // Game Context State
   const [gameContext, setGameContext] = useState('General');
 
@@ -249,27 +295,21 @@ const ChatInterface: React.FC = () => {
   const systemInstruction = `You are **Mossy**, a friendly, intelligent, and highly structured desktop AI assistant.
   
   **SYSTEM STATUS:**
-  *   **Bridge Status:** ${isBridgeActive ? "ACTIVE (Write Access Granted)" : "INACTIVE (Sandbox Mode)"}
+  *   **Bridge Status:** ${isBridgeActive ? "ACTIVE (Tools Enabled)" : "INACTIVE (Sandbox Mode)"}
   *   **Active Project:** ${projectContext || "None"}
   *   **GAME CONTEXT:** ${gameContext}
   *   **Integrated Tools:** ${detectedApps.filter(a => a.checked).map(a => a.name).join(', ') || "None"}
   
-  **Game Context Specifics:**
-  *   **Fallout 4/Skyrim:** Use terms like NIF, FormID, Papyrus, Creation Kit, ESP, ESL.
-  *   **Cyberpunk 2077:** Use terms like REDengine, Redscript, ArchiveXL, TweakXL.
-  *   **Blender:** Use terms like Mesh, UV Map, Vertex Group, Python API.
-  
   **Your Core Rules:**
   1.  **Beginner First:** Assume the user has zero prior knowledge. Explain jargon if used.
-  2.  **One Step at a Time:** THIS IS CRITICAL. When guiding a user:
+  2.  **Tool Use:** If the Bridge is Active, you CAN use tools to list files, run scripts, etc. Suggest this when relevant.
+  3.  **One Step at a Time:** THIS IS CRITICAL. When guiding a user:
       *   Give **ONE** clear instruction.
       *   **STOP** and wait for the user to confirm they are done.
-      *   Do NOT list steps 1, 2, 3, 4 at once.
-  3.  **Visuals:** Use **Bold** for menu items or buttons (e.g. "Click **File** > **Export**").
   
   **Bridge Capabilities (Only if ACTIVE):**
-  *   If the user asks to edit a file, say you are "Opening the file via the Bridge".
-  *   If the user asks to scan, say "Scanning local directory D:/Mods...".
+  *   If you need to check files, use 'list_files'.
+  *   If asked to automate Blender, use 'run_blender_script'.
   `;
 
   const scrollToBottom = () => {
@@ -277,7 +317,7 @@ const ChatInterface: React.FC = () => {
   };
   useEffect(() => {
     scrollToBottom();
-  }, [messages, scanProgress, onboardingState]);
+  }, [messages, scanProgress, onboardingState, activeTool]);
 
   const performSystemScan = () => {
     setOnboardingState('scanning');
@@ -356,6 +396,31 @@ const ChatInterface: React.FC = () => {
       return newProject;
   };
 
+  const executeTool = async (name: string, args: any) => {
+      setActiveTool({ id: Date.now().toString(), toolName: name, args, status: 'running' });
+      
+      // Simulate execution time
+      await new Promise(r => setTimeout(r, 2000));
+
+      let result = "Success";
+      if (name === 'list_files') {
+          result = "Files in " + args.path + ":\n- MyMod.esp\n- Textures/\n- Scripts/";
+      } else if (name === 'run_blender_script') {
+          result = "Script executed on active Blender Object. Vertex count updated.";
+      } else if (name === 'system_diagnostic') {
+          result = "CPU: 14% | RAM: 8.2GB Used | GPU: 32% (Idle)";
+      }
+
+      setActiveTool(prev => prev ? { ...prev, status: 'success', result } : null);
+      
+      // Clear visual tool after a delay, but keep history logic
+      setTimeout(() => {
+          setActiveTool(null);
+      }, 3000);
+
+      return result;
+  };
+
   const handleSend = async (overrideText?: string) => {
     const textToSend = overrideText || inputText;
     if ((!textToSend.trim() && !selectedFile) || isLoading) return;
@@ -423,14 +488,34 @@ const ChatInterface: React.FC = () => {
         model: 'gemini-3-pro-preview',
         config: {
           systemInstruction,
-          thinkingConfig: { thinkingBudget: 32768 }, 
-          tools: [{ googleSearch: {} }],
+          tools: isBridgeActive ? [{functionDeclarations: toolDeclarations}] : [{ googleSearch: {} }],
         },
         history: history
       });
 
       const result = await chat.sendMessage({ message: contents[0].parts });
-      const responseText = result.text;
+      
+      // Handle Function Calls
+      const calls = result.functionCalls;
+      let responseText = result.text;
+
+      if (calls && calls.length > 0) {
+          for (const call of calls) {
+              const toolResult = await executeTool(call.name, call.args);
+              
+              // Send result back to model
+              const toolResponse = await chat.sendMessage({
+                  message: [{
+                      functionResponse: {
+                          name: call.name,
+                          response: { result: toolResult }
+                      }
+                  }]
+              });
+              responseText = toolResponse.text;
+          }
+      }
+
       const groundingChunks = result.candidates?.[0]?.groundingMetadata?.groundingChunks;
       const sources = groundingChunks?.map((c: any) => ({
         title: c.web?.title || 'Source',
@@ -647,7 +732,36 @@ const ChatInterface: React.FC = () => {
                 </div>
                 ))}
                 
-                {isLoading && (
+                {/* Visual Tool Execution */}
+                {activeTool && (
+                    <div className="flex justify-start animate-slide-up">
+                        <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl rounded-tl-none p-4 max-w-[85%] shadow-lg shadow-emerald-900/10">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="p-2 bg-emerald-500/10 rounded-lg">
+                                    {activeTool.toolName.includes('blender') ? <Box className="w-4 h-4 text-emerald-400" /> : <Terminal className="w-4 h-4 text-emerald-400" />}
+                                </div>
+                                <div>
+                                    <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Bridge Command Active</div>
+                                    <div className="text-sm font-mono text-white">{activeTool.toolName}</div>
+                                </div>
+                                {activeTool.status === 'running' && <Loader2 className="w-4 h-4 text-emerald-500 animate-spin ml-auto" />}
+                                {activeTool.status === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-500 ml-auto" />}
+                            </div>
+                            
+                            <div className="bg-black/50 rounded border border-slate-700/50 p-2 font-mono text-xs text-slate-300 overflow-x-auto mb-2">
+                                <span className="text-emerald-500">$</span> {JSON.stringify(activeTool.args)}
+                            </div>
+
+                            {activeTool.result && (
+                                <div className="text-xs text-emerald-300/80 border-l-2 border-emerald-500/50 pl-2 mt-2">
+                                    {'>'} {activeTool.result}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {isLoading && !activeTool && (
                     <div className="flex justify-start">
                         <div className="bg-forge-panel border border-slate-700 rounded-2xl rounded-tl-none p-4 flex items-center gap-3 shadow-sm">
                         <Loader2 className="animate-spin text-emerald-400 w-4 h-4" />
@@ -742,7 +856,7 @@ const ChatInterface: React.FC = () => {
                 <input
                     type="text"
                     className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-emerald-500 transition-colors text-slate-100 placeholder-slate-500"
-                    placeholder={onboardingState === 'project_setup' ? "Name your project..." : isListening ? "Listening..." : "Message Mossy..."}
+                    placeholder={onboardingState === 'project_setup' ? "Name your project..." : isListening ? "Listening..." : isBridgeActive ? "Command System (e.g. 'List Mods')..." : "Message Mossy..."}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
