@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { GoogleGenAI, Modality, FunctionDeclaration, Type } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight, Wrench, Radio, Lock } from 'lucide-react';
@@ -128,6 +128,97 @@ const toolDeclarations: FunctionDeclaration[] = [
     }
 ];
 
+// --- Sub-components for Performance ---
+
+// Memoized Message Item to prevent re-rendering list on typing
+const MessageItem = React.memo(({ msg, onboardingState, scanProgress, detectedApps, projectContext, handleIntegrate, handleStartProject }: any) => {
+    return (
+        <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[85%] lg:max-w-[75%] rounded-2xl p-4 shadow-sm ${
+            msg.role === 'user' ? 'bg-emerald-600 text-white rounded-tr-none' : msg.role === 'system' ? 'bg-slate-800 border border-slate-700 text-slate-400 text-sm' : 'bg-forge-panel border border-slate-700 rounded-tl-none'
+            }`}>
+            {msg.images && msg.images.map((img: string, i: number) => (
+                <img key={i} src={img} alt="Uploaded" className="max-w-full h-auto rounded mb-2 border border-black/20" />
+            ))}
+            <div className="markdown-body text-sm leading-relaxed">
+                <ReactMarkdown>{msg.text}</ReactMarkdown>
+            </div>
+
+            {onboardingState === 'scanning' && msg.role === 'model' && msg.text.includes("Scan") && (
+                <div className="mt-4 bg-slate-900 rounded-lg p-3 border border-slate-700 animate-slide-up">
+                    <div className="flex justify-between text-xs mb-1 text-emerald-400 font-mono">
+                        <span>PIP-BOY DIAGNOSTIC</span>
+                        <span>{scanProgress}%</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 transition-all duration-100" style={{ width: `${scanProgress}%` }}></div>
+                    </div>
+                    <div className="mt-2 text-[10px] text-slate-500 font-mono truncate">
+                        Probing Data/F4SE/Plugins...
+                    </div>
+                </div>
+            )}
+
+            {onboardingState === 'integrating' && msg.role === 'model' && msg.text.includes("Scan Complete") && (
+                <div className="mt-4 bg-slate-900 rounded-xl p-4 border border-slate-700 shadow-inner animate-slide-up">
+                    <h4 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider flex items-center gap-2">
+                        <Search className="w-3 h-3" /> Detected Tools
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                        {detectedApps.map((app: any) => (
+                            <label key={app.id} className={`flex items-center gap-2 p-2 rounded cursor-pointer border transition-all ${app.checked ? 'bg-emerald-900/20 border-emerald-500/50' : 'bg-slate-800 border-transparent hover:border-slate-600'}`}>
+                                <div className="w-3 h-3 rounded bg-emerald-500"></div>
+                                <span className="text-xs font-medium text-slate-200">{app.name}</span>
+                            </label>
+                        ))}
+                    </div>
+                    <button onClick={handleIntegrate} className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition-colors">
+                        Link & Integrate
+                    </button>
+                </div>
+            )}
+
+            {msg.id === 'integrated' && onboardingState === 'ready' && !projectContext && (
+                <div className="mt-4 flex flex-col gap-2">
+                    <button onClick={handleStartProject} className="flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-emerald-500/50 rounded-xl text-left transition-all group">
+                        <div className="p-2 bg-emerald-500/20 rounded-lg group-hover:bg-emerald-500/30">
+                            <FolderOpen className="w-5 h-5 text-emerald-400" />
+                        </div>
+                        <div>
+                            <div className="text-sm font-bold text-slate-200">Start New Mod</div>
+                            <div className="text-xs text-slate-500">Create workspace for ESP/ESL</div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-600 ml-auto group-hover:text-emerald-400" />
+                    </button>
+                </div>
+            )}
+            
+            {msg.sources && msg.sources.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-600/50 text-xs flex flex-wrap gap-2">
+                    {msg.sources.map((s: any, idx: number) => (
+                    <a key={idx} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center gap-1 bg-black/20 hover:bg-black/40 px-2 py-1 rounded text-emerald-300 truncate max-w-[150px]">
+                        <Globe className="w-3 h-3" /> {s.title}
+                    </a>
+                    ))}
+                </div>
+            )}
+            </div>
+        </div>
+    );
+});
+
+// Memoized List Container
+const MessageList = React.memo(({ messages, ...props }: any) => {
+    return (
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth">
+            {messages.map((msg: Message) => (
+                <MessageItem key={msg.id} msg={msg} {...props} />
+            ))}
+            {props.children}
+        </div>
+    );
+});
+
 export const ChatInterface: React.FC = () => {
   // State
   const [messages, setMessages] = useState<Message[]>([]);
@@ -145,9 +236,6 @@ export const ChatInterface: React.FC = () => {
   
   // Tool Execution State
   const [activeTool, setActiveTool] = useState<ToolExecution | null>(null);
-
-  // Game Context - HARDCODED FOR FALLOUT 4
-  const gameContext = 'Fallout 4';
 
   // Onboarding & Context
   const [onboardingState, setOnboardingState] = useState<OnboardingState>('init');
@@ -646,81 +734,17 @@ export const ChatInterface: React.FC = () => {
 
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 flex flex-col min-w-0">
-            <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth">
-                {messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] lg:max-w-[75%] rounded-2xl p-4 shadow-sm ${
-                    msg.role === 'user' ? 'bg-emerald-600 text-white rounded-tr-none' : msg.role === 'system' ? 'bg-slate-800 border border-slate-700 text-slate-400 text-sm' : 'bg-forge-panel border border-slate-700 rounded-tl-none'
-                    }`}>
-                    {msg.images && msg.images.map((img, i) => (
-                        <img key={i} src={img} alt="Uploaded" className="max-w-full h-auto rounded mb-2 border border-black/20" />
-                    ))}
-                    <div className="markdown-body text-sm leading-relaxed">
-                        <ReactMarkdown>{msg.text}</ReactMarkdown>
-                    </div>
-
-                    {onboardingState === 'scanning' && msg.role === 'model' && msg.text.includes("Scan") && (
-                        <div className="mt-4 bg-slate-900 rounded-lg p-3 border border-slate-700 animate-slide-up">
-                            <div className="flex justify-between text-xs mb-1 text-emerald-400 font-mono">
-                                <span>PIP-BOY DIAGNOSTIC</span>
-                                <span>{scanProgress}%</span>
-                            </div>
-                            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                <div className="h-full bg-emerald-500 transition-all duration-100" style={{ width: `${scanProgress}%` }}></div>
-                            </div>
-                            <div className="mt-2 text-[10px] text-slate-500 font-mono truncate">
-                                Probing Data/F4SE/Plugins...
-                            </div>
-                        </div>
-                    )}
-
-                    {onboardingState === 'integrating' && msg.role === 'model' && msg.text.includes("Scan Complete") && (
-                        <div className="mt-4 bg-slate-900 rounded-xl p-4 border border-slate-700 shadow-inner animate-slide-up">
-                            <h4 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider flex items-center gap-2">
-                                <Search className="w-3 h-3" /> Detected Tools
-                            </h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-                                {detectedApps.map(app => (
-                                    <label key={app.id} className={`flex items-center gap-2 p-2 rounded cursor-pointer border transition-all ${app.checked ? 'bg-emerald-900/20 border-emerald-500/50' : 'bg-slate-800 border-transparent hover:border-slate-600'}`}>
-                                        <input type="checkbox" checked={app.checked} onChange={() => setDetectedApps(apps => apps.map(a => a.id === app.id ? {...a, checked: !a.checked} : a))} className="w-3 h-3 rounded border-slate-600 text-emerald-500 focus:ring-0 bg-slate-700" />
-                                        <span className="text-xs font-medium text-slate-200">{app.name}</span>
-                                    </label>
-                                ))}
-                            </div>
-                            <button onClick={handleIntegrate} className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition-colors">
-                                Link & Integrate
-                            </button>
-                        </div>
-                    )}
-
-                    {msg.id === 'integrated' && onboardingState === 'ready' && !projectContext && (
-                        <div className="mt-4 flex flex-col gap-2">
-                            <button onClick={handleStartProject} className="flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-emerald-500/50 rounded-xl text-left transition-all group">
-                                <div className="p-2 bg-emerald-500/20 rounded-lg group-hover:bg-emerald-500/30">
-                                    <FolderOpen className="w-5 h-5 text-emerald-400" />
-                                </div>
-                                <div>
-                                    <div className="text-sm font-bold text-slate-200">Start New Mod</div>
-                                    <div className="text-xs text-slate-500">Create workspace for ESP/ESL</div>
-                                </div>
-                                <ChevronRight className="w-4 h-4 text-slate-600 ml-auto group-hover:text-emerald-400" />
-                            </button>
-                        </div>
-                    )}
-                    
-                    {msg.sources && msg.sources.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-slate-600/50 text-xs flex flex-wrap gap-2">
-                            {msg.sources.map((s, idx) => (
-                            <a key={idx} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center gap-1 bg-black/20 hover:bg-black/40 px-2 py-1 rounded text-emerald-300 truncate max-w-[150px]">
-                                <Globe className="w-3 h-3" /> {s.title}
-                            </a>
-                            ))}
-                        </div>
-                    )}
-                    </div>
-                </div>
-                ))}
-                
+            
+            <MessageList 
+                messages={messages} 
+                onboardingState={onboardingState}
+                scanProgress={scanProgress}
+                detectedApps={detectedApps}
+                projectContext={projectContext}
+                handleIntegrate={handleIntegrate}
+                handleStartProject={handleStartProject}
+            >
+                {/* Active Tool Status */}
                 {activeTool && (
                     <div className="flex justify-start animate-slide-up">
                         <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl rounded-tl-none p-4 max-w-[85%] shadow-lg">
@@ -741,6 +765,7 @@ export const ChatInterface: React.FC = () => {
                     </div>
                 )}
 
+                {/* Loading State */}
                 {isLoading && !activeTool && (
                     <div className="flex justify-start">
                         <div className="bg-forge-panel border border-slate-700 rounded-2xl rounded-tl-none p-4 flex items-center gap-3 shadow-sm">
@@ -750,7 +775,7 @@ export const ChatInterface: React.FC = () => {
                     </div>
                 )}
                 <div ref={messagesEndRef} />
-            </div>
+            </MessageList>
 
             <div className="p-4 bg-forge-panel border-t border-slate-700 z-10">
                 {selectedFile && (
