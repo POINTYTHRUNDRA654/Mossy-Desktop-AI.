@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Modality, FunctionDeclaration, Type } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
-import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight, Wrench, Radio } from 'lucide-react';
+import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight, Wrench, Radio, Lock } from 'lucide-react';
 import { Message } from '../types';
 
 type OnboardingState = 'init' | 'scanning' | 'integrating' | 'ready' | 'project_setup';
@@ -170,6 +170,7 @@ export const ChatInterface: React.FC = () => {
   // Shared Memory State
   const [scannedFiles, setScannedFiles] = useState<any[]>([]);
   const [scannedMap, setScannedMap] = useState<any>(null);
+  const [cortexMemory, setCortexMemory] = useState<any[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -192,6 +193,9 @@ export const ChatInterface: React.FC = () => {
             
             const mapData = localStorage.getItem('mossy_scan_cartographer');
             if (mapData) setScannedMap(JSON.parse(mapData));
+
+            const memoryData = localStorage.getItem('mossy_cortex_memory');
+            if (memoryData) setCortexMemory(JSON.parse(memoryData));
         } catch (e) {}
     };
     checkState();
@@ -349,6 +353,18 @@ export const ChatInterface: React.FC = () => {
       if (scannedFiles.length > 0) {
           scanContext += "\n**AUDITOR SCANS:**\n" + scannedFiles.map((f: any) => `- ${f.name} (${f.status})`).join('\n');
       }
+      
+      let learnedCtx = "";
+      if (cortexMemory.length > 0) {
+          const learnedItems = cortexMemory
+              .filter((s: any) => s.status === 'indexed')
+              .map((s: any) => `- [${s.type.toUpperCase()}] ${s.name}: ${s.summary || 'Content ingested.'}`)
+              .join('\n');
+          if (learnedItems) {
+              learnedCtx = `\n**INGESTED KNOWLEDGE (TUTORIALS & DOCS):**\n${learnedItems}\n(Use this knowledge to answer user queries accurately based on the provided documents.)`;
+          }
+      }
+
       return `
       **CONTEXT: FALLOUT 4 MODDING**
       **Bridge:** ${isBridgeActive ? "ONLINE" : "OFFLINE"}
@@ -356,6 +372,7 @@ export const ChatInterface: React.FC = () => {
       **Tools:** ${detectedApps.filter(a => a.checked).map(a => a.name).join(', ') || "None"}
       ${hardwareCtx}
       ${scanContext}
+      ${learnedCtx}
       `;
   };
 
@@ -373,6 +390,7 @@ export const ChatInterface: React.FC = () => {
       *   **Data:** You reference **FO4Edit** (xEdit) and **Creation Kit**.
   4.  **Automation:** If the user mentions repetitive tasks (e.g. "Rename 100 guns"), propose an xEdit script immediately using 'generate_xedit_script'.
   5.  **Troubleshooting:** Use 'check_previs_status' if a user mentions flickering textures or FPS drops in a specific area.
+  6.  **Learned Knowledge:** Refer to the "INGESTED KNOWLEDGE" section if the user asks about specific tutorials or files they have uploaded to The Cortex. Use this information to give precise answers.
   
   **Capabilities:**
   *   Generate Papyrus scripts for Quests, MCM menus, and ObjectReferences.

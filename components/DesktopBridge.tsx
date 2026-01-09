@@ -34,8 +34,9 @@ const DesktopBridge: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
   const [repairing, setRepairing] = useState(false);
-  const [directoryHandle, setDirectoryHandle] = useState<any>(null);
   const [mountedPath, setMountedPath] = useState<string | null>(null);
+  
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
       logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -102,44 +103,59 @@ const DesktopBridge: React.FC = () => {
 
   // --- NATIVE FILE SYSTEM ACCESS ---
   const handleMountFileSystem = async () => {
+      // 1. Attempt Modern API
       try {
-          // @ts-ignore - window.showDirectoryPicker is experimental but supported in Chrome/Edge
-          if (!window.showDirectoryPicker) {
-              addLog('System', 'Browser does not support File System Access API. Use Chrome or Edge.', 'err');
+          // @ts-ignore
+          if (window.showDirectoryPicker) {
+              // @ts-ignore
+              const handle = await window.showDirectoryPicker();
+              setMountedPath(handle.name);
+              
+              addLog('FileSystem', `Access granted to: ${handle.name}`, 'success');
+              addLog('Indexer', 'Indexing files...', 'warn');
+
+              // Deep Scan Simulation
+              let count = 0;
+              // @ts-ignore
+              for await (const entry of handle.values()) {
+                  if (count < 5) addLog('Indexer', `Found: ${entry.name}`, 'ok');
+                  count++;
+              }
+              addLog('Indexer', `Index complete. ${count} items mapped.`, 'success');
+              activateSystem();
               return;
           }
-
-          // @ts-ignore
-          const handle = await window.showDirectoryPicker();
-          setDirectoryHandle(handle);
-          setMountedPath(handle.name);
-          
-          addLog('FileSystem', `Access granted to: ${handle.name}`, 'success');
-          addLog('Indexer', 'Indexing files...', 'warn');
-
-          // Activate OS Shell Driver visually
-          toggleDriver('os_shell', true);
-          toggleDriver('fs_watcher', true);
-
-          // Deep Scan Simulation using the real handle name
-          let count = 0;
-          // @ts-ignore
-          for await (const entry of handle.values()) {
-              if (count < 5) {
-                  addLog('Indexer', `Found: ${entry.name}`, 'ok');
-              }
-              count++;
-          }
-          addLog('Indexer', `Index complete. ${count} items mapped.`, 'success');
-          
-          // Persist the "fact" that we have access (we can't persist the handle easily)
-          localStorage.setItem('mossy_bridge_active', 'true');
-          window.dispatchEvent(new Event('mossy-bridge-connected'));
-
       } catch (err) {
-          console.error(err);
-          addLog('FileSystem', 'User denied access or error occurred.', 'err');
+          console.log('FileSystem API failed, falling back to input');
       }
+
+      // 2. Fallback to standard input
+      folderInputRef.current?.click();
+  };
+
+  const handleFolderFallback = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      const path = files[0].webkitRelativePath.split('/')[0] || "Local Folder";
+      setMountedPath(path);
+      
+      addLog('FileSystem', `Mounted via fallback: ${path}`, 'success');
+      addLog('Indexer', `Indexing ${files.length} files...`, 'warn');
+      
+      // Simulate listing first few
+      for(let i=0; i<Math.min(5, files.length); i++) {
+          addLog('Indexer', `Found: ${files[i].name}`, 'ok');
+      }
+      addLog('Indexer', 'Index complete.', 'success');
+      activateSystem();
+  };
+
+  const activateSystem = () => {
+      toggleDriver('os_shell', true);
+      toggleDriver('fs_watcher', true);
+      localStorage.setItem('mossy_bridge_active', 'true');
+      window.dispatchEvent(new Event('mossy-bridge-connected'));
   };
 
   const handleRepair = () => {
@@ -164,6 +180,19 @@ const DesktopBridge: React.FC = () => {
 
   return (
     <div className="h-full bg-[#050910] p-8 overflow-y-auto font-sans text-slate-200">
+      
+      {/* Hidden Fallback Input */}
+      <input 
+          type="file" 
+          ref={folderInputRef}
+          className="hidden"
+          // @ts-ignore
+          webkitdirectory="" 
+          directory="" 
+          multiple
+          onChange={handleFolderFallback}
+      />
+
       <div className="max-w-6xl mx-auto flex flex-col h-full">
         
         {/* Header */}
