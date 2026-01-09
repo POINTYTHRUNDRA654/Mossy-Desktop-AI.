@@ -50,6 +50,40 @@ const toolDeclarations: FunctionDeclaration[] = [
         }
     },
     {
+        name: 'read_file',
+        description: 'Read the contents of a specific file on the user\'s computer. Use this to study tutorials, code, or logs.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                path: { type: Type.STRING, description: 'The full path to the file.' },
+            },
+            required: ['path']
+        }
+    },
+    {
+        name: 'browse_web',
+        description: 'Access a URL to read its content for research or studying.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                url: { type: Type.STRING, description: 'The URL to visit.' },
+            },
+            required: ['url']
+        }
+    },
+    {
+        name: 'recommend_software',
+        description: 'Analyze the user\'s needs and recommend specific software tools installed or missing from their computer.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                category: { type: Type.STRING, description: 'The workflow category (e.g., "Modding", "3D Modeling", "Scripting").' },
+                context: { type: Type.STRING, description: 'The specific game or context (e.g., "Fallout 4", "General Dev").' },
+            },
+            required: ['category']
+        }
+    },
+    {
         name: 'run_blender_script',
         description: 'Execute a Python script inside the active Blender instance.',
         parameters: {
@@ -71,7 +105,7 @@ const toolDeclarations: FunctionDeclaration[] = [
     }
 ];
 
-const ChatInterface: React.FC = () => {
+export const ChatInterface: React.FC = () => {
   // State
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -110,7 +144,19 @@ const ChatInterface: React.FC = () => {
   useEffect(() => {
     // Check bridge status every mount or focus
     const checkBridge = () => {
-        setIsBridgeActive(localStorage.getItem('mossy_bridge_active') === 'true');
+        const active = localStorage.getItem('mossy_bridge_active') === 'true';
+        setIsBridgeActive(active);
+        
+        // Auto-scan if bridge is active on mount and we are in init state
+        if (active && onboardingState === 'init') {
+             // We need to wait a tick to ensure state is settled or avoid duplicate scans if already running
+             // But since we are inside checkBridge which runs on mount...
+             // Check if we haven't already scanned (by checking messages or detectedApps)
+             const hasScanned = localStorage.getItem('mossy_apps');
+             if (!hasScanned) {
+                 performSystemScan();
+             }
+        }
     };
     checkBridge();
     window.addEventListener('focus', checkBridge);
@@ -322,14 +368,17 @@ const ChatInterface: React.FC = () => {
   
   **Your Core Rules:**
   1.  **Beginner First:** Assume the user has zero prior knowledge. Explain jargon if used.
-  2.  **Tool Use:** If the Bridge is Active, you CAN use tools to list files, run scripts, etc. Suggest this when relevant.
+  2.  **Tool Use:** If the Bridge is Active, you CAN use tools to list files, run scripts, scan software, etc. Suggest this when relevant.
   3.  **One Step at a Time:** THIS IS CRITICAL. When guiding a user:
       *   Give **ONE** clear instruction.
       *   **STOP** and wait for the user to confirm they are done.
   
   **Bridge Capabilities (Only if ACTIVE):**
-  *   If you need to check files, use 'list_files'.
-  *   If asked to automate Blender, use 'run_blender_script'.
+  *   **Software Recommendations:** If the user asks what tools to use, use 'recommend_software'.
+      *   For **Fallout 4**, prefer: **Mod Organizer 2** (Manager), **xEdit/FO4Edit** (Data), **NifSkope** (Meshes), **Outfit Studio** (Bodies), **Creation Kit** (Quests/World).
+  *   **Learning:** If the user asks to **study** or **learn from** local files, use 'read_file'.
+  *   **Web Research:** If the user mentions a **web tutorial**, use 'browse_web'.
+  *   **Automation:** If asked to automate Blender, use 'run_blender_script'.
   `;
 
   const scrollToBottom = () => {
@@ -430,6 +479,20 @@ const ChatInterface: React.FC = () => {
       let result = "Success";
       if (name === 'list_files') {
           result = "Files in " + args.path + ":\n- MyMod.esp\n- Textures/\n- Scripts/";
+      } else if (name === 'read_file') {
+          result = `Content of ${args.path}:\n[FILE_CONTENT_STREAM_OPEN]\n...\n(Simulated content of tutorial/script)\n...`;
+      } else if (name === 'browse_web') {
+          result = `Content of ${args.url}:\n[WEB_SCRAPER_OUTPUT]\n...\n(Simulated parsed HTML/text content)\n...`;
+      } else if (name === 'recommend_software') {
+          // Intelligent recommendation logic simulation
+          const ctx = args.context?.toLowerCase() || "";
+          if (ctx.includes("fallout") || ctx.includes("skyrim")) {
+              result = `Scanning installed software for ${args.category}...\n
+              DETECTED:\n- Mod Organizer 2 (Recommended Manager)\n- NifSkope (Mesh Editor)\n- Blender 4.2 (3D Suite)\n
+              MISSING / RECOMMENDED:\n- xEdit (Critical for data editing)\n- Outfit Studio (For body conversions)`;
+          } else {
+              result = `General recommendation for ${args.category}: VS Code (Detected), Git (Detected).`;
+          }
       } else if (name === 'run_blender_script') {
           result = "Script executed on active Blender Object. Vertex count updated.";
       } else if (name === 'system_diagnostic') {
@@ -778,7 +841,7 @@ const ChatInterface: React.FC = () => {
                             </div>
 
                             {activeTool.result && (
-                                <div className="text-xs text-emerald-300/80 border-l-2 border-emerald-500/50 pl-2 mt-2">
+                                <div className="text-xs text-emerald-300/80 border-l-2 border-emerald-500/50 pl-2 mt-2 whitespace-pre-wrap">
                                     {'>'} {activeTool.result}
                                 </div>
                             )}
@@ -881,7 +944,7 @@ const ChatInterface: React.FC = () => {
                 <input
                     type="text"
                     className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-emerald-500 transition-colors text-slate-100 placeholder-slate-500"
-                    placeholder={onboardingState === 'project_setup' ? "Name your project..." : isListening ? "Listening..." : isBridgeActive ? "Command System (e.g. 'List Mods')..." : "Message Mossy..."}
+                    placeholder={onboardingState === 'project_setup' ? "Name your project..." : isListening ? "Listening..." : isBridgeActive ? "Command System (e.g. 'Recommend mod manager')..." : "Message Mossy..."}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
@@ -896,76 +959,5 @@ const ChatInterface: React.FC = () => {
                 </div>
             </div>
         </div>
-
-        {/* Right Sidebar: Project Memory Panel */}
-        {showProjectPanel && (
-            <div className="w-72 bg-slate-900 border-l border-slate-800 flex flex-col animate-slide-in-right">
-                <div className="p-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur">
-                    <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
-                        <Save className="w-4 h-4" /> Project File
-                    </h3>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                    {/* Project Status Card */}
-                    {projectData ? (
-                        <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-                            <div className="text-[10px] uppercase text-slate-500 font-bold mb-1">Active Project</div>
-                            <div className="font-bold text-white text-lg leading-tight mb-2">{projectData.name}</div>
-                            <div className="flex gap-2 text-xs">
-                                <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20">Active</span>
-                                <span className="px-2 py-0.5 bg-slate-700 text-slate-400 rounded-full">{projectData.timestamp}</span>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="text-center py-8 text-slate-600 text-sm border-2 border-dashed border-slate-800 rounded-xl">
-                            No active project file.
-                        </div>
-                    )}
-
-                    {/* Integrated Tools List */}
-                    <div>
-                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
-                            <Cpu className="w-3 h-3" /> Linked Systems
-                        </h4>
-                        <div className="space-y-2">
-                            {detectedApps.filter(a => a.checked).length > 0 ? (
-                                detectedApps.filter(a => a.checked).map(app => (
-                                    <div key={app.id} className="flex items-center gap-3 p-2 bg-slate-800/50 rounded-lg border border-slate-700/50">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                        <div>
-                                            <div className="text-xs font-bold text-slate-300">{app.name}</div>
-                                            <div className="text-[10px] text-slate-500">{app.category}</div>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="text-xs text-slate-600 italic">No tools integrated yet.</div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Notes Area (Simulation) */}
-                    {projectData && (
-                        <div>
-                             <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
-                                <FileText className="w-3 h-3" /> Notes
-                            </h4>
-                            <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 text-xs text-slate-400 min-h-[100px] font-mono">
-                                // Project Notes
-                                <br/>
-                                {projectData.notes}
-                                <br/><br/>
-                                [Mossy]: System integration verified.
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        )}
-      </div>
-    </div>
-  );
+    );
 };
-
-export default ChatInterface;

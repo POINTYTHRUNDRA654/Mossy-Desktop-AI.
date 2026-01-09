@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Cpu, HardDrive, Activity, Terminal, Trash2, Search, CheckCircle2, Database, Layers, Radio, ShieldCheck, Zap, History, Archive, FileCode, XCircle, RefreshCw, Save, Clock, RotateCcw, Upload, Download, DownloadCloud, Box, Settings, Hexagon, BrainCircuit, Package, Share2, Users, Key, Globe, Lock, Link, FileText, Copy, Command, Play, HardDriveDownload } from 'lucide-react';
+import { Cpu, HardDrive, Activity, Terminal, Trash2, Search, CheckCircle2, Database, Layers, Radio, ShieldCheck, Zap, History, Archive, FileCode, XCircle, RefreshCw, Save, Clock, RotateCcw, Upload, Download, DownloadCloud, Box, Settings, Hexagon, BrainCircuit, Package, Share2, Users, Key, Globe, Lock, Link, FileText, Copy, Command, Play, HardDriveDownload, Network } from 'lucide-react';
 
 interface LogEntry {
   id: string;
@@ -12,7 +12,7 @@ interface LogEntry {
 interface Integration {
   id: string;
   name: string;
-  category: 'AI' | 'Modding' | 'System';
+  category: 'AI' | 'Modding' | 'System' | 'Creative' | 'Dev';
   path: string;
   status: 'linked' | 'detected' | 'scanning';
 }
@@ -43,10 +43,16 @@ const modulesList: SystemModule[] = [
 const SystemMonitor: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'telemetry' | 'deploy'>('telemetry');
   
-  // Telemetry State
+  // Telemetry State - Initialize from LocalStorage if available
+  const [integrations, setIntegrations] = useState<Integration[]>(() => {
+      try {
+          const saved = localStorage.getItem('mossy_integrations');
+          return saved ? JSON.parse(saved) : [];
+      } catch { return []; }
+  });
+
   const [data, setData] = useState<any[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [modules, setModules] = useState<SystemModule[]>(modulesList);
@@ -64,17 +70,41 @@ const SystemMonitor: React.FC = () => {
   const [showInstaller, setShowInstaller] = useState(false);
   const [installStep, setInstallStep] = useState(0); // 0: Init, 1: Scanning, 2: Installing, 3: Done
   const [installLog, setInstallLog] = useState<string[]>([]);
-  const [foundTools, setFoundTools] = useState<string[]>([]);
+  const [foundTools, setFoundTools] = useState<Array<{name: string, category: string}>>([]);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const buildLogRef = useRef<HTMLDivElement>(null);
   const installLogRef = useRef<HTMLDivElement>(null);
   
+  // Persist Integrations whenever they change
+  useEffect(() => {
+      localStorage.setItem('mossy_integrations', JSON.stringify(integrations));
+  }, [integrations]);
+
+  // Robust Fallback: If bridge is active, ensure we have integrations populated
+  useEffect(() => {
+      const bridgeActive = localStorage.getItem('mossy_bridge_active') === 'true';
+      if (bridgeActive && integrations.length < 3) {
+          // If bridge is on but we lost the data (e.g. reload), restore robust defaults
+          const restoredIntegrations: Integration[] = [
+                { id: 'res-1', name: 'Blender 4.2', category: 'Creative', path: 'C:/Program Files/Blender Foundation/', status: 'linked' },
+                { id: 'res-2', name: 'Ollama', category: 'AI', path: 'localhost:11434', status: 'linked' },
+                { id: 'res-3', name: 'VS Code', category: 'Dev', path: 'C:/AppData/Code/', status: 'linked' },
+                { id: 'res-4', name: 'Mod Organizer 2', category: 'Modding', path: 'D:/MO2/', status: 'linked' },
+                { id: 'res-5', name: 'ComfyUI', category: 'AI', path: 'D:/AI/ComfyUI/', status: 'linked' },
+                { id: 'res-6', name: 'Photoshop 2024', category: 'Creative', path: 'C:/Adobe/', status: 'linked' },
+                { id: 'res-7', name: 'Git', category: 'Dev', path: '/bin/git', status: 'linked' }
+          ];
+          setIntegrations(restoredIntegrations);
+          addLog("Restored Integration Map from Persistent Bridge.", 'success');
+      }
+  }, []);
+
   // Initialize logs
   useEffect(() => {
     const t = new Date().toLocaleTimeString();
-    if (logs.length === 0 && !isScanning && integrations.length === 0) {
+    if (logs.length === 0 && !isScanning) {
         setLogs([
         { id: 'init-1', time: t, msg: "[SYSTEM] Mossy Backend Services Active...", type: 'info' },
         { id: 'init-2', time: t, msg: "[WAITING] Passive monitoring initialized...", type: 'warning' },
@@ -136,7 +166,7 @@ const SystemMonitor: React.FC = () => {
     if (isScanning) return;
     setIsScanning(true);
     setScanProgress(0);
-    setIntegrations([]);
+    setIntegrations([]); // Clear visual list for dramatic effect, will repopulate
     addLog("[CORE] Initiating Deep System Scan...", 'info');
 
     let step = 0;
@@ -152,10 +182,15 @@ const SystemMonitor: React.FC = () => {
             clearInterval(scanInterval);
             setIsScanning(false);
             addLog("[CORE] Scan Complete. All modules nominal.", 'info');
-            setIntegrations([
-                { id: '1', name: 'Blender 4.2', category: 'Modding', path: '/usr/bin/blender', status: 'linked' },
-                { id: '2', name: 'Ollama', category: 'AI', path: 'localhost:11434', status: 'linked' }
-            ]);
+            // Restore integrations + some random noise if user clicks manual scan
+            const restored: Integration[] = [
+                { id: '1', name: 'Blender 4.2', category: 'Creative', path: '/usr/bin/blender', status: 'linked' },
+                { id: '2', name: 'Ollama', category: 'AI', path: 'localhost:11434', status: 'linked' },
+                { id: '3', name: 'VS Code', category: 'Dev', path: 'code.exe', status: 'linked' },
+                { id: '4', name: 'KoboldCPP', category: 'AI', path: 'koboldcpp.exe', status: 'linked' },
+                { id: '5', name: 'Stable Diffusion', category: 'AI', path: 'webui-user.bat', status: 'linked' }
+            ];
+            setIntegrations(restored);
         }
     }, 50);
   };
@@ -200,43 +235,113 @@ const SystemMonitor: React.FC = () => {
   const startInstaller = () => {
       setShowInstaller(true);
       setInstallStep(1);
-      setInstallLog(['> Initializing Setup Wizard v2.4.0', '> Checking Permissions... OK']);
+      setInstallLog(['> Initializing Setup Wizard v2.4.2', '> Checking Permissions... OK', '> Mounting Local File System...']);
       setFoundTools([]);
 
-      // Simulation Sequence
-      const paths = [
-          'C:/Program Files/Blender Foundation/Blender 4.0/blender.exe',
-          'C:/Program Files (x86)/Steam/steamapps/common/Fallout 4/Fallout4.exe',
-          'C:/Users/User/AppData/Local/Programs/Microsoft VS Code/Code.exe',
-          'C:/Program Files/Adobe/Adobe Photoshop 2024/Photoshop.exe',
-          'D:/Modding/MO2/ModOrganizer.exe'
+      // Enhanced Simulation Sequence - Huge List
+      const scanSequence = [
+          // OS / Drivers
+          { path: 'C:/Windows/System32/drivers/etc/hosts', found: true, name: 'System32 Host', cat: 'System' },
+          { path: 'C:/Windows/System32/nvidia-smi.exe', found: true, name: 'NVIDIA Drivers', cat: 'System' },
+          { path: 'C:/Windows/System32/wsl.exe', found: true, name: 'WSL 2 (Ubuntu)', cat: 'System' },
+          
+          // Creative
+          { path: 'C:/Program Files/Adobe/Adobe Photoshop 2024/Photoshop.exe', found: true, name: 'Photoshop 2024', cat: 'Creative' },
+          { path: 'C:/Program Files/Adobe/Adobe Illustrator 2024/Support Files/Contents/Windows/Illustrator.exe', found: false, name: '', cat: '' },
+          { path: 'C:/Program Files/Blender Foundation/Blender 4.0/blender.exe', found: true, name: 'Blender 4.0', cat: 'Creative' },
+          { path: 'C:/Program Files/Pixologic/ZBrush 2022/ZBrush.exe', found: true, name: 'ZBrush 2022', cat: 'Creative' },
+          
+          // AI & Neural Services - NETWORK SCAN
+          { path: 'tcp://localhost:11434', found: true, name: 'Ollama (Active Service)', cat: 'AI' },
+          { path: 'tcp://localhost:5000', found: true, name: 'KoboldCPP (API)', cat: 'AI' },
+          { path: 'tcp://localhost:7860', found: true, name: 'Stable Diffusion WebUI', cat: 'AI' },
+          { path: 'tcp://localhost:8188', found: true, name: 'ComfyUI Server', cat: 'AI' },
+
+          // AI - FILESYSTEM SCAN
+          { path: 'C:/Program Files/LM Studio/LM Studio.exe', found: true, name: 'LM Studio', cat: 'AI' },
+          { path: 'C:/Program Files/GPT4All/bin/chat.exe', found: true, name: 'GPT4All', cat: 'AI' },
+          { path: 'D:/AI/text-generation-webui/start_windows.bat', found: true, name: 'Oobabooga WebUI', cat: 'AI' },
+          { path: 'D:/AI/LocalAI/local-ai.exe', found: true, name: 'LocalAI', cat: 'AI' },
+
+          // Dev
+          { path: 'C:/Users/User/AppData/Local/Programs/Microsoft VS Code/Code.exe', found: true, name: 'VS Code', cat: 'Dev' },
+          { path: 'C:/Program Files/Git/bin/git.exe', found: true, name: 'Git', cat: 'Dev' },
+          { path: 'C:/Program Files/Docker/Docker/Docker Desktop.exe', found: true, name: 'Docker Desktop', cat: 'Dev' },
+          { path: 'C:/Python311/python.exe', found: true, name: 'Python 3.11', cat: 'Dev' },
+
+          // Modding
+          { path: 'C:/Program Files (x86)/Steam/steamapps/common/Fallout 4/Fallout4.exe', found: true, name: 'Fallout 4', cat: 'Modding' },
+          { path: 'D:/Modding/MO2/ModOrganizer.exe', found: true, name: 'Mod Organizer 2', cat: 'Modding' },
+          { path: 'D:/Tools/xEdit/FO4Edit.exe', found: true, name: 'FO4Edit', cat: 'Modding' },
+          { path: 'D:/Tools/NifSkope/NifSkope.exe', found: true, name: 'NifSkope', cat: 'Modding' },
       ];
 
       let i = 0;
       const scanInterval = setInterval(() => {
-          if (i >= paths.length) {
+          if (i >= scanSequence.length) {
               clearInterval(scanInterval);
-              setInstallLog(prev => [...prev, '> Scan Complete.', '> Installing Bridge Service...']);
+              setInstallLog(prev => [...prev, '> Deep Scan Complete.', '> Registering System Hooks...', '> Installing Bridge Service...']);
               setInstallStep(2);
               
               setTimeout(() => {
                   setInstallLog(prev => [...prev, '> Registering Protocol Handlers...', '> Opening Localhost Port 21337...', '> SUCCESS: Bridge Online.']);
                   setInstallStep(3);
                   
-                  // ACTUALLY ACTIVATE BRIDGE
+                  // ACTUALLY ACTIVATE BRIDGE & SAVE
                   localStorage.setItem('mossy_bridge_active', 'true');
                   window.dispatchEvent(new Event('storage'));
                   window.dispatchEvent(new CustomEvent('mossy-bridge-connected'));
                   
-              }, 2000);
+              }, 1500);
               return;
           }
-          const path = paths[i];
-          setInstallLog(prev => [...prev, `Searching: ${path}... FOUND`]);
-          const toolName = path.split('/').pop()?.replace('.exe', '');
-          if(toolName) setFoundTools(prev => [...prev, toolName]);
+          const item = scanSequence[i];
+          
+          // Enhanced log messages for Network/AI scans
+          let logMsg = `Scanning: ${item.path.substring(0, 40)}...`;
+          if (item.path.startsWith('tcp://')) {
+              logMsg = `Port Probe: ${item.path} [NET]...`;
+          }
+          
+          // Show skipped items less frequently to avoid clutter but keep speed
+          if (item.found || Math.random() > 0.7) {
+              setInstallLog(prev => [...prev, `${logMsg} ${item.found ? 'DETECTED' : 'Not Found'}`]);
+          }
+          
+          if (item.found && item.name) {
+              setFoundTools(prev => [...prev, { name: item.name!, category: item.cat! }]);
+          }
           i++;
-      }, 800);
+      }, 30); // Faster scan
+  };
+
+  const handleFinishInstaller = () => {
+      setShowInstaller(false);
+      setActiveTab('telemetry');
+      
+      // Auto-populate integrations based on what we found in the wizard
+      const newIntegrations: Integration[] = foundTools.map((tool, index) => ({
+          id: `linked-${index}`,
+          name: tool.name,
+          category: tool.category as any,
+          path: 'C:/Program Files/...', // Mock path
+          status: 'linked'
+      }));
+      
+      // Add a couple default ones if list is empty (fallback)
+      if (newIntegrations.length === 0) {
+          newIntegrations.push({ id: 'def-1', name: 'Blender 4.0', category: 'Creative', path: '...', status: 'linked' });
+          newIntegrations.push({ id: 'def-2', name: 'VS Code', category: 'Dev', path: '...', status: 'linked' });
+          newIntegrations.push({ id: 'def-3', name: 'Ollama', category: 'AI', path: '...', status: 'linked' });
+      }
+
+      setIntegrations(newIntegrations);
+      
+      // Sync with Chat Interface's memory (so Chat knows what apps are available)
+      const chatApps = newIntegrations.map(i => ({ id: i.id, name: i.name, category: i.category, checked: true }));
+      localStorage.setItem('mossy_apps', JSON.stringify(chatApps));
+      
+      addLog(`Desktop Bridge linked with ${newIntegrations.length} applications.`, 'success');
   };
 
   const copyLink = () => {
@@ -248,7 +353,7 @@ const SystemMonitor: React.FC = () => {
 
   const downloadManual = () => {
       const element = document.createElement("a");
-      const file = new Blob(["OmniForge / Mossy User Manual\n\nVersion: 2.4.0\n\n1. Getting Started\n..."], {type: 'text/plain'});
+      const file = new Blob(["OmniForge / Mossy User Manual\n\nVersion: 2.4.2\n\n1. Getting Started\n..."], {type: 'text/plain'});
       element.href = URL.createObjectURL(file);
       element.download = "Mossy_User_Manual.txt";
       document.body.appendChild(element);
@@ -262,7 +367,7 @@ const SystemMonitor: React.FC = () => {
       {/* --- VIRTUAL INSTALLER MODAL --- */}
       {showInstaller && (
           <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-8 animate-fade-in">
-              <div className="w-full max-w-3xl bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+              <div className="w-full max-w-4xl bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                   {/* Installer Header */}
                   <div className="p-6 border-b border-slate-800 bg-slate-900 flex justify-between items-center">
                       <div className="flex items-center gap-3">
@@ -271,7 +376,7 @@ const SystemMonitor: React.FC = () => {
                           </div>
                           <div>
                               <h2 className="text-xl font-bold text-white">OmniForge Setup Wizard</h2>
-                              <p className="text-xs text-slate-400">Desktop Bridge & Tool Integration</p>
+                              <p className="text-xs text-slate-400">Deep System Analysis & Bridge Configuration</p>
                           </div>
                       </div>
                       {installStep === 3 && (
@@ -286,29 +391,47 @@ const SystemMonitor: React.FC = () => {
                       {installStep === 1 && (
                           <div className="flex flex-col items-center justify-center h-full gap-4">
                               <div className="w-16 h-16 border-4 border-slate-700 border-t-emerald-500 rounded-full animate-spin"></div>
-                              <h3 className="text-lg font-bold text-white animate-pulse">Scanning File System...</h3>
+                              <h3 className="text-lg font-bold text-white animate-pulse">Scanning Local Sectors...</h3>
                               <p className="text-sm text-slate-500 text-center max-w-md">
-                                  Looking for compatible applications (Blender, Unity, Creation Kit) to integrate with Mossy.
+                                  Cataloging installed applications, development SDKs, and neural services.
                               </p>
                           </div>
                       )}
 
                       {installStep >= 2 && (
-                          <div className="grid grid-cols-2 gap-4 animate-fade-in">
-                              <div className="col-span-2 text-sm text-slate-400 mb-2 font-bold uppercase tracking-wider">Detected Tools</div>
-                              {foundTools.map((tool, i) => (
-                                  <div key={i} className="flex items-center gap-3 p-3 bg-slate-800 rounded-lg border border-slate-700 animate-slide-up" style={{animationDelay: `${i*100}ms`}}>
-                                      <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                                      <span className="font-mono text-white">{tool}</span>
-                                  </div>
-                              ))}
+                          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                              <div className="text-sm text-slate-400 mb-4 font-bold uppercase tracking-wider flex justify-between items-end">
+                                  <span>Detected Environment ({foundTools.length} Items)</span>
+                                  <span className="text-emerald-500 text-xs">SCAN COMPLETE</span>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 animate-fade-in">
+                                  {foundTools.map((tool, i) => (
+                                      <div key={i} className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700 animate-slide-up hover:border-emerald-500/30 transition-colors" style={{animationDelay: `${i*30}ms`}}>
+                                          <div className={`p-1.5 rounded ${
+                                              tool.category === 'System' ? 'bg-blue-900/30 text-blue-400' :
+                                              tool.category === 'Creative' ? 'bg-purple-900/30 text-purple-400' :
+                                              tool.category === 'Modding' ? 'bg-orange-900/30 text-orange-400' :
+                                              tool.category === 'AI' ? 'bg-red-900/30 text-red-400' :
+                                              'bg-emerald-900/30 text-emerald-400'
+                                          }`}>
+                                              {tool.category === 'AI' ? <BrainCircuit className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                                          </div>
+                                          <div className="min-w-0">
+                                              <div className="font-bold text-white text-xs truncate max-w-[150px]">{tool.name}</div>
+                                              <div className="text-[10px] text-slate-500 uppercase">{tool.category}</div>
+                                          </div>
+                                      </div>
+                                  ))}
+                              </div>
                           </div>
                       )}
 
                       {/* Log Output */}
-                      <div className="flex-1 bg-black rounded-lg border border-slate-800 p-4 font-mono text-xs text-slate-300 overflow-y-auto" ref={installLogRef}>
+                      <div className="h-32 bg-black rounded-lg border border-slate-800 p-4 font-mono text-[10px] text-slate-300 overflow-y-auto" ref={installLogRef}>
                           {installLog.map((log, i) => (
-                              <div key={i} className="mb-1">{log}</div>
+                              <div key={i} className={`mb-1 ${log.includes('DETECTED') ? 'text-emerald-400' : log.includes('Port Probe') ? 'text-blue-400' : log.includes('Not Found') ? 'text-slate-600' : ''}`}>
+                                  {log}
+                              </div>
                           ))}
                           {installStep === 2 && <div className="text-emerald-500 animate-pulse">_</div>}
                       </div>
@@ -318,11 +441,11 @@ const SystemMonitor: React.FC = () => {
                   <div className="p-6 border-t border-slate-800 bg-slate-900 flex justify-end gap-3">
                       {installStep < 3 ? (
                           <button disabled className="px-6 py-2 bg-slate-800 text-slate-500 font-bold rounded-lg cursor-not-allowed">
-                              Installing...
+                              Processing...
                           </button>
                       ) : (
                           <button 
-                              onClick={() => setShowInstaller(false)}
+                              onClick={handleFinishInstaller}
                               className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-lg shadow-emerald-900/20 transition-all flex items-center gap-2"
                           >
                               <Play className="w-4 h-4 fill-current" /> Launch Mossy
@@ -384,6 +507,34 @@ const SystemMonitor: React.FC = () => {
                     {isScanning ? `Scanning... ${scanProgress}%` : 'Full System Scan'}
                 </button>
             </div>
+
+            {/* Integration List (New Feature) */}
+            {integrations.length > 0 && (
+                <div className="mb-8 animate-fade-in">
+                    <h3 className="text-sm font-bold text-slate-500 mb-3 flex items-center gap-2 uppercase tracking-widest">
+                        <Link className="w-4 h-4" /> Active Integrations
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                        {integrations.map(app => (
+                            <div key={app.id} className="bg-slate-800 border border-slate-700 p-3 rounded-lg flex flex-col justify-between shadow-sm hover:border-forge-accent transition-colors h-full">
+                                <div className="flex items-start gap-3 mb-2">
+                                    <div className={`p-1.5 rounded text-slate-300 ${app.category === 'AI' ? 'bg-red-900/30' : 'bg-slate-900'}`}>
+                                        {app.category === 'AI' ? <BrainCircuit className="w-4 h-4 text-red-400" /> : <Box className="w-4 h-4" />}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="text-xs font-bold text-white truncate" title={app.name}>{app.name}</div>
+                                        <div className="text-[10px] text-slate-500 uppercase truncate">{app.category}</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-900/20 rounded border border-emerald-500/30 w-fit">
+                                    <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    <span className="text-[9px] font-bold text-emerald-400 uppercase">Linked</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Scan Progress */}
             {isScanning && (

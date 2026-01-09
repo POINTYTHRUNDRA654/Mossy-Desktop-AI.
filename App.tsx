@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import SystemMonitor from './components/SystemMonitor';
-import ChatInterface from './components/ChatInterface';
+import { ChatInterface } from './components/ChatInterface';
 import LiveInterface from './components/LiveInterface';
 import ImageSuite from './components/ImageSuite';
 import TTSPanel from './components/TTSPanel';

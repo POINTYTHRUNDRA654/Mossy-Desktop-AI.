@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon } from 'lucide-react';
+import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench } from 'lucide-react';
 
 interface Driver {
     id: string;
@@ -21,10 +21,12 @@ interface LogEntry {
 
 const initialDrivers: Driver[] = [
     { id: 'os_shell', name: 'Windows Shell', icon: Terminal, status: 'inactive', version: '10.0.19045', latency: 0, permissions: ['fs.read', 'fs.write', 'exec'] },
-    { id: 'blender', name: 'Blender 4.0 API', icon: Box, status: 'inactive', version: '4.0.2', latency: 0, permissions: ['bpy.ops', 'bpy.data'] },
+    { id: 'fs_watcher', name: 'File System Watcher', icon: Eye, status: 'inactive', version: '2.1.0', latency: 0, permissions: ['fs.watch', 'read.recursive'] },
+    { id: 'browser', name: 'Browser Uplink', icon: Globe, status: 'inactive', version: '118.0.5', latency: 0, permissions: ['tabs.read', 'bookmarks.read'] },
+    { id: 'nifskope', name: 'NifSkope IPC', icon: Box, status: 'inactive', version: '2.0.0', latency: 0, permissions: ['mesh.read', 'mesh.write'] },
+    { id: 'xedit', name: 'xEdit Data Link', icon: Database, status: 'inactive', version: '4.0.4', latency: 0, permissions: ['plugin.read', 'record.edit'] },
+    { id: 'ck', name: 'Creation Kit Telemetry', icon: Wrench, status: 'inactive', version: '1.10', latency: 0, permissions: ['cell.view'] },
     { id: 'vscode', name: 'VS Code Host', icon: Code, status: 'inactive', version: '1.85.1', latency: 0, permissions: ['editor.action', 'workspace'] },
-    { id: 'adobe', name: 'Photoshop Remote', icon: ImageIcon, status: 'inactive', version: '25.0.0', latency: 0, permissions: ['jsx.eval', 'layer.mod'] },
-    { id: 'discord', name: 'Discord RPC', icon: MessageSquare, status: 'inactive', version: 'Gateway v9', latency: 0, permissions: ['rpc.activity'] },
 ];
 
 const DesktopBridge: React.FC = () => {
@@ -32,25 +34,33 @@ const DesktopBridge: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
   const [repairing, setRepairing] = useState(false);
+  const [autoConnect, setAutoConnect] = useState(true);
 
   // Auto-connect simulates simulated local bridge existing
   useEffect(() => {
       const checkBridge = () => {
           const active = localStorage.getItem('mossy_bridge_active') === 'true';
-          if (active) {
-              toggleDriver('os_shell', true);
+          if (active && autoConnect) {
+              // Reconnect ALL drivers if bridge is globally active
+              addLog('System', 'Restoring previous session state...', 'warn');
+              drivers.forEach((d, i) => {
+                  setTimeout(() => {
+                      toggleDriver(d.id, true);
+                  }, i * 300);
+              });
           }
       };
       
       checkBridge();
       
       const handleConnect = () => {
+          localStorage.setItem('mossy_bridge_active', 'true');
           checkBridge();
           addLog('System', 'External Connection Signal Received.', 'ok');
       };
       window.addEventListener('mossy-bridge-connected', handleConnect);
       return () => window.removeEventListener('mossy-bridge-connected', handleConnect);
-  }, []);
+  }, []); // Run once on mount
 
   useEffect(() => {
       logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -61,7 +71,8 @@ const DesktopBridge: React.FC = () => {
       const interval = setInterval(() => {
           setDrivers(prev => prev.map(d => {
               if (d.status === 'active') {
-                  return { ...d, latency: Math.floor(Math.random() * 15) + 5 };
+                  // Randomize latency slightly
+                  return { ...d, latency: Math.max(1, Math.min(50, d.latency + (Math.random() * 4 - 2))) };
               }
               return d;
           }));
@@ -83,55 +94,85 @@ const DesktopBridge: React.FC = () => {
       setDrivers(prev => prev.map(d => {
           if (d.id !== id) return d;
           
-          const newState = forceState !== undefined ? (forceState ? 'active' : 'inactive') : (d.status === 'active' ? 'inactive' : 'mounting');
+          // Determine new state
+          const currentState = d.status;
+          let targetState: 'active' | 'inactive' | 'mounting' = 'mounting';
           
-          if (newState === 'mounting') {
-              // Simulate mounting process
+          if (forceState !== undefined) {
+              targetState = forceState ? 'active' : 'inactive';
+          } else {
+              targetState = currentState === 'active' ? 'inactive' : 'mounting';
+          }
+
+          // Immediate state update for force, delayed for toggle/mounting simulation
+          if (targetState === 'mounting') {
               setTimeout(() => {
-                  setDrivers(curr => curr.map(cd => cd.id === id ? { ...cd, status: 'active' } : cd));
+                  setDrivers(curr => curr.map(cd => cd.id === id ? { ...cd, status: 'active', latency: Math.floor(Math.random() * 10) + 5 } : cd));
                   addLog(d.name, 'Socket handshake established', 'ok');
-                  addLog(d.name, `PID Attached. Latency: 12ms`, 'ok');
                   
-                  // If shell, update global state
+                  if (id === 'fs_watcher') {
+                      addLog(d.name, 'Indexing D:/Tutorials...', 'ok');
+                  }
+                  if (id === 'browser') {
+                      addLog(d.name, 'Synced with Chrome Profile 1', 'ok');
+                  }
+                  
                   if (id === 'os_shell') {
                       localStorage.setItem('mossy_bridge_active', 'true');
                       window.dispatchEvent(new Event('storage'));
                   }
-              }, 1500);
+              }, 800);
               addLog('Bridge', `Mounting driver: ${d.name}...`, 'warn');
-          } else if (newState === 'inactive') {
+              return { ...d, status: 'mounting' };
+          } 
+          
+          if (targetState === 'active' && currentState !== 'active') {
+               // Immediate activation (used for restore)
+               addLog(d.name, 'Connection restored.', 'success');
+               if (id === 'os_shell') {
+                   localStorage.setItem('mossy_bridge_active', 'true');
+               }
+               return { ...d, status: 'active', latency: 12 };
+          }
+
+          if (targetState === 'inactive') {
               addLog(d.name, 'SIGTERM sent. Connection closed.', 'warn');
               if (id === 'os_shell') {
                   localStorage.removeItem('mossy_bridge_active');
                   window.dispatchEvent(new Event('storage'));
               }
+              return { ...d, status: 'inactive', latency: 0 };
           }
 
-          return { ...d, status: newState };
+          return d;
       }));
   };
 
   const handleRepair = () => {
       if (repairing) return;
       setRepairing(true);
-      addLog('Diagnostics', 'Initiating self-repair sequence...', 'warn');
+      setLogs([]); // Clear logs for clarity
+      addLog('Diagnostics', 'Initiating full-stack neural repair...', 'warn');
       
       let step = 0;
       const interval = setInterval(() => {
           step++;
-          if (step === 1) addLog('Diagnostics', 'Scanning local ports 21337-21340...', 'ok');
-          if (step === 2) addLog('Diagnostics', 'Flushing socket buffers...', 'ok');
-          if (step === 3) {
+          if (step === 1) addLog('Diagnostics', 'Flushing socket buffers...', 'ok');
+          if (step === 2) addLog('Diagnostics', 'Renewing TSL certificates...', 'ok');
+          if (step === 3) addLog('Diagnostics', 'Scanning local ports 21337-21342...', 'ok');
+          if (step === 4) {
               clearInterval(interval);
-              toggleDriver('os_shell', true);
+              // Force enable ALL
+              drivers.forEach(d => toggleDriver(d.id, true));
               setRepairing(false);
-              addLog('System', 'Bridge connection re-established.', 'success');
-              // Force global update
+              addLog('System', 'All Systems Nominal. Link Stabilized.', 'success');
+              
+              // Force global state update
               localStorage.setItem('mossy_bridge_active', 'true');
               window.dispatchEvent(new Event('storage'));
               window.dispatchEvent(new CustomEvent('mossy-bridge-connected'));
           }
-      }, 1000);
+      }, 600);
   };
 
   return (
@@ -145,22 +186,30 @@ const DesktopBridge: React.FC = () => {
                     <Monitor className="w-8 h-8 text-emerald-400" />
                     Neural Interconnect
                 </h2>
-                <p className="text-slate-400 mt-2 font-mono text-sm">
-                    Localhost Bridge Service v2.4.0 <span className="text-slate-600">|</span> Port: 21337
-                </p>
+                <div className="flex items-center gap-4 mt-2">
+                    <p className="text-slate-400 font-mono text-sm">
+                        Localhost Bridge Service v2.4.2 <span className="text-slate-600">|</span> Port: 21337
+                    </p>
+                    <div className="flex items-center gap-2 bg-slate-900 px-2 py-1 rounded border border-slate-800">
+                        <div className={`w-2 h-2 rounded-full ${drivers.some(d => d.status === 'active') ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">
+                            {drivers.some(d => d.status === 'active') ? 'LINK ESTABLISHED' : 'NO CARRIER'}
+                        </span>
+                    </div>
+                </div>
             </div>
             <div className="flex gap-4 items-center">
                 <button 
                     onClick={handleRepair}
-                    className={`flex items-center gap-2 px-4 py-2 rounded bg-slate-800 border border-slate-600 text-xs font-bold hover:bg-slate-700 transition-colors ${repairing ? 'opacity-50 cursor-wait' : ''}`}
+                    className={`flex items-center gap-2 px-6 py-3 rounded-lg bg-emerald-900/20 border border-emerald-500/30 text-emerald-400 text-sm font-bold hover:bg-emerald-900/40 transition-all shadow-lg shadow-emerald-900/10 ${repairing ? 'opacity-50 cursor-wait' : ''}`}
                 >
-                    <RefreshCw className={`w-3 h-3 ${repairing ? 'animate-spin' : ''}`} />
-                    {repairing ? 'Diagnosing...' : 'Repair Link'}
+                    <Zap className={`w-4 h-4 ${repairing ? 'animate-spin' : 'fill-current'}`} />
+                    {repairing ? 'Stabilizing...' : 'Repair Neural Link'}
                 </button>
                 <div className="h-10 w-px bg-slate-800"></div>
                 <div className="text-right">
                     <div className="text-xs font-bold text-slate-500 uppercase">Active Threads</div>
-                    <div className="text-blue-400 font-mono text-lg">{drivers.filter(d => d.status === 'active').length}</div>
+                    <div className="text-blue-400 font-mono text-lg">{drivers.filter(d => d.status === 'active').length}/{drivers.length}</div>
                 </div>
             </div>
         </div>
@@ -168,20 +217,34 @@ const DesktopBridge: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1 min-h-0">
             {/* Driver Grid */}
             <div className="lg:col-span-2 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
+                <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <Layers className="w-4 h-4" /> Driver Matrix
+                    </h3>
+                    <button 
+                        onClick={() => {
+                            drivers.forEach(d => toggleDriver(d.id, true));
+                        }}
+                        className="text-xs text-emerald-500 hover:text-emerald-400 font-bold flex items-center gap-1"
+                    >
+                        <Link className="w-3 h-3" /> Connect All
+                    </button>
+                </div>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {drivers.map(driver => (
                         <div 
                             key={driver.id}
-                            className={`relative overflow-hidden rounded-2xl border transition-all duration-300 p-5 ${
+                            className={`relative overflow-hidden rounded-2xl border transition-all duration-500 p-5 group ${
                                 driver.status === 'active' 
                                 ? 'bg-slate-900/80 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]' 
                                 : driver.status === 'mounting'
                                 ? 'bg-slate-900 border-yellow-500/50'
-                                : 'bg-slate-950 border-slate-800 opacity-60 hover:opacity-100'
+                                : 'bg-slate-950 border-slate-800 opacity-60 hover:opacity-100 hover:border-slate-700'
                             }`}
                         >
                             <div className="flex justify-between items-start mb-4">
-                                <div className={`p-3 rounded-xl ${
+                                <div className={`p-3 rounded-xl transition-colors ${
                                     driver.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 
                                     driver.status === 'mounting' ? 'bg-yellow-500/20 text-yellow-400 animate-pulse' :
                                     'bg-slate-800 text-slate-500'
@@ -195,6 +258,7 @@ const DesktopBridge: React.FC = () => {
                                         ? 'bg-emerald-900/30 border-emerald-500/50 text-emerald-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-400'
                                         : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
                                     }`}
+                                    title={driver.status === 'active' ? 'Disconnect' : 'Connect'}
                                 >
                                     <Power className="w-4 h-4" />
                                 </button>
@@ -218,17 +282,17 @@ const DesktopBridge: React.FC = () => {
                                     <>
                                         <div className="flex justify-between items-center text-xs">
                                             <span className="text-slate-400">Latency</span>
-                                            <span className="text-blue-400 font-mono">{driver.latency}ms</span>
+                                            <span className="text-blue-400 font-mono">{driver.latency.toFixed(1)}ms</span>
                                         </div>
                                         <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden mt-2">
-                                            <div className="h-full bg-emerald-500 animate-pulse" style={{ width: '100%' }}></div>
+                                            <div className="h-full bg-emerald-500 animate-pulse" style={{ width: `${Math.random() * 40 + 60}%` }}></div>
                                         </div>
                                     </>
                                 )}
                             </div>
 
                             {driver.status === 'active' && (
-                                <div className="mt-4 pt-4 border-t border-slate-800 flex flex-wrap gap-1">
+                                <div className="mt-4 pt-4 border-t border-slate-800 flex flex-wrap gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     {driver.permissions.map(perm => (
                                         <span key={perm} className="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-400 border border-slate-700">
                                             {perm}
@@ -265,7 +329,7 @@ const DesktopBridge: React.FC = () => {
                             <AlertOctagon className="w-5 h-5 text-red-500 shrink-0" />
                             <div className="text-xs text-red-200">
                                 <span className="font-bold block mb-1">Sandbox Warning</span>
-                                Drivers have direct memory access to target applications. Ensure plugins are trusted.
+                                Drivers have direct memory access. Ensure all plugins are trusted.
                             </div>
                         </div>
                     </div>

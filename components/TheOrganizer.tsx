@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Library, Folder, File, AlertTriangle, Play, Settings, RefreshCw, Zap, ArrowDown, ArrowUp, Minus, Plus, Search, Layers, Database, Check } from 'lucide-react';
+import { Library, Folder, File, AlertTriangle, Play, Settings, RefreshCw, Zap, ArrowDown, ArrowUp, Minus, Plus, Search, Layers, Database, Check, Wrench, Download, Box, Link } from 'lucide-react';
 
 interface Mod {
     id: string;
@@ -14,6 +14,15 @@ interface Mod {
         overwrittenBy: string[]; // IDs of mods that overwrite this one
     };
     files: string[]; // Simulated file list
+}
+
+interface Utility {
+    id: string;
+    name: string;
+    description: string;
+    isInstalled: boolean;
+    isRequired: boolean; // Recommended vs Essential
+    path?: string;
 }
 
 const initialMods: Mod[] = [
@@ -49,14 +58,35 @@ const initialMods: Mod[] = [
     },
 ];
 
+const initialUtilities: Utility[] = [
+    { id: 'f4se', name: 'F4SE', description: 'Script Extender', isInstalled: true, isRequired: true, path: 'Fallout 4/f4se_loader.exe' },
+    { id: 'ck', name: 'Creation Kit', description: 'Official Editor', isInstalled: false, isRequired: false },
+    { id: 'xedit', name: 'FO4Edit', description: 'Conflict Resolution', isInstalled: true, isRequired: true, path: 'Tools/FO4Edit.exe' },
+    { id: 'bodyslide', name: 'BodySlide', description: 'Mesh Generator', isInstalled: true, isRequired: true, path: 'Tools/BodySlide x64.exe' },
+    { id: 'nifskope', name: 'NifSkope', description: 'NIF Mesh Editor', isInstalled: false, isRequired: false },
+    { id: 'loot', name: 'LOOT', description: 'Load Order Tool', isInstalled: false, isRequired: false },
+];
+
 const TheOrganizer: React.FC = () => {
     const [mods, setMods] = useState<Mod[]>(initialMods);
+    const [utilities, setUtilities] = useState<Utility[]>(initialUtilities);
     const [selectedModId, setSelectedModId] = useState<string | null>(null);
     const [filter, setFilter] = useState('');
     const [isSorting, setIsSorting] = useState(false);
+    const [activeTab, setActiveTab] = useState<'mods' | 'utils'>('mods');
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
 
     const selectedMod = mods.find(m => m.id === selectedModId);
+
+    // Simulate scanning on load
+    useEffect(() => {
+        // Only if bridge is active in reality, but simulating for UI
+        const bridgeActive = localStorage.getItem('mossy_bridge_active') === 'true';
+        if (bridgeActive) {
+            // Randomize detected state for demo
+            setUtilities(prev => prev.map(u => ({...u, isInstalled: Math.random() > 0.3})));
+        }
+    }, []);
 
     const handleToggle = (id: string) => {
         setMods(prev => prev.map(m => m.id === id ? { ...m, enabled: !m.enabled } : m));
@@ -133,13 +163,17 @@ const TheOrganizer: React.FC = () => {
                     </h2>
                     <div className="h-6 w-px bg-slate-600"></div>
                     <div className="flex items-center gap-2">
-                        <select className="bg-[#1e1e1e] border border-slate-600 rounded px-2 py-1 text-xs text-white outline-none">
-                            <option>Default Profile</option>
-                            <option>Survival Mode</option>
-                            <option>Testing</option>
-                        </select>
-                        <button className="p-1.5 bg-[#1e1e1e] border border-slate-600 rounded hover:bg-slate-700" title="Profile Settings">
-                            <Settings className="w-4 h-4 text-slate-400" />
+                        <button 
+                            onClick={() => setActiveTab('mods')}
+                            className={`px-3 py-1 rounded text-xs font-bold transition-all ${activeTab === 'mods' ? 'bg-[#094771] text-white' : 'hover:bg-slate-700 text-slate-400'}`}
+                        >
+                            Mods
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('utils')}
+                            className={`px-3 py-1 rounded text-xs font-bold transition-all ${activeTab === 'utils' ? 'bg-[#094771] text-white' : 'hover:bg-slate-700 text-slate-400'}`}
+                        >
+                            Executables
                         </button>
                     </div>
                 </div>
@@ -155,173 +189,227 @@ const TheOrganizer: React.FC = () => {
                         </select>
                     </div>
                     <button className="px-4 py-1 bg-gradient-to-b from-slate-700 to-slate-800 border border-slate-600 rounded text-xs font-bold hover:from-slate-600 hover:to-slate-700">Run</button>
-                    <div className="h-6 w-px bg-slate-600 mx-2"></div>
-                    <button 
-                        onClick={handleSort}
-                        disabled={isSorting}
-                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 border border-slate-500 rounded text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
-                    >
-                        {isSorting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 text-yellow-400" />}
-                        Sort
-                    </button>
+                    {activeTab === 'mods' && (
+                        <>
+                            <div className="h-6 w-px bg-slate-600 mx-2"></div>
+                            <button 
+                                onClick={handleSort}
+                                disabled={isSorting}
+                                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 border border-slate-500 rounded text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
+                            >
+                                {isSorting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 text-yellow-400" />}
+                                Sort
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 
             <div className="flex-1 flex overflow-hidden">
-                {/* Left Pane: Mod List */}
-                <div className="flex-1 flex flex-col min-w-0 border-r border-black bg-[#252526]">
-                    {/* Filter Bar */}
-                    <div className="p-2 border-b border-black flex gap-2">
-                        <div className="relative flex-1">
-                            <Search className="w-3 h-3 absolute left-2 top-2 text-slate-500" />
-                            <input 
-                                type="text" 
-                                placeholder="Filter mods..." 
-                                value={filter}
-                                onChange={(e) => setFilter(e.target.value)}
-                                className="w-full bg-[#1e1e1e] border border-slate-600 rounded pl-7 pr-2 py-1 text-xs focus:outline-none focus:border-forge-accent"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Header Row */}
-                    <div className="grid grid-cols-[40px_1fr_100px_40px] bg-[#333333] text-[10px] text-slate-300 font-bold border-b border-black p-1 select-none">
-                        <div className="text-center">Priority</div>
-                        <div className="pl-2">Mod Name</div>
-                        <div>Category</div>
-                        <div className="text-center">Flags</div>
-                    </div>
-
-                    {/* Mod Rows */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
-                        {mods
-                            .filter(m => m.name.toLowerCase().includes(filter.toLowerCase()))
-                            .sort((a, b) => a.priority - b.priority)
-                            .map((mod) => (
-                            <div 
-                                key={mod.id}
-                                onClick={() => setSelectedModId(mod.id)}
-                                className={`grid grid-cols-[40px_1fr_100px_40px] items-center p-1 border-b border-[#2a2a2a] cursor-pointer hover:bg-[#2a2d3e] text-xs transition-colors ${
-                                    selectedModId === mod.id ? 'bg-[#094771] text-white hover:bg-[#094771]' : 
-                                    !mod.enabled ? 'text-slate-500 italic' : 'text-slate-200'
-                                }`}
-                            >
-                                <div className="text-center font-mono text-slate-500">{mod.priority}</div>
-                                <div className="flex items-center gap-2 pl-2 overflow-hidden">
+                {activeTab === 'mods' ? (
+                    <>
+                        {/* Left Pane: Mod List */}
+                        <div className="flex-1 flex flex-col min-w-0 border-r border-black bg-[#252526]">
+                            {/* Filter Bar */}
+                            <div className="p-2 border-b border-black flex gap-2">
+                                <div className="relative flex-1">
+                                    <Search className="w-3 h-3 absolute left-2 top-2 text-slate-500" />
                                     <input 
-                                        type="checkbox" 
-                                        checked={mod.enabled}
-                                        onChange={(e) => {
-                                            e.stopPropagation();
-                                            handleToggle(mod.id);
-                                        }}
-                                        className="w-3 h-3 rounded-sm border-slate-600 bg-[#1e1e1e]"
+                                        type="text" 
+                                        placeholder="Filter mods..." 
+                                        value={filter}
+                                        onChange={(e) => setFilter(e.target.value)}
+                                        className="w-full bg-[#1e1e1e] border border-slate-600 rounded pl-7 pr-2 py-1 text-xs focus:outline-none focus:border-forge-accent"
                                     />
-                                    <span className="truncate">{mod.name}</span>
-                                </div>
-                                <div className="text-[10px] text-slate-400 truncate">{mod.category}</div>
-                                <div className="flex justify-center gap-1">
-                                    {mod.conflicts.overwrites.length > 0 && <span className="text-green-500 text-[10px] font-bold">+</span>}
-                                    {mod.conflicts.overwrittenBy.length > 0 && <span className="text-red-500 text-[10px] font-bold">-</span>}
-                                    {mod.conflicts.overwrites.length > 0 && mod.conflicts.overwrittenBy.length > 0 && <span className="text-yellow-500 text-[10px] font-bold">⚡</span>}
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                    
-                    <div className="p-1 bg-[#333333] border-t border-black text-[10px] text-slate-400 text-center">
-                        Active: {mods.filter(m => m.enabled).length} / Total: {mods.length}
-                    </div>
-                </div>
 
-                {/* Right Pane: Details & Conflicts */}
-                <div className="w-80 bg-[#1e1e1e] flex flex-col">
-                    {selectedMod ? (
-                        <>
-                            <div className="p-3 border-b border-black bg-[#2d2d2d] font-bold text-slate-200 truncate" title={selectedMod.name}>
-                                {selectedMod.name}
+                            {/* Header Row */}
+                            <div className="grid grid-cols-[40px_1fr_100px_40px] bg-[#333333] text-[10px] text-slate-300 font-bold border-b border-black p-1 select-none">
+                                <div className="text-center">Priority</div>
+                                <div className="pl-2">Mod Name</div>
+                                <div>Category</div>
+                                <div className="text-center">Flags</div>
+                            </div>
+
+                            {/* Mod Rows */}
+                            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                {mods
+                                    .filter(m => m.name.toLowerCase().includes(filter.toLowerCase()))
+                                    .sort((a, b) => a.priority - b.priority)
+                                    .map((mod) => (
+                                    <div 
+                                        key={mod.id}
+                                        onClick={() => setSelectedModId(mod.id)}
+                                        className={`grid grid-cols-[40px_1fr_100px_40px] items-center p-1 border-b border-[#2a2a2a] cursor-pointer hover:bg-[#2a2d3e] text-xs transition-colors ${
+                                            selectedModId === mod.id ? 'bg-[#094771] text-white hover:bg-[#094771]' : 
+                                            !mod.enabled ? 'text-slate-500 italic' : 'text-slate-200'
+                                        }`}
+                                    >
+                                        <div className="text-center font-mono text-slate-500">{mod.priority}</div>
+                                        <div className="flex items-center gap-2 pl-2 overflow-hidden">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={mod.enabled}
+                                                onChange={(e) => {
+                                                    e.stopPropagation();
+                                                    handleToggle(mod.id);
+                                                }}
+                                                className="w-3 h-3 rounded-sm border-slate-600 bg-[#1e1e1e]"
+                                            />
+                                            <span className="truncate">{mod.name}</span>
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 truncate">{mod.category}</div>
+                                        <div className="flex justify-center gap-1">
+                                            {mod.conflicts.overwrites.length > 0 && <span className="text-green-500 text-[10px] font-bold">+</span>}
+                                            {mod.conflicts.overwrittenBy.length > 0 && <span className="text-red-500 text-[10px] font-bold">-</span>}
+                                            {mod.conflicts.overwrites.length > 0 && mod.conflicts.overwrittenBy.length > 0 && <span className="text-yellow-500 text-[10px] font-bold">⚡</span>}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                             
-                            {/* Fake Tabs */}
-                            <div className="flex border-b border-black text-xs">
-                                <div className="px-3 py-1.5 bg-[#1e1e1e] text-slate-200 border-t-2 border-forge-accent">Conflicts</div>
-                                <div className="px-3 py-1.5 bg-[#252526] text-slate-500 border-t-2 border-transparent hover:text-slate-300 cursor-pointer">Files</div>
-                                <div className="px-3 py-1.5 bg-[#252526] text-slate-500 border-t-2 border-transparent hover:text-slate-300 cursor-pointer">Text</div>
+                            <div className="p-1 bg-[#333333] border-t border-black text-[10px] text-slate-400 text-center">
+                                Active: {mods.filter(m => m.enabled).length} / Total: {mods.length}
                             </div>
+                        </div>
 
-                            <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                                {/* Overwritten By (Red) */}
-                                <div>
-                                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                        <ArrowDown className="w-3 h-3 text-red-500" /> Overwritten By (Loser)
-                                    </h4>
-                                    {selectedMod.conflicts.overwrittenBy.length > 0 ? (
-                                        <div className="space-y-1">
-                                            {selectedMod.conflicts.overwrittenBy.map(id => (
-                                                <div key={id} className="flex items-center gap-2 p-2 bg-red-900/10 border border-red-900/30 rounded text-xs text-red-200">
-                                                    <Layers className="w-3 h-3" />
-                                                    {getModName(id)}
+                        {/* Right Pane: Details & Conflicts */}
+                        <div className="w-80 bg-[#1e1e1e] flex flex-col">
+                            {selectedMod ? (
+                                <>
+                                    <div className="p-3 border-b border-black bg-[#2d2d2d] font-bold text-slate-200 truncate" title={selectedMod.name}>
+                                        {selectedMod.name}
+                                    </div>
+                                    
+                                    {/* Fake Tabs */}
+                                    <div className="flex border-b border-black text-xs">
+                                        <div className="px-3 py-1.5 bg-[#1e1e1e] text-slate-200 border-t-2 border-forge-accent">Conflicts</div>
+                                        <div className="px-3 py-1.5 bg-[#252526] text-slate-500 border-t-2 border-transparent hover:text-slate-300 cursor-pointer">Files</div>
+                                        <div className="px-3 py-1.5 bg-[#252526] text-slate-500 border-t-2 border-transparent hover:text-slate-300 cursor-pointer">Text</div>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                                        {/* Overwritten By (Red) */}
+                                        <div>
+                                            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                <ArrowDown className="w-3 h-3 text-red-500" /> Overwritten By (Loser)
+                                            </h4>
+                                            {selectedMod.conflicts.overwrittenBy.length > 0 ? (
+                                                <div className="space-y-1">
+                                                    {selectedMod.conflicts.overwrittenBy.map(id => (
+                                                        <div key={id} className="flex items-center gap-2 p-2 bg-red-900/10 border border-red-900/30 rounded text-xs text-red-200">
+                                                            <Layers className="w-3 h-3" />
+                                                            {getModName(id)}
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            ))}
+                                            ) : (
+                                                <div className="text-xs text-slate-600 italic">No mods overwrite this one.</div>
+                                            )}
                                         </div>
-                                    ) : (
-                                        <div className="text-xs text-slate-600 italic">No mods overwrite this one.</div>
-                                    )}
-                                </div>
 
-                                {/* Overwrites (Green) */}
-                                <div>
-                                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                        <ArrowUp className="w-3 h-3 text-green-500" /> Overwrites (Winner)
-                                    </h4>
-                                    {selectedMod.conflicts.overwrites.length > 0 ? (
-                                        <div className="space-y-1">
-                                            {selectedMod.conflicts.overwrites.map(id => (
-                                                <div key={id} className="flex items-center gap-2 p-2 bg-green-900/10 border border-green-900/30 rounded text-xs text-green-200">
-                                                    <Layers className="w-3 h-3" />
-                                                    {getModName(id)}
+                                        {/* Overwrites (Green) */}
+                                        <div>
+                                            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                <ArrowUp className="w-3 h-3 text-green-500" /> Overwrites (Winner)
+                                            </h4>
+                                            {selectedMod.conflicts.overwrites.length > 0 ? (
+                                                <div className="space-y-1">
+                                                    {selectedMod.conflicts.overwrites.map(id => (
+                                                        <div key={id} className="flex items-center gap-2 p-2 bg-green-900/10 border border-green-900/30 rounded text-xs text-green-200">
+                                                            <Layers className="w-3 h-3" />
+                                                            {getModName(id)}
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            ))}
+                                            ) : (
+                                                <div className="text-xs text-slate-600 italic">This mod does not overwrite others.</div>
+                                            )}
                                         </div>
-                                    ) : (
-                                        <div className="text-xs text-slate-600 italic">This mod does not overwrite others.</div>
-                                    )}
-                                </div>
 
-                                {/* File Preview Logic */}
-                                <div>
-                                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                        <Database className="w-3 h-3" /> VFS Preview
-                                    </h4>
-                                    <div className="bg-black border border-slate-700 rounded p-2 text-[10px] font-mono text-slate-400 overflow-x-auto">
-                                        {selectedMod.files.map((f, i) => (
-                                            <div key={i} className="flex items-center gap-1">
-                                                <File className="w-3 h-3 text-slate-600" />
-                                                {f}
+                                        {/* File Preview Logic */}
+                                        <div>
+                                            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                <Database className="w-3 h-3" /> VFS Preview
+                                            </h4>
+                                            <div className="bg-black border border-slate-700 rounded p-2 text-[10px] font-mono text-slate-400 overflow-x-auto">
+                                                {selectedMod.files.map((f, i) => (
+                                                    <div key={i} className="flex items-center gap-1">
+                                                        <File className="w-3 h-3 text-slate-600" />
+                                                        {f}
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
+                                            <div className="mt-2 text-[10px] text-slate-500">
+                                                These files are mapped to /Data/ in the virtual file system.
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="mt-2 text-[10px] text-slate-500">
-                                        These files are mapped to /Data/ in the virtual file system.
-                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex-1 flex flex-col items-center justify-center text-slate-600 p-6 text-center">
+                                    <Layers className="w-12 h-12 mb-4 opacity-20" />
+                                    <p className="text-sm">Select a mod to view conflicts and file structure.</p>
                                 </div>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center text-slate-600 p-6 text-center">
-                            <Layers className="w-12 h-12 mb-4 opacity-20" />
-                            <p className="text-sm">Select a mod to view conflicts and file structure.</p>
+                            )}
+                            
+                            {/* Status Bar for Right Pane */}
+                            {analysisResult && (
+                                <div className="p-2 bg-slate-800 border-t border-black text-xs text-green-400 flex items-center gap-2 animate-fade-in">
+                                    <Check className="w-3 h-3" />
+                                    {analysisResult}
+                                </div>
+                            )}
                         </div>
-                    )}
-                    
-                    {/* Status Bar for Right Pane */}
-                    {analysisResult && (
-                        <div className="p-2 bg-slate-800 border-t border-black text-xs text-green-400 flex items-center gap-2 animate-fade-in">
-                            <Check className="w-3 h-3" />
-                            {analysisResult}
+                    </>
+                ) : (
+                    // UTILITIES TAB
+                    <div className="flex-1 bg-[#1b1b1b] p-8 overflow-y-auto">
+                        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
+                            <Wrench className="w-6 h-6 text-forge-accent" /> Tool Dashboard
+                        </h2>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {utilities.map(tool => (
+                                <div key={tool.id} className={`p-6 rounded-xl border-2 transition-all group ${tool.isInstalled ? 'bg-slate-800 border-slate-700' : 'bg-slate-900 border-dashed border-slate-700 opacity-80'}`}>
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className={`p-3 rounded-lg ${tool.isInstalled ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                            {tool.id === 'f4se' ? <Zap className="w-6 h-6" /> : 
+                                             tool.id === 'ck' ? <Box className="w-6 h-6" /> : 
+                                             tool.id === 'xedit' ? <Database className="w-6 h-6" /> : 
+                                             <Settings className="w-6 h-6" />}
+                                        </div>
+                                        {tool.isInstalled ? (
+                                            <div className="px-2 py-1 rounded bg-emerald-900/30 text-emerald-400 text-xs font-bold flex items-center gap-1 border border-emerald-500/30">
+                                                <Check className="w-3 h-3" /> Detected
+                                            </div>
+                                        ) : (
+                                            tool.isRequired && (
+                                                <div className="px-2 py-1 rounded bg-yellow-900/30 text-yellow-400 text-xs font-bold border border-yellow-500/30">
+                                                    Recommended
+                                                </div>
+                                            )
+                                        )}
+                                    </div>
+                                    
+                                    <h3 className="text-lg font-bold text-white mb-1">{tool.name}</h3>
+                                    <p className="text-sm text-slate-400 mb-4 h-10">{tool.description}</p>
+                                    
+                                    {tool.isInstalled ? (
+                                        <div className="text-xs font-mono text-slate-500 break-all bg-black/30 p-2 rounded border border-slate-700">
+                                            Path: {tool.path}
+                                        </div>
+                                    ) : (
+                                        <button className="w-full py-2 flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-bold transition-colors">
+                                            <Download className="w-3 h-3" /> Find Download
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
         </div>
     );

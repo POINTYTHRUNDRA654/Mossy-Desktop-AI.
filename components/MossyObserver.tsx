@@ -54,6 +54,17 @@ const MossyObserver: React.FC = () => {
     const location = useLocation();
     const [message, setMessage] = useState<string | null>(null);
     const [visible, setVisible] = useState(false);
+    const [customAvatar, setCustomAvatar] = useState<string | null>(null);
+
+    // Sync Avatar from Storage
+    useEffect(() => {
+        const checkAvatar = () => {
+            setCustomAvatar(localStorage.getItem('mossy_avatar_custom'));
+        };
+        checkAvatar();
+        window.addEventListener('storage', checkAvatar);
+        return () => window.removeEventListener('storage', checkAvatar);
+    }, []);
 
     useEffect(() => {
         // Clear previous
@@ -101,13 +112,23 @@ const MossyObserver: React.FC = () => {
                 </div>
                 
                 {/* Mini Avatar Bubble */}
-                <div className="w-12 h-12 rounded-full border-2 border-emerald-500/50 overflow-hidden relative shadow-lg bg-black">
-                    <img 
-                        src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop" 
-                        className="w-full h-full object-cover opacity-80"
-                        alt="Mossy"
-                    />
-                    <div className="absolute inset-0 bg-emerald-500/20"></div>
+                <div className="w-12 h-12 rounded-full bg-black border-2 border-slate-800 flex items-center justify-center overflow-hidden relative shadow-lg">
+                    {customAvatar ? (
+                        <>
+                            <div className="absolute inset-0 bg-emerald-500/20 animate-pulse"></div>
+                            <img src={customAvatar} alt="Mossy" className="w-full h-full object-cover opacity-90" />
+                        </>
+                    ) : (
+                        <>
+                            {/* Inner Glow */}
+                            <div className="absolute inset-0 bg-emerald-900/20"></div>
+                            {/* Core */}
+                            <div className="w-4 h-4 bg-emerald-400 rounded-full shadow-[0_0_15px_#10b981] animate-pulse"></div>
+                            {/* Rings */}
+                            <div className="absolute inset-1 border border-emerald-500/30 rounded-full animate-spin-slow"></div>
+                            <div className="absolute inset-2 border border-emerald-500/20 rounded-full animate-reverse-spin"></div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>
