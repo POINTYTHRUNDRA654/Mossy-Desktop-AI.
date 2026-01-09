@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { GoogleGenAI } from "@google/genai";
-import { LayoutDashboard, Zap, Clock, Shield, Activity, Star, ArrowRight, MessageSquare, Terminal, Aperture, GitBranch, Cpu, AlertTriangle, Calendar, Bell, Gamepad2 } from 'lucide-react';
+import { LayoutDashboard, Zap, Clock, Shield, Activity, Star, ArrowRight, MessageSquare, Terminal, Aperture, GitBranch, Cpu, AlertTriangle, Calendar, Bell, Gamepad2, Package, Library, Bug, Binary } from 'lucide-react';
 
 interface Insight {
   id: string;
@@ -48,8 +48,8 @@ const TheNexus: React.FC = () => {
       // We simulate an AI summary of "Recent Events"
       
       const mockInsights: Insight[] = [
-          { id: '1', type: 'suggestion', message: 'You have 3 uncompiled scripts in The Workshop.', action: 'Open Workshop', actionLink: '/workshop' },
-          { id: '2', type: 'info', message: 'Bridge connection is stable (12ms latency).', action: 'View Telemetry', actionLink: '/monitor' }
+          { id: '1', type: 'info', message: 'Havok Content Tools Compendium ingested. Physics analysis available in The Splicer.', action: 'Open Splicer', actionLink: '/splicer' },
+          { id: '2', type: 'suggestion', message: 'You have 3 uncompiled scripts in The Workshop.', action: 'Open Workshop', actionLink: '/workshop' },
       ];
 
       if (!localStorage.getItem('mossy_bridge_active')) {
@@ -180,7 +180,7 @@ const TheNexus: React.FC = () => {
                   <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                       <Zap className="w-5 h-5 text-forge-accent" /> Quick Launch
                   </h2>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-2 gap-4">
                       
                       <Link to="/chat" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-emerald-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
                           <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -189,11 +189,25 @@ const TheNexus: React.FC = () => {
                           <span className="text-sm font-bold text-slate-200">Chat</span>
                       </Link>
 
-                      <Link to="/terminal" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-green-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
-                          <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                              <Terminal className="w-5 h-5 text-green-400" />
+                      <Link to="/splicer" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-purple-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
+                          <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                              <Binary className="w-5 h-5 text-purple-400" />
                           </div>
-                          <span className="text-sm font-bold text-slate-200">Terminal</span>
+                          <span className="text-sm font-bold text-slate-200">Splicer</span>
+                      </Link>
+
+                      <Link to="/organizer" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-yellow-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
+                          <div className="w-10 h-10 bg-yellow-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                              <Library className="w-5 h-5 text-yellow-400" />
+                          </div>
+                          <span className="text-sm font-bold text-slate-200">Organizer</span>
+                      </Link>
+
+                      <Link to="/crucible" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-red-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
+                          <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                              <Bug className="w-5 h-5 text-red-400" />
+                          </div>
+                          <span className="text-sm font-bold text-slate-200">Crucible</span>
                       </Link>
 
                       <Link to="/lens" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-blue-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
@@ -203,9 +217,9 @@ const TheNexus: React.FC = () => {
                           <span className="text-sm font-bold text-slate-200">Lens</span>
                       </Link>
 
-                      <Link to="/holo" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-purple-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
-                          <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                              <Gamepad2 className="w-5 h-5 text-purple-400" />
+                      <Link to="/holo" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-pink-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
+                          <div className="w-10 h-10 bg-pink-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                              <Gamepad2 className="w-5 h-5 text-pink-400" />
                           </div>
                           <span className="text-sm font-bold text-slate-200">Holodeck</span>
                       </Link>

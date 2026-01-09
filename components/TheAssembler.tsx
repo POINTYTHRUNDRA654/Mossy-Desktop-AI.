@@ -147,7 +147,9 @@ const TheAssembler: React.FC = () => {
                 config: { responseMimeType: 'application/json' }
             });
 
-            const generated = JSON.parse(response.text);
+            // Clean markdown fences if present
+            let cleanJson = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
+            const generated = JSON.parse(cleanJson);
             
             // Add IDs and visual state
             const processGen = (nodes: any[]): FomodNode[] => {
@@ -163,7 +165,7 @@ const TheAssembler: React.FC = () => {
 
         } catch (e) {
             console.error(e);
-            alert("Failed to auto-generate structure.");
+            alert("Failed to auto-generate structure. AI returned invalid format.");
         } finally {
             setIsGenerating(false);
         }
@@ -305,7 +307,7 @@ const TheAssembler: React.FC = () => {
                         <Package className="w-6 h-6 text-purple-400" />
                         The Assembler
                     </h2>
-                    <p className="text-xs text-slate-400 font-mono mt-1">FOMOD Visual Architect</p>
+                    <p className="text-xs text-slate-400 font-mono mt-1">FOMOD Creation Tool v1.7</p>
                 </div>
                 <div className="flex gap-2">
                     <button 
