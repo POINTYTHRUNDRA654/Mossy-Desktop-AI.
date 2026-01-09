@@ -12,6 +12,7 @@ interface LiveContextType {
   // Avatar Management
   customAvatar: string | null;
   updateAvatar: (file: File) => Promise<void>;
+  setAvatarFromUrl: (url: string) => Promise<void>;
   clearAvatar: () => void;
 }
 
@@ -82,43 +83,51 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const processorRef = useRef<ScriptProcessorNode | null>(null);
 
   // --- Avatar Logic ---
-  const updateAvatar = async (file: File) => {
-      try {
-          // Resize and compress image to fit in localStorage
-          const compressed = await new Promise<string>((resolve) => {
+  const processImageToAvatar = async (imgSource: string | File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const maxSize = 300; // Smaller size for better performance/storage
+              let width = img.width;
+              let height = img.height;
+              
+              if (width > height) {
+                  if (width > maxSize) {
+                      height *= maxSize / width;
+                      width = maxSize;
+                  }
+              } else {
+                  if (height > maxSize) {
+                      width *= maxSize / height;
+                      height = maxSize;
+                  }
+              }
+              
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              ctx?.drawImage(img, 0, 0, width, height);
+              // Compress to JPEG 60% quality
+              resolve(canvas.toDataURL('image/jpeg', 0.6));
+          };
+          img.onerror = reject;
+
+          if (typeof imgSource === 'string') {
+              img.src = imgSource;
+          } else {
               const reader = new FileReader();
               reader.onload = (e) => {
-                  const img = new Image();
-                  img.onload = () => {
-                      const canvas = document.createElement('canvas');
-                      const maxSize = 300; // Smaller size for better performance/storage
-                      let width = img.width;
-                      let height = img.height;
-                      
-                      if (width > height) {
-                          if (width > maxSize) {
-                              height *= maxSize / width;
-                              width = maxSize;
-                          }
-                      } else {
-                          if (height > maxSize) {
-                              width *= maxSize / height;
-                              height = maxSize;
-                          }
-                      }
-                      
-                      canvas.width = width;
-                      canvas.height = height;
-                      const ctx = canvas.getContext('2d');
-                      ctx?.drawImage(img, 0, 0, width, height);
-                      // Compress to JPEG 60% quality
-                      resolve(canvas.toDataURL('image/jpeg', 0.6));
-                  };
                   img.src = e.target?.result as string;
               };
-              reader.readAsDataURL(file);
-          });
+              reader.readAsDataURL(imgSource);
+          }
+      });
+  };
 
+  const updateAvatar = async (file: File) => {
+      try {
+          const compressed = await processImageToAvatar(file);
           setCustomAvatar(compressed);
           try {
               localStorage.setItem('mossy_avatar_custom', compressed);
@@ -128,6 +137,21 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
       } catch (err) {
           console.error("Failed to process avatar:", err);
+      }
+  };
+
+  const setAvatarFromUrl = async (url: string) => {
+      try {
+          const compressed = await processImageToAvatar(url);
+          setCustomAvatar(compressed);
+          try {
+              localStorage.setItem('mossy_avatar_custom', compressed);
+          } catch (e) {
+              console.error("Storage quota exceeded", e);
+              alert("Image saved for this session only (Browser Storage Full).");
+          }
+      } catch (err) {
+          console.error("Failed to process avatar url:", err);
       }
   };
 
@@ -254,7 +278,7 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <LiveContext.Provider value={{ isActive, status, volume, mode, transcription, connect, disconnect, customAvatar, updateAvatar, clearAvatar }}>
+    <LiveContext.Provider value={{ isActive, status, volume, mode, transcription, connect, disconnect, customAvatar, updateAvatar, setAvatarFromUrl, clearAvatar }}>
       {children}
     </LiveContext.Provider>
   );

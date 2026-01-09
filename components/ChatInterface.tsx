@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { GoogleGenAI, Modality, FunctionDeclaration, Type } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
-import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight, Wrench, Radio, Lock, Square } from 'lucide-react';
+import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight, Wrench, Radio, Lock, Square, Map, Scroll, Flag, PenTool, Database, Activity } from 'lucide-react';
 import { Message } from '../types';
 
 type OnboardingState = 'init' | 'scanning' | 'integrating' | 'ready' | 'project_setup';
@@ -20,6 +20,7 @@ interface ProjectData {
   timestamp: string;
   lastSessionSummary?: string; 
   keyDecisions?: string[];
+  categories?: string[];
 }
 
 interface SystemProfile {
@@ -127,6 +128,111 @@ const toolDeclarations: FunctionDeclaration[] = [
         }
     }
 ];
+
+// --- Project Wizard Component ---
+const ProjectWizard: React.FC<{ onSubmit: (data: any) => void, onCancel: () => void }> = ({ onSubmit, onCancel }) => {
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+    const categories = [
+        { id: 'quest', label: 'Quest / Story', icon: Scroll },
+        { id: 'asset', label: 'Asset Replacer', icon: Box },
+        { id: 'script', label: 'Scripting', icon: FileText },
+        { id: 'world', label: 'Worldspace', icon: Globe },
+        { id: 'gameplay', label: 'Gameplay', icon: Activity },
+        { id: 'ui', label: 'Interface', icon: Layout },
+    ];
+
+    const toggleCategory = (id: string) => {
+        setSelectedCategories(prev => 
+            prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+        );
+    };
+
+    const handleSubmit = () => {
+        if (!name) return;
+        onSubmit({ name, description, categories: selectedCategories });
+    };
+
+    return (
+        <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-2xl animate-slide-up w-full max-w-2xl mx-auto">
+            <div className="flex justify-between items-start mb-6">
+                <div>
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <Database className="w-5 h-5 text-emerald-400" />
+                        Initialize Project
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">Configure workspace parameters for new mod.</p>
+                </div>
+                <button onClick={onCancel} className="text-slate-500 hover:text-white transition-colors">
+                    <X className="w-5 h-5" />
+                </button>
+            </div>
+
+            <div className="space-y-4 mb-6">
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Project Name</label>
+                    <input 
+                        type="text" 
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="e.g. 'Project Cobalt', 'Wasteland Flora Overhaul'"
+                        className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none transition-colors"
+                        autoFocus
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description</label>
+                    <textarea 
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Brief overview of the mod's goals..."
+                        className="w-full h-20 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none resize-none transition-colors text-sm"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Primary Modules</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {categories.map(cat => (
+                            <button
+                                key={cat.id}
+                                onClick={() => toggleCategory(cat.id)}
+                                className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium transition-all ${
+                                    selectedCategories.includes(cat.id) 
+                                    ? 'bg-emerald-900/30 border-emerald-500 text-emerald-400' 
+                                    : 'bg-slate-800 border-transparent text-slate-400 hover:border-slate-600'
+                                }`}
+                            >
+                                <cat.icon className="w-4 h-4" />
+                                {cat.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                <button 
+                    onClick={onCancel}
+                    className="px-4 py-2 text-slate-400 hover:text-white text-sm font-bold transition-colors"
+                >
+                    Cancel
+                </button>
+                <button 
+                    onClick={handleSubmit}
+                    disabled={!name}
+                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Create Workspace
+                </button>
+            </div>
+        </div>
+    );
+};
 
 // --- Sub-components for Performance ---
 
@@ -550,19 +656,20 @@ export const ChatInterface: React.FC = () => {
 
   const handleStartProject = () => {
       setOnboardingState('project_setup');
-      setMessages(prev => [...prev, { id: 'proj-start', role: 'model', text: "Initializing new Workspace.\n\n**Project Name?** (e.g. 'My First Vault', 'Laser Sword')" }]);
+      setMessages(prev => [...prev, { id: 'proj-start', role: 'model', text: "Initializing new Workspace configuration protocol..." }]);
   };
 
-  const createProjectFile = (description: string) => {
+  const createProjectFile = (data: { name: string, description: string, categories: string[] }) => {
       const newProject: ProjectData = {
-          name: description,
+          name: data.name,
           status: 'Pre-Production',
-          notes: description,
+          notes: data.description,
           timestamp: new Date().toLocaleDateString(),
-          keyDecisions: []
+          keyDecisions: [],
+          categories: data.categories
       };
       setProjectData(newProject);
-      setProjectContext(description);
+      setProjectContext(data.name);
       setShowProjectPanel(true);
       return newProject;
   };
@@ -635,7 +742,8 @@ export const ChatInterface: React.FC = () => {
     stopAudio();
 
     if (onboardingState === 'project_setup') {
-        createProjectFile(textToSend);
+        // Fallback if wizard is bypassed or text sent directly (shouldn't happen with UI change, but good for safety)
+        createProjectFile({ name: textToSend, description: "Auto-created from chat", categories: [] });
         setOnboardingState('ready');
     }
 
@@ -808,34 +916,54 @@ export const ChatInterface: React.FC = () => {
             </MessageList>
 
             <div className="p-4 bg-forge-panel border-t border-slate-700 z-10">
-                {selectedFile && (
-                <div className="flex items-center gap-2 mb-2 bg-slate-800 p-2 rounded-lg w-fit text-sm border border-slate-600">
-                    <div className="bg-slate-700 p-1 rounded"><FileText className="w-4 h-4 text-slate-300" /></div>
-                    <span className="truncate max-w-[200px] text-slate-200">{selectedFile.name}</span>
-                    <button onClick={() => setSelectedFile(null)} className="hover:text-red-400 p-1 rounded-full hover:bg-slate-700"><X className="w-3 h-3" /></button>
-                </div>
-                )}
-                
-                {(isListening || isPlayingAudio) && (
-                    <div className="flex items-center gap-3 mb-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700/50 w-fit">
-                        {isListening && <span className="flex items-center gap-2 text-xs text-red-400 animate-pulse font-medium"><div className="w-2 h-2 bg-red-500 rounded-full"></div> Listening...</span>}
-                        {isPlayingAudio && <div className="flex items-center gap-2"><span className="flex items-center gap-2 text-xs text-emerald-400 font-medium"><Volume2 className="w-3 h-3" /> Speaking...</span><button onClick={stopAudio} className="p-1 rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400"><StopCircle className="w-3 h-3" /></button></div>}
-                    </div>
-                )}
+                {onboardingState === 'project_setup' ? (
+                    <ProjectWizard 
+                        onCancel={() => {
+                            setOnboardingState('ready');
+                            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "Project setup cancelled." }]);
+                        }}
+                        onSubmit={(data) => {
+                            createProjectFile(data);
+                            setOnboardingState('ready');
+                            setMessages(prev => [...prev, { 
+                                id: Date.now().toString(), 
+                                role: 'model', 
+                                text: `**Project Initialized:** ${data.name}\n\nCategories: ${data.categories.join(', ')}\n\nI've set up your workspace. Ready to begin?` 
+                            }]);
+                        }}
+                    />
+                ) : (
+                    <>
+                        {selectedFile && (
+                        <div className="flex items-center gap-2 mb-2 bg-slate-800 p-2 rounded-lg w-fit text-sm border border-slate-600">
+                            <div className="bg-slate-700 p-1 rounded"><FileText className="w-4 h-4 text-slate-300" /></div>
+                            <span className="truncate max-w-[200px] text-slate-200">{selectedFile.name}</span>
+                            <button onClick={() => setSelectedFile(null)} className="hover:text-red-400 p-1 rounded-full hover:bg-slate-700"><X className="w-3 h-3" /></button>
+                        </div>
+                        )}
+                        
+                        {(isListening || isPlayingAudio) && (
+                            <div className="flex items-center gap-3 mb-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700/50 w-fit">
+                                {isListening && <span className="flex items-center gap-2 text-xs text-red-400 animate-pulse font-medium"><div className="w-2 h-2 bg-red-500 rounded-full"></div> Listening...</span>}
+                                {isPlayingAudio && <div className="flex items-center gap-2"><span className="flex items-center gap-2 text-xs text-emerald-400 font-medium"><Volume2 className="w-3 h-3" /> Speaking...</span><button onClick={stopAudio} className="p-1 rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400"><StopCircle className="w-3 h-3" /></button></div>}
+                            </div>
+                        )}
 
-                <div className="flex gap-2">
-                <label className="p-3 hover:bg-slate-700 rounded-xl cursor-pointer text-slate-400 transition-colors border border-transparent hover:border-slate-600">
-                    <input type="file" className="hidden" onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} accept=".psc,.nif,.dds,image/*,text/*" />
-                    <Paperclip className="w-5 h-5" />
-                </label>
-                
-                <button onClick={startListening} disabled={isListening} className={`p-3 rounded-xl transition-all border ${isListening ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse' : 'bg-slate-800 text-slate-400 hover:text-white border-transparent hover:border-slate-600 hover:bg-slate-700'}`}>
-                    <Mic className="w-5 h-5" />
-                </button>
+                        <div className="flex gap-2">
+                        <label className="p-3 hover:bg-slate-700 rounded-xl cursor-pointer text-slate-400 transition-colors border border-transparent hover:border-slate-600">
+                            <input type="file" className="hidden" onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} accept=".psc,.nif,.dds,image/*,text/*" />
+                            <Paperclip className="w-5 h-5" />
+                        </label>
+                        
+                        <button onClick={startListening} disabled={isListening} className={`p-3 rounded-xl transition-all border ${isListening ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse' : 'bg-slate-800 text-slate-400 hover:text-white border-transparent hover:border-slate-600 hover:bg-slate-700'}`}>
+                            <Mic className="w-5 h-5" />
+                        </button>
 
-                <input type="text" className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-emerald-500 transition-colors text-slate-100 placeholder-slate-500" placeholder={onboardingState === 'project_setup' ? "Project Name..." : "Message Mossy..."} value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} />
-                <button onClick={() => handleSend()} disabled={isLoading || isStreaming || (!inputText && !selectedFile)} className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-lg shadow-emerald-900/20"><Send className="w-5 h-5" /></button>
-                </div>
+                        <input type="text" className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-emerald-500 transition-colors text-slate-100 placeholder-slate-500" placeholder="Message Mossy..." value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} />
+                        <button onClick={() => handleSend()} disabled={isLoading || isStreaming || (!inputText && !selectedFile)} className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-lg shadow-emerald-900/20"><Send className="w-5 h-5" /></button>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     </div>

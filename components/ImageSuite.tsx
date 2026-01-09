@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Image as ImageIcon, Wand2, ScanSearch, Download, Trash2, Layers, Zap, Eye, Upload } from 'lucide-react';
+import { Image as ImageIcon, Wand2, ScanSearch, Download, Trash2, Layers, Zap, Eye, Upload, UserCheck } from 'lucide-react';
+import { useLive } from './LiveContext';
 
 const ImageSuite: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'generate' | 'edit' | 'pbr'>('generate');
@@ -15,6 +16,9 @@ const ImageSuite: React.FC = () => {
   // For editing & PBR
   const [sourceImage, setSourceImage] = useState<File | null>(null);
   const [sourcePreview, setSourcePreview] = useState<string | null>(null);
+
+  // Global Context for Avatar
+  const { setAvatarFromUrl } = useLive();
 
   // PBR State
   const [pbrMaps, setPbrMaps] = useState<{ normal: string | null, roughness: string | null, height: string | null }>({
@@ -266,8 +270,7 @@ const ImageSuite: React.FC = () => {
                   {activeTab === 'pbr' && resultImage && !sourceImage && (
                       <button 
                         onClick={() => {
-                             // Convert result image URL to File/Blob logic handled by state mainly
-                             // Just setting preview as logic source is handled in generatePBRMaps
+                             // Use result as source
                         }}
                         className="mt-2 text-xs text-forge-accent hover:underline flex items-center gap-1"
                       >
@@ -402,18 +405,26 @@ const ImageSuite: React.FC = () => {
                     <div className="relative group w-full h-full flex items-center justify-center">
                         <img src={resultImage} alt="Generated" className="max-w-full max-h-[600px] rounded shadow-2xl object-contain" />
                         <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {/* Set as Avatar Button */}
+                            <button 
+                                onClick={() => setAvatarFromUrl(resultImage)}
+                                className="p-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-500 shadow-lg"
+                                title="Set as Mossy's Face"
+                            >
+                                <UserCheck className="w-5 h-5" />
+                            </button>
+                            
                             <a href={resultImage} download="omniforge-art.png" className="p-2 bg-white text-black rounded-full hover:bg-slate-200">
-                            <Download className="w-5 h-5" />
+                                <Download className="w-5 h-5" />
                             </a>
                             <button onClick={() => {
                                 // Send to PBR
                                 setActiveTab('pbr');
-                                // The preview is automatically handled if sourceImage isn't set, logic in PBR render
                             }} className="p-2 bg-forge-accent text-black rounded-full hover:bg-sky-400" title="Generate Textures">
                                 <Layers className="w-5 h-5" />
                             </button>
                             <button onClick={() => setResultImage(null)} className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600">
-                            <Trash2 className="w-5 h-5" />
+                                <Trash2 className="w-5 h-5" />
                             </button>
                         </div>
                     </div>
