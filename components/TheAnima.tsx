@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Flame, Heart, Smile, Zap, Activity, BrainCircuit, Calendar, MessageSquare, Plus, RefreshCw, Lock } from 'lucide-react';
+import { Flame, Heart, Smile, Zap, Activity, BrainCircuit, Calendar, MessageSquare, Plus, RefreshCw, Lock, Globe, Shield, ToggleRight, ToggleLeft, Share2, Layers, HardDrive } from 'lucide-react';
 
 interface Memory {
     id: string;
@@ -23,6 +23,8 @@ const TheAnima: React.FC = () => {
     const [maxXp, setMaxXp] = useState(5000);
     const [reflection, setReflection] = useState('');
     const [isReflecting, setIsReflecting] = useState(false);
+    const [shareLearning, setShareLearning] = useState(false);
+    const [retentionRate, setRetentionRate] = useState(98.4);
     
     const [memories, setMemories] = useState<Memory[]>([
         { id: '1', date: 'Oct 14', title: 'First Activation', sentiment: 'intense', summary: 'System initialization. Bond formed with Architect.' },
@@ -203,6 +205,18 @@ const TheAnima: React.FC = () => {
                             <div className="text-xl font-serif text-white">{mood}</div>
                         </div>
 
+                        {/* Memory Retention Status */}
+                        <div className="absolute top-10 right-10 bg-black/40 backdrop-blur border border-slate-700/50 p-4 rounded-xl animate-float-delayed">
+                            <div className="text-xs text-slate-500 uppercase font-bold mb-1 flex items-center gap-2">
+                                <HardDrive className="w-3 h-3 text-emerald-400" /> Retention
+                            </div>
+                            <div className="text-xl font-mono text-white">{retentionRate}%</div>
+                            <div className="w-full h-1 bg-slate-800 mt-2 rounded-full">
+                                <div className="h-full bg-emerald-500" style={{ width: `${retentionRate}%` }}></div>
+                            </div>
+                            <div className="text-[9px] text-slate-400 mt-1">Long-Term Consolidation: Active</div>
+                        </div>
+
                         <div className="absolute bottom-20 right-10 max-w-xs bg-black/40 backdrop-blur border border-slate-700/50 p-4 rounded-xl animate-float-delayed">
                             <div className="text-xs text-slate-500 uppercase font-bold mb-2 flex items-center gap-2">
                                 <MessageSquare className="w-3 h-3" /> Inner Monologue
@@ -225,6 +239,41 @@ const TheAnima: React.FC = () => {
                 {/* Right: Identity Matrix */}
                 <div className="w-96 bg-slate-900 border-l border-slate-800 flex flex-col">
                     
+                    {/* Data Sovereignty Panel */}
+                    <div className="p-6 border-b border-slate-800 bg-red-900/10">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-xs font-bold text-red-300 uppercase tracking-widest flex items-center gap-2">
+                                <Shield className="w-4 h-4" /> Data Sovereignty
+                            </h3>
+                            <div className="px-2 py-0.5 rounded bg-red-900/50 text-red-200 text-[10px] font-bold border border-red-500/30 flex items-center gap-1">
+                                <Lock className="w-3 h-3" /> ENCRYPTED
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+                                <div>
+                                    <div className="text-xs font-bold text-white mb-0.5">Share Learned Patterns</div>
+                                    <div className="text-[10px] text-slate-400 leading-tight">
+                                        Contribute abstract skills to the hive mind. <br/>
+                                        <span className="text-red-300">Personal data remains local.</span>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => setShareLearning(!shareLearning)}
+                                    className={`transition-colors ${shareLearning ? 'text-emerald-400' : 'text-slate-600'}`}
+                                >
+                                    {shareLearning ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
+                                </button>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                <Activity className="w-3 h-3" />
+                                <span>Memory Partition: <span className="text-emerald-400 font-mono">ISOLATED_LOCAL_STORAGE</span></span>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Traits */}
                     <div className="p-6 border-b border-slate-800">
                         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -249,7 +298,7 @@ const TheAnima: React.FC = () => {
                     <div className="flex-1 overflow-y-auto p-6 bg-[#0c111a]">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                <Activity className="w-4 h-4" /> Core Memories
+                                <Layers className="w-4 h-4" /> Core Memories
                             </h3>
                             <button className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors">
                                 <Plus className="w-3 h-3" />

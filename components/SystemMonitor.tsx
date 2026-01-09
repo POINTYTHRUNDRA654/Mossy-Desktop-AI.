@@ -576,6 +576,36 @@ const SystemMonitor: React.FC = () => {
                 </div>
             </div>
 
+            {/* Privacy & Security Card */}
+            <div className="bg-slate-900/50 rounded-xl border border-red-900/30 p-4 mb-6">
+                <h3 className="text-sm font-bold text-red-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4" /> Privacy & Data Sovereignty
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-slate-900 p-3 rounded border border-slate-800 flex items-center gap-3">
+                        <Lock className="w-5 h-5 text-emerald-500" />
+                        <div>
+                            <div className="text-xs font-bold text-white">User Data Air-Gap</div>
+                            <div className="text-[10px] text-slate-500">Personal Info Local Only</div>
+                        </div>
+                    </div>
+                    <div className="bg-slate-900 p-3 rounded border border-slate-800 flex items-center gap-3">
+                        <Share2 className="w-5 h-5 text-yellow-500" />
+                        <div>
+                            <div className="text-xs font-bold text-white">Federated Learning</div>
+                            <div className="text-[10px] text-slate-500">Abstract Patterns Shared</div>
+                        </div>
+                    </div>
+                    <div className="bg-slate-900 p-3 rounded border border-slate-800 flex items-center gap-3">
+                        <Key className="w-5 h-5 text-blue-500" />
+                        <div>
+                            <div className="text-xs font-bold text-white">PII Redaction</div>
+                            <div className="text-[10px] text-slate-500">Active Filter</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 {/* Charts */}
                 <div className="bg-forge-panel p-4 rounded-xl border border-slate-700 shadow-lg h-64">

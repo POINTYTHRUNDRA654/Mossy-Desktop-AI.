@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Container, Search, Filter, FolderPlus, Tag, HardDrive, FileImage, FileAudio, FileCode, BrainCircuit, RefreshCw, Eye, Grid, List, Scan, Check, Box } from 'lucide-react';
+import { Container, Search, Filter, FolderPlus, Tag, HardDrive, FileImage, FileAudio, FileCode, BrainCircuit, RefreshCw, Eye, Grid, List, Scan, Check, Box, Lock, Globe, ShieldCheck, FileKey } from 'lucide-react';
 
 interface Asset {
   id: string;
@@ -11,30 +11,34 @@ interface Asset {
   previewUrl?: string;
   size: string;
   analyzed: boolean;
+  privacy: 'local' | 'shared'; // New privacy field
 }
 
 const initialAssets: Asset[] = [
-    { id: '1', name: 'tex_metal_rust_01.png', path: 'D:/Assets/Textures', type: 'image', tags: ['metal', 'rust', 'texture'], previewUrl: 'https://placehold.co/400x400/3e2723/a1887f?text=Rust+Texture', size: '2.4 MB', analyzed: true },
-    { id: '2', name: 'sfx_laser_blast.wav', path: 'D:/Assets/Audio/SciFi', type: 'audio', tags: ['sfx', 'sci-fi', 'weapon'], size: '0.5 MB', analyzed: true },
-    { id: '3', name: 'char_cyber_ninja.nif', path: 'D:/Assets/Models', type: 'model', tags: [], size: '14.2 MB', analyzed: false },
-    { id: '4', name: 'unknown_img_2991.jpg', path: 'D:/Downloads', type: 'image', tags: [], previewUrl: 'https://placehold.co/400x400/1e1e1e/38bdf8?text=Unsorted+Img', size: '1.1 MB', analyzed: false },
-    { id: '5', name: 'script_player_move.psc', path: 'D:/Dev/Source', type: 'script', tags: ['gameplay', 'papyrus'], size: '4 KB', analyzed: true },
+    { id: '1', name: 'personal_photo_001.png', path: 'C:/Users/Admin/Pictures', type: 'image', tags: ['personal', 'photo'], previewUrl: 'https://placehold.co/400x400/1e293b/475569?text=Private+Photo', size: '2.4 MB', analyzed: false, privacy: 'local' },
+    { id: '2', name: 'mod_tutorial_01.mp4', path: 'D:/Downloads/Tutorials', type: 'audio', tags: ['tutorial', 'learning'], size: '45.0 MB', analyzed: true, privacy: 'shared' },
+    { id: '3', name: 'char_cyber_ninja.nif', path: 'D:/Assets/Models', type: 'model', tags: [], size: '14.2 MB', analyzed: false, privacy: 'local' },
+    { id: '4', name: 'react_docs_pdf', path: 'D:/Docs', type: 'image', tags: ['docs', 'reference'], previewUrl: 'https://placehold.co/400x400/0f172a/38bdf8?text=React+Docs', size: '1.1 MB', analyzed: true, privacy: 'shared' },
+    { id: '5', name: 'secrets_config.json', path: 'C:/Dev/Keys', type: 'script', tags: ['config', 'keys'], size: '4 KB', analyzed: false, privacy: 'local' },
 ];
 
 const TheVault: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
+  const [privacyFilter, setPrivacyFilter] = useState<'all' | 'local' | 'shared'>('all');
   const [isScanning, setIsScanning] = useState(false);
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sanitizePII, setSanitizePII] = useState(true);
 
   // Filter Logic
   const filteredAssets = assets.filter(asset => {
       const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             asset.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesType = filterType === 'all' || asset.type === filterType;
-      return matchesSearch && matchesType;
+      const matchesPrivacy = privacyFilter === 'all' || asset.privacy === privacyFilter;
+      return matchesSearch && matchesType && matchesPrivacy;
   });
 
   // --- AI Logic ---
@@ -44,8 +48,8 @@ const TheVault: React.FC = () => {
       // Simulate scanning disk
       setTimeout(() => {
           const newAssets: Asset[] = [
-              { id: `new-${Date.now()}-1`, name: 'env_swamp_mist.png', path: 'D:/NewScans', type: 'image', tags: [], previewUrl: 'https://placehold.co/400x300/064e3b/34d399?text=Swamp', size: '3.1 MB', analyzed: false },
-              { id: `new-${Date.now()}-2`, name: 'voc_npc_greeting.mp3', path: 'D:/NewScans', type: 'audio', tags: [], size: '1.2 MB', analyzed: false },
+              { id: `new-${Date.now()}-1`, name: 'bank_statement.pdf', path: 'C:/Documents', type: 'image', tags: [], previewUrl: 'https://placehold.co/400x300/3f3f46/71717a?text=Sensitive+Doc', size: '3.1 MB', analyzed: false, privacy: 'local' },
+              { id: `new-${Date.now()}-2`, name: 'open_source_lib.zip', path: 'D:/OSS', type: 'audio', tags: [], size: '1.2 MB', analyzed: false, privacy: 'shared' },
           ];
           setAssets(prev => [...prev, ...newAssets]);
           setIsScanning(false);
@@ -62,17 +66,14 @@ const TheVault: React.FC = () => {
           
           let generatedTags: string[] = [];
           
-          if (asset.type === 'image') {
-              // Simulate Image Analysis (In real app, send Base64 to Gemini Vision)
-              // const result = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: [imagePart, "Describe this texture"] });
-              await new Promise(r => setTimeout(r, 1500)); // Sim latency
-              generatedTags = ['environment', 'dark', 'foggy', 'organic', 'green'];
-          } else if (asset.type === 'audio') {
-               await new Promise(r => setTimeout(r, 1200));
-               generatedTags = ['voice', 'human', 'greeting', 'friendly'];
-          } else if (asset.type === 'model') {
-              await new Promise(r => setTimeout(r, 2000));
-              generatedTags = ['character', 'biped', 'armature', 'high-poly'];
+          // Simulation of analysis
+          await new Promise(r => setTimeout(r, 1200));
+          
+          if (asset.privacy === 'local' && sanitizePII) {
+              // Simulate PII scrubbing
+              generatedTags = ['[PII_REDACTED]', 'private_data', 'secure_storage'];
+          } else {
+              generatedTags = ['analyzed', 'content_verified', 'public_safe'];
           }
 
           setAssets(prev => prev.map(a => 
@@ -96,6 +97,10 @@ const TheVault: React.FC = () => {
       unanalyzed.forEach(a => handleAnalyze(a));
   };
 
+  const togglePrivacy = (id: string) => {
+      setAssets(prev => prev.map(a => a.id === id ? { ...a, privacy: a.privacy === 'local' ? 'shared' : 'local' } : a));
+  };
+
   return (
     <div className="h-full flex flex-col bg-forge-dark text-slate-200">
       {/* Header */}
@@ -106,23 +111,36 @@ const TheVault: React.FC = () => {
                       <Container className="w-6 h-6 text-forge-accent" />
                       The Vault
                   </h1>
-                  <p className="text-xs text-slate-400 font-mono mt-1">Neural Asset Management System</p>
+                  <p className="text-xs text-slate-400 font-mono mt-1">Secure Asset Management & Privacy Partition</p>
               </div>
               <div className="flex gap-2">
+                  <button 
+                      onClick={() => setSanitizePII(!sanitizePII)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors border ${
+                          sanitizePII 
+                          ? 'bg-emerald-900/30 border-emerald-500/50 text-emerald-400' 
+                          : 'bg-slate-800 border-slate-600 text-slate-400'
+                      }`}
+                      title="Automatically redact personal info during analysis"
+                  >
+                      {sanitizePII ? <ShieldCheck className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4 opacity-50" />}
+                      {sanitizePII ? 'PII Scrubbing: ON' : 'PII Scrubbing: OFF'}
+                  </button>
+                  <div className="h-8 w-px bg-slate-700 mx-2"></div>
                   <button 
                       onClick={handleScanFolder}
                       disabled={isScanning}
                       className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm font-bold transition-colors"
                   >
                       {isScanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FolderPlus className="w-4 h-4" />}
-                      {isScanning ? 'Scanning Disk...' : 'Index Folder'}
+                      {isScanning ? 'Scanning...' : 'Index Local'}
                   </button>
                   <button 
                       onClick={handleAnalyzeAll}
                       className="flex items-center gap-2 px-4 py-2 bg-forge-accent hover:bg-sky-400 text-slate-900 rounded-lg text-sm font-bold transition-colors shadow-[0_0_15px_rgba(56,189,248,0.3)]"
                   >
                       <BrainCircuit className="w-4 h-4" />
-                      Auto-Tag All
+                      Auto-Tag
                   </button>
               </div>
           </div>
@@ -133,11 +151,31 @@ const TheVault: React.FC = () => {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                   <input 
                       type="text" 
-                      placeholder="Search assets by name, tag, or concept (e.g., 'rusty metal')..." 
+                      placeholder="Search secure assets..." 
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-forge-accent text-slate-200"
                   />
+              </div>
+              <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-700">
+                  <button 
+                      onClick={() => setPrivacyFilter('all')}
+                      className={`px-3 py-1 text-xs rounded font-medium transition-colors ${privacyFilter === 'all' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                      All
+                  </button>
+                  <button 
+                      onClick={() => setPrivacyFilter('local')}
+                      className={`px-3 py-1 text-xs rounded font-medium flex items-center gap-1 transition-colors ${privacyFilter === 'local' ? 'bg-red-900/50 text-red-200' : 'text-slate-500 hover:text-red-400'}`}
+                  >
+                      <Lock className="w-3 h-3" /> Local
+                  </button>
+                  <button 
+                      onClick={() => setPrivacyFilter('shared')}
+                      className={`px-3 py-1 text-xs rounded font-medium flex items-center gap-1 transition-colors ${privacyFilter === 'shared' ? 'bg-blue-900/50 text-blue-200' : 'text-slate-500 hover:text-blue-400'}`}
+                  >
+                      <Globe className="w-3 h-3" /> Shared
+                  </button>
               </div>
               <select 
                   value={filterType}
@@ -166,16 +204,16 @@ const TheVault: React.FC = () => {
           {filteredAssets.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-slate-600">
                   <HardDrive className="w-12 h-12 mb-4 opacity-20" />
-                  <p>No assets found matching your criteria.</p>
+                  <p>No assets found matching your security criteria.</p>
               </div>
           ) : viewMode === 'grid' ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                   {filteredAssets.map(asset => (
-                      <div key={asset.id} className="group relative bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden hover:border-forge-accent transition-all hover:shadow-xl hover:shadow-sky-900/20">
+                      <div key={asset.id} className={`group relative bg-slate-800/50 border rounded-xl overflow-hidden hover:border-forge-accent transition-all hover:shadow-xl ${asset.privacy === 'local' ? 'border-red-900/30' : 'border-slate-700'}`}>
                           {/* Preview Area */}
                           <div className="aspect-square bg-slate-900 relative overflow-hidden flex items-center justify-center">
                               {asset.previewUrl ? (
-                                  <img src={asset.previewUrl} alt={asset.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                  <img src={asset.previewUrl} alt={asset.name} className={`w-full h-full object-cover transition-transform group-hover:scale-105 ${asset.privacy === 'local' ? 'grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100' : ''}`} />
                               ) : (
                                   <div className="text-slate-600">
                                       {asset.type === 'audio' ? <FileAudio className="w-12 h-12" /> :
@@ -189,20 +227,21 @@ const TheVault: React.FC = () => {
                                   <button className="p-2 bg-slate-700 hover:bg-white hover:text-black rounded-full transition-colors" title="Preview">
                                       <Eye className="w-4 h-4" />
                                   </button>
-                                  {!asset.analyzed && (
-                                      <button 
-                                          onClick={() => handleAnalyze(asset)}
-                                          className="p-2 bg-forge-accent hover:bg-sky-400 text-slate-900 rounded-full transition-colors" 
-                                          title="AI Analyze"
-                                      >
-                                          {analyzingIds.has(asset.id) ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BrainCircuit className="w-4 h-4" />}
-                                      </button>
-                                  )}
+                                  <button 
+                                      onClick={() => togglePrivacy(asset.id)}
+                                      className={`p-2 rounded-full transition-colors ${asset.privacy === 'local' ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'}`} 
+                                      title={asset.privacy === 'local' ? 'Make Shared' : 'Make Local Only'}
+                                  >
+                                      {asset.privacy === 'local' ? <Lock className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
+                                  </button>
                               </div>
 
-                              {/* Type Badge */}
-                              <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/70 backdrop-blur rounded text-[10px] uppercase font-bold text-slate-300">
-                                  {asset.type}
+                              {/* Privacy Badge */}
+                              <div className={`absolute top-2 right-2 px-2 py-0.5 backdrop-blur rounded text-[10px] uppercase font-bold flex items-center gap-1 ${
+                                  asset.privacy === 'local' ? 'bg-red-900/80 text-red-200 border border-red-500/50' : 'bg-blue-900/80 text-blue-200 border border-blue-500/50'
+                              }`}>
+                                  {asset.privacy === 'local' ? <Lock className="w-3 h-3" /> : <Globe className="w-3 h-3" />}
+                                  {asset.privacy}
                               </div>
                           </div>
 
@@ -234,7 +273,7 @@ const TheVault: React.FC = () => {
               // List View
               <div className="flex flex-col gap-2">
                   {filteredAssets.map(asset => (
-                      <div key={asset.id} className="flex items-center gap-4 p-3 bg-slate-800/50 border border-slate-700 rounded-lg hover:bg-slate-800 hover:border-slate-500 transition-colors group">
+                      <div key={asset.id} className={`flex items-center gap-4 p-3 bg-slate-800/50 border rounded-lg hover:bg-slate-800 transition-colors group ${asset.privacy === 'local' ? 'border-red-900/30' : 'border-slate-700'}`}>
                           <div className="w-10 h-10 bg-slate-900 rounded flex items-center justify-center shrink-0">
                                {asset.type === 'image' ? <FileImage className="w-5 h-5 text-purple-400" /> :
                                 asset.type === 'audio' ? <FileAudio className="w-5 h-5 text-yellow-400" /> :
@@ -244,14 +283,9 @@ const TheVault: React.FC = () => {
                           <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                   <span className="font-medium text-sm text-slate-200 truncate">{asset.name}</span>
-                                  {!asset.analyzed && (
-                                      <button 
-                                        onClick={() => handleAnalyze(asset)}
-                                        className="text-[10px] flex items-center gap-1 text-forge-accent hover:underline opacity-0 group-hover:opacity-100 transition-opacity"
-                                      >
-                                          <BrainCircuit className="w-3 h-3" /> Analyze
-                                      </button>
-                                  )}
+                                  <div className={`px-1.5 py-0.5 rounded text-[9px] uppercase font-bold border ${asset.privacy === 'local' ? 'bg-red-900/20 text-red-400 border-red-900/50' : 'bg-blue-900/20 text-blue-400 border-blue-900/50'}`}>
+                                      {asset.privacy}
+                                  </div>
                               </div>
                               <div className="text-xs text-slate-500 truncate font-mono">{asset.path}</div>
                           </div>
@@ -262,7 +296,15 @@ const TheVault: React.FC = () => {
                                   </span>
                               ))}
                           </div>
-                          <div className="text-xs text-slate-500 w-16 text-right">{asset.size}</div>
+                          <div className="flex items-center gap-4">
+                              <div className="text-xs text-slate-500 w-16 text-right">{asset.size}</div>
+                              <button 
+                                  onClick={() => togglePrivacy(asset.id)}
+                                  className={`p-1.5 rounded transition-colors ${asset.privacy === 'local' ? 'text-red-500 hover:bg-red-900/20' : 'text-blue-500 hover:bg-blue-900/20'}`}
+                              >
+                                  {asset.privacy === 'local' ? <Lock className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
+                              </button>
+                          </div>
                       </div>
                   ))}
               </div>

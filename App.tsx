@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import SystemMonitor from './components/SystemMonitor';
 import { ChatInterface } from './components/ChatInterface';
@@ -36,12 +36,46 @@ import MossyObserver from './components/MossyObserver';
 import CommandPalette from './components/CommandPalette';
 import TutorialOverlay from './components/TutorialOverlay';
 
-// Define window interface for AI Studio helpers
+// Define window interface for AI Studio helpers & Custom Events
 declare global {
   interface Window {
     webkitAudioContext: typeof AudioContext;
   }
+  interface WindowEventMap {
+    'mossy-control': CustomEvent<{ action: string; payload: any }>;
+  }
 }
+
+// Controller Component to handle AI Navigation Commands
+const NeuralController: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const handleControl = (e: CustomEvent<{ action: string; payload: any }>) => {
+      const { action, payload } = e.detail;
+      
+      console.log(`[Neural Control] Executing: ${action}`, payload);
+
+      if (action === 'navigate') {
+        if (location.pathname !== payload.path) {
+          navigate(payload.path);
+        }
+      }
+      
+      // Future expansion: 'toggle_sidebar', 'open_modal', etc.
+      if (action === 'open_palette') {
+        // Trigger command palette keyboard shortcut logic if needed
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
+      }
+    };
+
+    window.addEventListener('mossy-control', handleControl as EventListener);
+    return () => window.removeEventListener('mossy-control', handleControl as EventListener);
+  }, [navigate, location]);
+
+  return null;
+};
 
 const App: React.FC = () => {
   // Ensure API Key selection for paid features (Veo/Pro Image) if applicable
@@ -66,6 +100,7 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <div className="flex h-screen w-screen overflow-hidden bg-forge-dark text-slate-200">
+        <NeuralController />
         <CommandPalette />
         <TutorialOverlay />
         <Sidebar />

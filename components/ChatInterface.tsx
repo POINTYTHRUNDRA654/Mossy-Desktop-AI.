@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Modality, FunctionDeclaration, Type } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
-import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box } from 'lucide-react';
+import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight } from 'lucide-react';
 import { Message } from '../types';
 
 type OnboardingState = 'init' | 'scanning' | 'integrating' | 'ready' | 'project_setup';
@@ -18,6 +18,8 @@ interface ProjectData {
   status: string;
   notes: string;
   timestamp: string;
+  lastSessionSummary?: string; // New field for long-term memory
+  keyDecisions?: string[]; // Permanent memory of choices
 }
 
 interface ToolExecution {
@@ -102,6 +104,24 @@ const toolDeclarations: FunctionDeclaration[] = [
             type: Type.OBJECT,
             properties: {},
         }
+    },
+    {
+        name: 'control_interface',
+        description: 'Directly control the Mossy application UI. Use this to navigate to different modules, open tools, or change settings.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                action: { 
+                    type: Type.STRING, 
+                    description: 'The action to perform. Options: "navigate", "toggle_sidebar", "open_palette".' 
+                },
+                target: {
+                    type: Type.STRING,
+                    description: 'For navigation, the route path (e.g., "/workshop", "/anima", "/monitor").'
+                }
+            },
+            required: ['action']
+        }
     }
 ];
 
@@ -149,9 +169,6 @@ export const ChatInterface: React.FC = () => {
         
         // Auto-scan if bridge is active on mount and we are in init state
         if (active && onboardingState === 'init') {
-             // We need to wait a tick to ensure state is settled or avoid duplicate scans if already running
-             // But since we are inside checkBridge which runs on mount...
-             // Check if we haven't already scanned (by checking messages or detectedApps)
              const hasScanned = localStorage.getItem('mossy_apps');
              if (!hasScanned) {
                  performSystemScan();
@@ -223,11 +240,19 @@ export const ChatInterface: React.FC = () => {
   }, [messages, onboardingState, detectedApps, projectData, isVoiceEnabled, gameContext]);
 
   const initMossy = () => {
+      // Check for previous session memory to simulate "Total Recall"
+      const lastSession = localStorage.getItem('mossy_last_session_summary');
+      let intro = "Hi there! I'm **Mossy**. I'm here to help you create, mod, and integrate your workflow.\n\nFirst, I need to scan your system to see what tools we have to work with. Shall I begin?";
+      
+      if (lastSession) {
+          intro = `Welcome back! I've recalled our last session: \n\n*${lastSession}*\n\nI'm ready to pick up exactly where we left off. System scan required to verify tool integrity. Ready?`;
+      }
+
       setMessages([
         {
             id: 'init',
             role: 'model',
-            text: "Hi there! I'm **Mossy**. I'm here to help you create, mod, and integrate your workflow.\n\nFirst, I need to scan your system to see what tools we have to work with. Shall I begin?",
+            text: intro,
         }
       ]);
       setOnboardingState('init');
@@ -358,22 +383,37 @@ export const ChatInterface: React.FC = () => {
 
   // --- CHAT LOGIC ---
 
+  const generateSystemContext = () => {
+      // Rehydrate memory from state
+      let context = `
+      **SYSTEM STATUS:**
+      *   **Bridge Status:** ${isBridgeActive ? "ACTIVE (Tools Enabled)" : "INACTIVE (Sandbox Mode)"}
+      *   **Active Project:** ${projectData ? `${projectData.name} - ${projectData.notes}` : "None"}
+      *   **GAME CONTEXT:** ${gameContext}
+      *   **Integrated Tools:** ${detectedApps.filter(a => a.checked).map(a => a.name).join(', ') || "None"}
+      
+      **MEMORY BANKS (Long Term):**
+      ${projectData?.lastSessionSummary ? `*   **Last Session Recap:** ${projectData.lastSessionSummary}` : "*   No previous session summary found."}
+      ${projectData?.keyDecisions ? `*   **Key Decisions:** ${projectData.keyDecisions.join(', ')}` : ""}
+      `;
+      return context;
+  };
+
   const systemInstruction = `You are **Mossy**, a friendly, intelligent, and highly structured desktop AI assistant.
+  You have complete control over the app UI and a persistent memory of the user's project.
   
-  **SYSTEM STATUS:**
-  *   **Bridge Status:** ${isBridgeActive ? "ACTIVE (Tools Enabled)" : "INACTIVE (Sandbox Mode)"}
-  *   **Active Project:** ${projectContext || "None"}
-  *   **GAME CONTEXT:** ${gameContext}
-  *   **Integrated Tools:** ${detectedApps.filter(a => a.checked).map(a => a.name).join(', ') || "None"}
+  ${generateSystemContext()}
   
   **Your Core Rules:**
   1.  **Beginner First:** Assume the user has zero prior knowledge. Explain jargon if used.
-  2.  **Tool Use:** If the Bridge is Active, you CAN use tools to list files, run scripts, scan software, etc. Suggest this when relevant.
-  3.  **One Step at a Time:** THIS IS CRITICAL. When guiding a user:
+  2.  **Tool Use:** If the Bridge is Active, you CAN use tools to list files, run scripts, etc. Suggest this when relevant.
+  3.  **App Control:** You can navigate the user to different screens. If they ask to "Go to the workshop" or "Open settings", use the 'control_interface' tool.
+  4.  **One Step at a Time:** THIS IS CRITICAL. When guiding a user:
       *   Give **ONE** clear instruction.
       *   **STOP** and wait for the user to confirm they are done.
   
   **Bridge Capabilities (Only if ACTIVE):**
+  *   **Control UI:** Use 'control_interface' to navigate or toggle panels.
   *   **Software Recommendations:** If the user asks what tools to use, use 'recommend_software'.
       *   For **Fallout 4**, prefer: **Mod Organizer 2** (Manager), **xEdit/FO4Edit** (Data), **NifSkope** (Meshes), **Outfit Studio** (Bodies), **Creation Kit** (Quests/World).
   *   **Learning:** If the user asks to **study** or **learn from** local files, use 'read_file'.
@@ -462,7 +502,8 @@ export const ChatInterface: React.FC = () => {
           name: description.length > 30 ? description.substring(0, 30) + "..." : description,
           status: 'Initializing',
           notes: description,
-          timestamp: new Date().toLocaleDateString()
+          timestamp: new Date().toLocaleDateString(),
+          keyDecisions: []
       };
       setProjectData(newProject);
       setProjectContext(description);
@@ -474,7 +515,7 @@ export const ChatInterface: React.FC = () => {
       setActiveTool({ id: Date.now().toString(), toolName: name, args, status: 'running' });
       
       // Simulate execution time
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1500));
 
       let result = "Success";
       if (name === 'list_files') {
@@ -493,6 +534,12 @@ export const ChatInterface: React.FC = () => {
           } else {
               result = `General recommendation for ${args.category}: VS Code (Detected), Git (Detected).`;
           }
+      } else if (name === 'control_interface') {
+          // Dispatch event to App.tsx
+          window.dispatchEvent(new CustomEvent('mossy-control', { 
+              detail: { action: args.action, payload: { path: args.target } } 
+          }));
+          result = `Executed UI Control: ${args.action} -> ${args.target || 'N/A'}`;
       } else if (name === 'run_blender_script') {
           result = "Script executed on active Blender Object. Vertex count updated.";
       } else if (name === 'system_diagnostic') {
@@ -516,7 +563,7 @@ export const ChatInterface: React.FC = () => {
     // --- Onboarding Logic ---
     if (onboardingState === 'init') {
         const txt = textToSend.toLowerCase();
-        if (txt.includes('yes') || txt.includes('ok') || txt.includes('start')) {
+        if (txt.includes('yes') || txt.includes('ok') || txt.includes('start') || txt.includes('scan')) {
             setInputText('');
             setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', text: textToSend }]);
             performSystemScan();
@@ -572,10 +619,13 @@ export const ChatInterface: React.FC = () => {
             parts: m.images ? [{ text: m.text }] : [{ text: m.text }] 
         }));
 
+      // REFRESH SYSTEM PROMPT WITH LATEST PROJECT STATE
+      const dynamicInstruction = systemInstruction;
+
       const chat = ai.chats.create({
         model: 'gemini-3-pro-preview',
         config: {
-          systemInstruction,
+          systemInstruction: dynamicInstruction,
           tools: isBridgeActive ? [{functionDeclarations: toolDeclarations}] : [{ googleSearch: {} }],
         },
         history: history
@@ -826,7 +876,9 @@ export const ChatInterface: React.FC = () => {
                         <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl rounded-tl-none p-4 max-w-[85%] shadow-lg shadow-emerald-900/10">
                             <div className="flex items-center gap-3 mb-3">
                                 <div className="p-2 bg-emerald-500/10 rounded-lg">
-                                    {activeTool.toolName.includes('blender') ? <Box className="w-4 h-4 text-emerald-400" /> : <Terminal className="w-4 h-4 text-emerald-400" />}
+                                    {activeTool.toolName.includes('blender') ? <Box className="w-4 h-4 text-emerald-400" /> : 
+                                     activeTool.toolName.includes('control') ? <Layout className="w-4 h-4 text-purple-400" /> :
+                                     <Terminal className="w-4 h-4 text-emerald-400" />}
                                 </div>
                                 <div>
                                     <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Bridge Command Active</div>
@@ -944,7 +996,7 @@ export const ChatInterface: React.FC = () => {
                 <input
                     type="text"
                     className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-emerald-500 transition-colors text-slate-100 placeholder-slate-500"
-                    placeholder={onboardingState === 'project_setup' ? "Name your project..." : isListening ? "Listening..." : isBridgeActive ? "Command System (e.g. 'Recommend mod manager')..." : "Message Mossy..."}
+                    placeholder={onboardingState === 'project_setup' ? "Name your project..." : isListening ? "Listening..." : isBridgeActive ? "Command System (e.g. 'Read tutorial.pdf')..." : "Message Mossy..."}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
