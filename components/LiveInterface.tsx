@@ -3,11 +3,8 @@ import { Mic, MicOff, Volume2, Activity, Wifi, Cpu, Disc, Power, Maximize2, Mini
 import { useLive } from './LiveContext';
 
 const LiveInterface: React.FC = () => {
-  const { isActive, status, volume, mode, transcription, connect, disconnect } = useLive();
+  const { isActive, status, volume, mode, transcription, connect, disconnect, customAvatar, updateAvatar, clearAvatar } = useLive();
   const [isFullscreen, setIsFullscreen] = useState(false);
-  
-  // Custom Avatar State
-  const [customAvatar, setCustomAvatar] = useState<string | null>(() => localStorage.getItem('mossy_avatar_custom'));
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -19,60 +16,7 @@ const LiveInterface: React.FC = () => {
   // Handle Image Upload
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (file) processFile(file);
-  };
-
-  const processFile = async (file: File) => {
-      try {
-          // Resize and compress image to fit in localStorage
-          const compressed = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                  const img = new Image();
-                  img.onload = () => {
-                      const canvas = document.createElement('canvas');
-                      const maxSize = 400; // Limit size to 400px to ensure it saves
-                      let width = img.width;
-                      let height = img.height;
-                      
-                      if (width > height) {
-                          if (width > maxSize) {
-                              height *= maxSize / width;
-                              width = maxSize;
-                          }
-                      } else {
-                          if (height > maxSize) {
-                              width *= maxSize / height;
-                              height = maxSize;
-                          }
-                      }
-                      
-                      canvas.width = width;
-                      canvas.height = height;
-                      const ctx = canvas.getContext('2d');
-                      ctx?.drawImage(img, 0, 0, width, height);
-                      // Compress to JPEG 70% quality
-                      resolve(canvas.toDataURL('image/jpeg', 0.7));
-                  };
-                  img.src = e.target?.result as string;
-              };
-              reader.readAsDataURL(file);
-          });
-
-          setCustomAvatar(compressed);
-          try {
-              localStorage.setItem('mossy_avatar_custom', compressed);
-              // Manually dispatch storage event so MossyObserver updates immediately
-              window.dispatchEvent(new Event('storage'));
-          } catch (e) {
-              console.error("Storage quota exceeded", e);
-              alert("Image saved for this session only (Storage Full).");
-          }
-          
-      } catch (err) {
-          console.error("Failed to process avatar:", err);
-          alert("Could not process image. Try a standard JPG/PNG.");
-      }
+      if (file) updateAvatar(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -87,14 +31,8 @@ const LiveInterface: React.FC = () => {
       setIsDragging(false);
       const file = e.dataTransfer.files[0];
       if (file && file.type.startsWith('image/')) {
-          processFile(file);
+          updateAvatar(file);
       }
-  };
-
-  const clearAvatar = () => {
-      setCustomAvatar(null);
-      localStorage.removeItem('mossy_avatar_custom');
-      window.dispatchEvent(new Event('storage'));
   };
 
   // --- VISUALIZATION ENGINE ---

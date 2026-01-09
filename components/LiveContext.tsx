@@ -9,6 +9,10 @@ interface LiveContextType {
   transcription: string;
   connect: () => Promise<void>;
   disconnect: () => void;
+  // Avatar Management
+  customAvatar: string | null;
+  updateAvatar: (file: File) => Promise<void>;
+  clearAvatar: () => void;
 }
 
 const LiveContext = createContext<LiveContextType | undefined>(undefined);
@@ -54,11 +58,19 @@ const decodeAudioData = async (base64String: string, ctx: AudioContext): Promise
 };
 
 export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Live State
   const [isActive, setIsActive] = useState(false);
   const [status, setStatus] = useState('Standby');
   const [volume, setVolume] = useState(0);
   const [mode, setMode] = useState<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
   const [transcription, setTranscription] = useState('');
+
+  // Avatar State (Global)
+  const [customAvatar, setCustomAvatar] = useState<string | null>(() => {
+      try {
+          return localStorage.getItem('mossy_avatar_custom');
+      } catch { return null; }
+  });
 
   // Refs for audio handling - PERSISTENT ACROSS ROUTES
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -69,6 +81,62 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
 
+  // --- Avatar Logic ---
+  const updateAvatar = async (file: File) => {
+      try {
+          // Resize and compress image to fit in localStorage
+          const compressed = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                  const img = new Image();
+                  img.onload = () => {
+                      const canvas = document.createElement('canvas');
+                      const maxSize = 300; // Smaller size for better performance/storage
+                      let width = img.width;
+                      let height = img.height;
+                      
+                      if (width > height) {
+                          if (width > maxSize) {
+                              height *= maxSize / width;
+                              width = maxSize;
+                          }
+                      } else {
+                          if (height > maxSize) {
+                              width *= maxSize / height;
+                              height = maxSize;
+                          }
+                      }
+                      
+                      canvas.width = width;
+                      canvas.height = height;
+                      const ctx = canvas.getContext('2d');
+                      ctx?.drawImage(img, 0, 0, width, height);
+                      // Compress to JPEG 60% quality
+                      resolve(canvas.toDataURL('image/jpeg', 0.6));
+                  };
+                  img.src = e.target?.result as string;
+              };
+              reader.readAsDataURL(file);
+          });
+
+          setCustomAvatar(compressed);
+          try {
+              localStorage.setItem('mossy_avatar_custom', compressed);
+          } catch (e) {
+              console.error("Storage quota exceeded", e);
+              alert("Image saved for this session only (Browser Storage Full).");
+          }
+      } catch (err) {
+          console.error("Failed to process avatar:", err);
+      }
+  };
+
+  const clearAvatar = () => {
+      setCustomAvatar(null);
+      localStorage.removeItem('mossy_avatar_custom');
+  };
+
+  // --- Live Connection Logic ---
   const disconnect = () => {
     streamRef.current?.getTracks().forEach(t => t.stop());
     processorRef.current?.disconnect();
@@ -133,8 +201,6 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               for (let i = 0; i < inputData.length; i++) sum += inputData[i] * inputData[i];
               const rms = Math.sqrt(sum / inputData.length);
               
-              // Only update volume state occasionally or heavily throttled to prevent React churn
-              // (Simplification: Updating state here is fine for this demo but heavy in prod)
               if (Math.random() > 0.5) setVolume(rms * 500); 
 
               if (rms > 0.02) setMode('listening'); 
@@ -164,8 +230,6 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                nextStartTimeRef.current += buffer.duration;
                sourcesRef.current.add(source);
                
-               // Fake volume data from output for the visualizer since we can't easily analyze output stream without AnalyzerNode
-               // Simplified for latency: just set volume high when speaking
                setVolume(Math.random() * 50 + 20);
             }
             if (msg.serverContent?.interrupted) {
@@ -190,7 +254,7 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <LiveContext.Provider value={{ isActive, status, volume, mode, transcription, connect, disconnect }}>
+    <LiveContext.Provider value={{ isActive, status, volume, mode, transcription, connect, disconnect, customAvatar, updateAvatar, clearAvatar }}>
       {children}
     </LiveContext.Provider>
   );

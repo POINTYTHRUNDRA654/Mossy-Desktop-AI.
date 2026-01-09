@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { MessageSquare, X } from 'lucide-react';
+import { useLive } from './LiveContext';
 
 const QUIPS: Record<string, string[]> = {
     '/': [
@@ -54,17 +55,9 @@ const MossyObserver: React.FC = () => {
     const location = useLocation();
     const [message, setMessage] = useState<string | null>(null);
     const [visible, setVisible] = useState(false);
-    const [customAvatar, setCustomAvatar] = useState<string | null>(null);
-
-    // Sync Avatar from Storage
-    useEffect(() => {
-        const checkAvatar = () => {
-            setCustomAvatar(localStorage.getItem('mossy_avatar_custom'));
-        };
-        checkAvatar();
-        window.addEventListener('storage', checkAvatar);
-        return () => window.removeEventListener('storage', checkAvatar);
-    }, []);
+    
+    // Consume global avatar state
+    const { customAvatar } = useLive();
 
     useEffect(() => {
         // Clear previous
