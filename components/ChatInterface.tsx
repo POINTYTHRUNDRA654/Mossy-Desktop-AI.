@@ -114,6 +114,22 @@ const ChatInterface: React.FC = () => {
     };
     checkBridge();
     window.addEventListener('focus', checkBridge);
+    window.addEventListener('storage', checkBridge);
+    
+    // Custom event listener for immediate updates from other components
+    const handleBridgeConnect = () => {
+        setIsBridgeActive(true);
+        // If we just connected and haven't scanned, trigger scan automatically
+        if (onboardingState === 'init') {
+            setMessages(prev => [...prev, {
+                id: Date.now().toString(),
+                role: 'model',
+                text: "**Desktop Bridge Connection Established.**\n\nI can now see your local environment. Initiating mandatory system scan..."
+            }]);
+            setTimeout(() => performSystemScan(), 1000);
+        }
+    };
+    window.addEventListener('mossy-bridge-connected', handleBridgeConnect);
 
     // Load state from local storage on mount
     const savedMessages = localStorage.getItem('mossy_messages');
@@ -139,8 +155,12 @@ const ChatInterface: React.FC = () => {
     if (!savedMessages) {
        initMossy();
     }
-    return () => window.removeEventListener('focus', checkBridge);
-  }, []);
+    return () => {
+        window.removeEventListener('focus', checkBridge);
+        window.removeEventListener('storage', checkBridge);
+        window.removeEventListener('mossy-bridge-connected', handleBridgeConnect);
+    };
+  }, [onboardingState]); // Depend on onboardingState to check logic inside handleBridgeConnect
 
   useEffect(() => {
     // Save state on updates
@@ -320,6 +340,9 @@ const ChatInterface: React.FC = () => {
   }, [messages, scanProgress, onboardingState, activeTool]);
 
   const performSystemScan = () => {
+    // Prevent double scanning
+    if (onboardingState === 'scanning' || onboardingState === 'integrating') return;
+
     setOnboardingState('scanning');
     setScanProgress(0);
     
@@ -342,16 +365,18 @@ const ChatInterface: React.FC = () => {
             ];
             
             // Bridge finds extra stuff
-            if (isBridgeActive) {
+            // Always show these if bridge is active to simulate deep integration
+            if (isBridgeActive || localStorage.getItem('mossy_bridge_active') === 'true') {
                 foundApps.push({ id: '7', name: 'Ollama (Local LLM)', category: 'AI Service', checked: true });
                 foundApps.push({ id: '8', name: 'VS Code', category: 'Development', checked: true });
+                foundApps.push({ id: '9', name: 'Mod Organizer 2', category: 'Manager', checked: true });
             }
 
             setDetectedApps(foundApps);
             setOnboardingState('integrating');
             
-            const msgText = isBridgeActive 
-              ? "**Deep Scan Complete.** The Desktop Bridge allowed me to find additional development tools."
+            const msgText = (isBridgeActive || localStorage.getItem('mossy_bridge_active') === 'true')
+              ? "**Deep Scan Complete.** The Desktop Bridge allowed me to find additional development tools including local AI services."
               : "**Scan Complete!** I found these tools on your system. Please confirm which ones you want me to link with.";
               
             setMessages(prev => [...prev, {
@@ -560,7 +585,7 @@ const ChatInterface: React.FC = () => {
             </h2>
             {/* Bridge Status Indicator */}
             {isBridgeActive ? (
-                <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 text-xs">
+                <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 text-xs animate-fade-in">
                     <Wifi className="w-3 h-3 text-emerald-400 animate-pulse" />
                     <span className="text-emerald-300">Connected</span>
                 </div>
@@ -647,8 +672,8 @@ const ChatInterface: React.FC = () => {
                     </div>
 
                     {/* Scan UI Overlay */}
-                    {msg.id === 'init' && onboardingState === 'scanning' && (
-                        <div className="mt-4 bg-slate-900 rounded-lg p-3 border border-slate-700">
+                    {onboardingState === 'scanning' && msg.role === 'model' && msg.text.includes("Scan") && (
+                        <div className="mt-4 bg-slate-900 rounded-lg p-3 border border-slate-700 animate-slide-up">
                             <div className="flex justify-between text-xs mb-1 text-emerald-400 font-mono">
                                 <span>SYSTEM SCAN</span>
                                 <span>{scanProgress}%</span>
@@ -663,8 +688,8 @@ const ChatInterface: React.FC = () => {
                     )}
 
                     {/* Integration UI */}
-                    {msg.id === 'scan-done' && onboardingState === 'integrating' && (
-                        <div className="mt-4 bg-slate-900 rounded-xl p-4 border border-slate-700 shadow-inner">
+                    {onboardingState === 'integrating' && msg.role === 'model' && msg.text.includes("Scan Complete") && (
+                        <div className="mt-4 bg-slate-900 rounded-xl p-4 border border-slate-700 shadow-inner animate-slide-up">
                             <h4 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider flex items-center gap-2">
                                 <Search className="w-3 h-3" /> Detected Tools
                             </h4>

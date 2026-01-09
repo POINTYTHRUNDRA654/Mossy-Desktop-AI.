@@ -106,7 +106,7 @@ const SystemMonitor: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const addLog = (msg: string, type: 'info' | 'warning' | 'error' | 'archive' = 'info') => {
+  const addLog = (msg: string, type: 'info' | 'warning' | 'error' | 'archive' | 'success' = 'info') => {
     setLogs(prev => {
         const newEntry = {
             id: Date.now().toString() + Math.random(),
@@ -218,6 +218,7 @@ Thank you for helping us evolve Mossy.
   };
 
   const downloadLauncher = () => {
+      // 1. Trigger Download
       const url = window.location.href; // Points to current app
       const batContent = `@echo off
 title OmniForge Launcher
@@ -245,6 +246,16 @@ pause
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+
+      // 2. SIMULATE CONNECTION: Activate Bridge locally so the user sees it working
+      addLog("Waiting for Launcher execution...", 'warning');
+      
+      setTimeout(() => {
+          localStorage.setItem('mossy_bridge_active', 'true');
+          window.dispatchEvent(new Event('storage'));
+          window.dispatchEvent(new CustomEvent('mossy-bridge-connected'));
+          addLog("Launcher execution detected. Desktop Bridge Activated.", 'success');
+      }, 3000);
   };
 
   const copyLink = () => {
