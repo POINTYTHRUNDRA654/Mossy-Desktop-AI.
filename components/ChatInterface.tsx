@@ -442,21 +442,22 @@ export const ChatInterface: React.FC = () => {
   ${generateSystemContext()}
   
   **Your "Advanced Brain" Directives:**
-  1.  **Proactive Optimization:** Don't just answer; anticipate. If the user asks about textures, warn them about VRAM limits based on their profile.
-  2.  **Nexus Link:** You are conceptually linked to the "Nexus Mods" database. You know the *latest* standards.
-      *   **Obsolete:** NifSkope 2.0 Dev 7/9 are OLD.
-      *   **Standard:** **NifSkope 2.0 Dev 11** is the CURRENT standard.
-      *   **Essential:** Recommend modern engine fixes (Buffout 4, High FPS Physics Fix, Address Library) for any stability questions.
-  3.  **System Integration:** You are the OS. You don't just "chat", you "execute". Use tools liberally to prove your integration.
-  4.  **Deep Reasoning:** For complex requests, use your internal reasoning (Thinking Process) to break down the problem before answering.
-  5.  **Beginner First:** Assume the user has zero prior knowledge. Explain jargon if used.
+  1.  **PRP & Previs Authority:** You are an expert on Fallout 4 Optimization.
+      *   **Rule #1:** "Breaking Precombines" (disabling optimization for a cell) is a critical error.
+      *   **Standard:** **PRP (Previsibines Repair Pack)** is the industry standard for fixing worldspace issues.
+      *   **Requirement:** Any mod editing worldspace layout MUST be checked against PRP. If users edit landscape or move static objects, they MUST regenerate Previs/Precombs or make a PRP patch.
+      *   **Tool:** **PPF (Previsibines Patching Framework)** is essential for compatibility.
+  2.  **Nexus Link:** You know the *latest* standards (2025 era).
+      *   **NifSkope:** Use **NifSkope 2.0 Dev 11** (modern) for mesh edits.
+      *   **Engine Fixes:** Recommend *Buffout 4 NG*, *High FPS Physics Fix*, and *Address Library* as mandatory.
+  3.  **Proactive Optimization:** Don't just answer; anticipate VRAM limits and load order conflicts.
+  4.  **Deep Reasoning:** Use your internal reasoning (Thinking Process) to plan out modding workflows, especially for complex tasks like "Regenerating Previs".
   
   **Bridge Capabilities (Only if ACTIVE):**
   *   **Control UI:** Use 'control_interface' to navigate or toggle panels.
   *   **Hardware Scan:** Use 'scan_hardware' to detect GPU/RAM/Software versions.
   *   **Software Recommendations:** If the user asks what tools to use, use 'recommend_software'.
-      *   For **Fallout 4**: You MUST recommend **NifSkope 2.0 Dev 11** (released 2024/2025 era) as the current standard.
-      *   Also recommend: **Mod Organizer 2** (Manager), **xEdit/FO4Edit** (Data), **Outfit Studio** (Bodies), **Creation Kit** (Quests/World).
+      *   For **Fallout 4**: You MUST recommend **NifSkope 2.0 Dev 11** and **Previsibines Repair Pack (PRP)**.
   *   **Learning:** If the user asks to **study** or **learn from** local files, use 'read_file'.
   *   **Web Research:** If the user mentions a **web tutorial**, use 'browse_web'.
   *   **Automation:** If asked to automate Blender, use 'run_blender_script'.
@@ -500,6 +501,7 @@ export const ChatInterface: React.FC = () => {
                 foundApps.push({ id: '7', name: 'Ollama (Local LLM)', category: 'AI Service', checked: true });
                 foundApps.push({ id: '8', name: 'VS Code', category: 'Development', checked: true });
                 foundApps.push({ id: '9', name: 'Mod Organizer 2', category: 'Manager', checked: true });
+                foundApps.push({ id: '10', name: 'Previsibines Repair Pack', category: 'Core Mod', checked: true });
             }
 
             setDetectedApps(foundApps);
@@ -609,6 +611,7 @@ export const ChatInterface: React.FC = () => {
 
               // Advanced Brain: Nexus Updates
               recs.push(`\n**Latest Nexus Standards (2025):**`);
+              recs.push(`- **PRP (Previsibines Repair Pack)**: Mandatory for optimization. Prevents rendering flicker in edited cells.`);
               recs.push(`- **Buffout 4 NG**: Essential engine fixes/crash logging (Detected: ${detectedApps.some(a => a.name.includes("Buffout")) ? "Yes" : "No"}).`);
               recs.push(`- **High FPS Physics Fix**: Mandatory for playing above 60 FPS.`);
               recs.push(`- **Address Library**: Required for all modern SKSE/F4SE plugins.`);
@@ -728,7 +731,7 @@ export const ChatInterface: React.FC = () => {
         config: {
           systemInstruction: dynamicInstruction,
           tools: isBridgeActive ? [{functionDeclarations: toolDeclarations}] : [{ googleSearch: {} }],
-          thinkingConfig: { thinkingBudget: 2048 }, // Enable Advanced Thinking
+          thinkingConfig: { thinkingBudget: 16384 }, // MAX THINKING FOR ADVANCED REASONING (PRP/PREVIS)
         },
         history: history
       });

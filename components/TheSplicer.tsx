@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Binary, Search, Eye, Cpu, Zap, FileCode, AlertTriangle, CheckCircle2, RefreshCw, Upload, Download, Scan, Boxes, Settings2, Activity, Network, Box } from 'lucide-react';
+import { Binary, Search, Eye, Cpu, Zap, FileCode, AlertTriangle, CheckCircle2, RefreshCw, Upload, Download, Scan, Boxes, Settings2, Activity, Network, Box, Cuboid } from 'lucide-react';
 
 interface HavokNode {
     id: string;
@@ -14,7 +14,7 @@ const TheSplicer: React.FC = () => {
     const [fileName, setFileName] = useState<string | null>(null);
     const [bytes, setBytes] = useState<Uint8Array | null>(null);
     const [cursor, setCursor] = useState<number | null>(null);
-    const [viewMode, setViewMode] = useState<'hex' | 'havok'>('hex');
+    const [viewMode, setViewMode] = useState<'hex' | 'havok' | 'render'>('hex');
     const [havokNodes, setHavokNodes] = useState<HavokNode[]>([]);
     
     // AI Analysis
@@ -23,6 +23,7 @@ const TheSplicer: React.FC = () => {
     const [structureMap, setStructureMap] = useState<{ start: number; end: number; label: string; color: string }[]>([]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
 
     // Initial dummy data
     useEffect(() => {
@@ -49,6 +50,83 @@ const TheSplicer: React.FC = () => {
         }
     }, []);
 
+    // 3D Render Loop
+    useEffect(() => {
+        if (viewMode !== 'render' || !canvasRef.current) return;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        let frameId: number;
+        let rot = 0;
+
+        const drawCube = (rotation: number) => {
+            // Resize logic
+            canvas.width = canvas.parentElement?.clientWidth || 400;
+            canvas.height = canvas.parentElement?.clientHeight || 400;
+            
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const size = 100;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#0f172a'; // Match bg
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // NIF-like shape (Diamond)
+            const vertices = [
+                {x: 0, y: -1.5, z: 0}, 
+                {x: 1, y: 0, z: 1}, {x: 1, y: 0, z: -1}, {x: -1, y: 0, z: -1}, {x: -1, y: 0, z: 1},
+                {x: 0, y: 1.5, z: 0}
+            ];
+
+            const rotated = vertices.map(v => {
+                let x = v.x * Math.cos(rotation) - v.z * Math.sin(rotation);
+                let z = v.x * Math.sin(rotation) + v.z * Math.cos(rotation);
+                
+                let y = v.y * Math.cos(rotation * 0.5) - z * Math.sin(rotation * 0.5);
+                z = v.y * Math.sin(rotation * 0.5) + z * Math.cos(rotation * 0.5);
+                
+                const scale = 300 / (300 + z * 50);
+                return { x: cx + x * size * scale, y: cy + y * size * scale };
+            });
+
+            // Connect lines
+            ctx.strokeStyle = '#38bdf8'; // Forge Accent
+            ctx.lineWidth = 1.5;
+            
+            const lines = [
+                [0,1], [0,2], [0,3], [0,4], // Top to mid
+                [5,1], [5,2], [5,3], [5,4], // Bot to mid
+                [1,2], [2,3], [3,4], [4,1]  // Mid ring
+            ];
+
+            ctx.beginPath();
+            lines.forEach(([i1, i2]) => {
+                ctx.moveTo(rotated[i1].x, rotated[i1].y);
+                ctx.lineTo(rotated[i2].x, rotated[i2].y);
+            });
+            ctx.stroke();
+            
+            // Add Vertices
+            ctx.fillStyle = '#fff';
+            rotated.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        };
+
+        const render = () => {
+            rot += 0.01;
+            drawCube(rot);
+            frameId = requestAnimationFrame(render);
+        };
+        render();
+
+        return () => cancelAnimationFrame(frameId);
+    }, [viewMode]);
+
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -64,7 +142,8 @@ const TheSplicer: React.FC = () => {
                 // Simple heuristic for view mode
                 if (file.name.endsWith('.hkx') || file.name.endsWith('.xml')) {
                     setViewMode('havok');
-                    // In real app, parse here. We'll reset to dummy nodes for now.
+                } else if (file.name.endsWith('.nif')) {
+                    setViewMode('render');
                 } else {
                     setViewMode('hex');
                 }
@@ -189,7 +268,13 @@ const TheSplicer: React.FC = () => {
                         onClick={() => setViewMode('havok')}
                         className={`px-4 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-2 ${viewMode === 'havok' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                     >
-                        <Activity className="w-3 h-3" /> Physics Graph
+                        <Activity className="w-3 h-3" /> Physics
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('render')}
+                        className={`px-4 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-2 ${viewMode === 'render' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                        <Cuboid className="w-3 h-3" /> Holo-Render
                     </button>
                 </div>
 
@@ -274,6 +359,13 @@ const TheSplicer: React.FC = () => {
                                 <p>No file loaded.</p>
                             </div>
                         )
+                    ) : viewMode === 'render' ? (
+                        <div className="h-full flex flex-col relative">
+                            <div className="absolute top-2 left-2 z-10 bg-black/50 p-2 rounded text-xs text-slate-400">
+                                Render Mode: Wireframe
+                            </div>
+                            <canvas ref={canvasRef} className="w-full h-full bg-[#0f172a] rounded-lg shadow-inner" />
+                        </div>
                     ) : (
                         // Havok Structure View
                         <div className="h-full flex flex-col">
@@ -292,7 +384,7 @@ const TheSplicer: React.FC = () => {
                 <div className="w-80 bg-slate-900 border-l border-slate-800 flex flex-col">
                     <div className="p-4 border-b border-slate-800 bg-slate-900/50">
                         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                            <Search className="w-3 h-3" /> {viewMode === 'hex' ? 'Data Inspector' : 'Physics Properties'}
+                            <Search className="w-3 h-3" /> {viewMode === 'hex' ? 'Data Inspector' : viewMode === 'render' ? 'Mesh Stats' : 'Physics Properties'}
                         </h3>
                     </div>
 
@@ -317,6 +409,24 @@ const TheSplicer: React.FC = () => {
                                     <div className="flex justify-between text-xs border-b border-slate-800 pb-1">
                                         <span className="text-slate-400">Char</span>
                                         <span className="text-emerald-400">'{String.fromCharCode(bytes[cursor])}'</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : viewMode === 'render' ? (
+                            <div className="space-y-4 text-xs">
+                                <div>
+                                    <div className="text-slate-500 uppercase font-bold mb-1">Geometry</div>
+                                    <div className="bg-slate-800 p-2 rounded">
+                                        <div className="flex justify-between"><span>Vertices</span><span className="text-white">6</span></div>
+                                        <div className="flex justify-between"><span>Triangles</span><span className="text-white">8</span></div>
+                                        <div className="flex justify-between"><span>Strips</span><span className="text-white">0</span></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-slate-500 uppercase font-bold mb-1">Material</div>
+                                    <div className="bg-slate-800 p-2 rounded">
+                                        <div>Shader: <span className="text-purple-400">PBR_MetalRough</span></div>
+                                        <div>Flags: <span className="text-emerald-400">TwoSided, CastShadow</span></div>
                                     </div>
                                 </div>
                             </div>

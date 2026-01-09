@@ -1,14 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical, Map, FileDigit, Library, Bug, Package } from 'lucide-react';
+import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical, Map, FileDigit, Library, Bug, Package, Watch } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
   const [bridgeConnected, setBridgeConnected] = useState(false);
+  const [isPipBoy, setIsPipBoy] = useState(false);
   const location = useLocation();
   const [moodColor, setMoodColor] = useState('text-emerald-400');
   const [glowColor, setGlowColor] = useState('border-emerald-500/30');
   const [shadowColor, setShadowColor] = useState('shadow-[0_0_15px_rgba(16,185,129,0.2)]');
   const [coreColor, setCoreColor] = useState('bg-emerald-500');
+
+  // Toggle Pip-Boy Theme
+  const togglePipBoy = () => {
+      const newState = !isPipBoy;
+      setIsPipBoy(newState);
+      if (newState) {
+          document.body.classList.add('pip-boy-mode');
+      } else {
+          document.body.classList.remove('pip-boy-mode');
+      }
+      localStorage.setItem('mossy_pip_mode', JSON.stringify(newState));
+  };
+
+  // Init Theme
+  useEffect(() => {
+      const saved = localStorage.getItem('mossy_pip_mode') === 'true';
+      setIsPipBoy(saved);
+      if (saved) document.body.classList.add('pip-boy-mode');
+  }, []);
 
   // Poll for bridge status check
   useEffect(() => {
@@ -156,13 +176,18 @@ const Sidebar: React.FC = () => {
         ))}
       </nav>
       
-      {/* Footer Info */}
-      <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-        <div className="text-[10px] text-slate-600 text-center font-mono flex justify-center items-center gap-2">
-          <span>v2.5.0-RC1</span>
-          <span className={`w-1 h-1 rounded-full ${moodColor.replace('text-', 'bg-').replace('-400', '-600')}`}></span>
-          <span>CORE: ACTIVE</span>
+      {/* Footer Info & Pip-Boy Toggle */}
+      <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center">
+        <div className="text-[10px] text-slate-600 font-mono">
+          v2.5.0-RC1
         </div>
+        <button 
+            onClick={togglePipBoy} 
+            className={`p-2 rounded-full transition-all ${isPipBoy ? 'text-green-400 bg-green-900/30 shadow-[0_0_10px_#16f342]' : 'text-slate-500 hover:text-white'}`}
+            title="Toggle Pip-Boy 3000 Mode"
+        >
+            <Watch className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );

@@ -22,9 +22,9 @@ const TheNexus: React.FC = () => {
   useEffect(() => {
     // 1. Time-based Greeting
     const hour = new Date().getHours();
-    if (hour < 12) setGreeting("Good Morning, Architect.");
-    else if (hour < 18) setGreeting("Good Afternoon, Architect.");
-    else setGreeting("Good Evening, Architect.");
+    if (hour < 12) setGreeting("Good Morning, Vault Dweller.");
+    else if (hour < 18) setGreeting("Good Afternoon, Vault Dweller.");
+    else setGreeting("Good Evening, Vault Dweller.");
 
     // 2. Load Local State
     const savedProject = localStorage.getItem('mossy_project');

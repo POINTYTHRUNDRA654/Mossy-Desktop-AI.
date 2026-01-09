@@ -9,6 +9,7 @@ interface AnalysisResult {
         y: number;
         label: string;
         type: 'error' | 'info' | 'action';
+        pct?: number; // VATS percentage
     }[];
 }
 
@@ -18,6 +19,7 @@ const TheLens: React.FC = () => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
     const [selectedApp, setSelectedApp] = useState('Blender 4.0');
+    const [isVatsMode, setIsVatsMode] = useState(false);
 
     // Simulate Screen Capture options
     const captureOptions = [
@@ -29,6 +31,7 @@ const TheLens: React.FC = () => {
     const handleCapture = () => {
         setIsAnalyzing(true);
         setAnalysis(null);
+        setIsVatsMode(true); // Auto-engage VATS visual effect
         
         // Simulate getting the specific app screenshot
         const option = captureOptions.find(o => o.label === selectedApp) || captureOptions[0];
@@ -46,23 +49,23 @@ const TheLens: React.FC = () => {
                     mockResult = {
                         summary: "I see the Blender Shader Editor. The 'Image Texture' node labeled 'Normal Map' is loaded but not connected to the BSDF.",
                         pointsOfInterest: [
-                            { x: 35, y: 45, label: "Disconnected Output", type: 'error' },
-                            { x: 60, y: 50, label: "Connect to 'Normal' Input", type: 'action' }
+                            { x: 35, y: 45, label: "Disconnected Output", type: 'error', pct: 95 },
+                            { x: 60, y: 50, label: "Connect to 'Normal' Input", type: 'action', pct: 82 }
                         ]
                     };
                 } else if (selectedApp.includes('VS Code')) {
                     mockResult = {
                         summary: "You are editing a Python script. There is an indentation error on line 42 inside the 'ProcessTurn' function.",
                         pointsOfInterest: [
-                            { x: 40, y: 60, label: "Indentation Error", type: 'error' },
-                            { x: 80, y: 20, label: "Run Debugger", type: 'info' }
+                            { x: 40, y: 60, label: "Indentation Error", type: 'error', pct: 99 },
+                            { x: 80, y: 20, label: "Run Debugger", type: 'info', pct: 45 }
                         ]
                     };
                 } else {
                     mockResult = {
                         summary: "Creation Kit detected. The Quest Object 'MQ101' has an undefined Stage Index '20'.",
                         pointsOfInterest: [
-                            { x: 50, y: 50, label: "Missing Index Data", type: 'error' }
+                            { x: 50, y: 50, label: "Missing Index Data", type: 'error', pct: 88 }
                         ]
                     };
                 }
@@ -119,14 +122,24 @@ const TheLens: React.FC = () => {
                         style={{ backgroundImage: 'radial-gradient(#334155 1px, transparent 1px)', backgroundSize: '40px 40px' }}
                     />
                     
+                    {/* VATS Overlay - Global Tint */}
+                    {isVatsMode && currentImage && (
+                        <div className="absolute inset-0 bg-[#16f342] opacity-10 mix-blend-overlay pointer-events-none z-20 animate-pulse-slow"></div>
+                    )}
+                    
                     {currentImage ? (
                         <div className="relative max-w-[90%] max-h-[90%] border border-slate-700 shadow-2xl rounded-lg overflow-hidden group">
-                            <img src={currentImage} alt="Analysis Target" className="w-full h-full object-contain block" />
+                            <img 
+                                src={currentImage} 
+                                alt="Analysis Target" 
+                                className={`w-full h-full object-contain block transition-all duration-1000 ${isVatsMode ? 'contrast-125 sepia brightness-110' : ''}`} 
+                            />
                             
                             {/* Scanning Effect */}
                             {isAnalyzing && (
                                 <div className="absolute inset-0 z-10 bg-emerald-500/5 overflow-hidden">
                                     <div className="w-full h-1 bg-emerald-500/50 shadow-[0_0_15px_#10b981] animate-scan-down"></div>
+                                    <div className="absolute top-10 left-10 text-[#16f342] font-mono text-xl font-bold animate-blink">V.A.T.S. ENGAGED</div>
                                 </div>
                             )}
 
@@ -137,33 +150,26 @@ const TheLens: React.FC = () => {
                                     className="absolute animate-fade-in"
                                     style={{ left: `${poi.x}%`, top: `${poi.y}%` }}
                                 >
-                                    {/* Marker */}
-                                    <div className={`relative -ml-3 -mt-3 w-6 h-6 rounded-full border-2 flex items-center justify-center animate-ping-slow ${
-                                        poi.type === 'error' ? 'border-red-500 shadow-[0_0_10px_#ef4444]' :
-                                        poi.type === 'action' ? 'border-emerald-500 shadow-[0_0_10px_#10b981]' :
-                                        'border-blue-500'
-                                    }`}>
-                                        <div className={`w-1.5 h-1.5 rounded-full ${
-                                            poi.type === 'error' ? 'bg-red-500' :
-                                            poi.type === 'action' ? 'bg-emerald-500' :
-                                            'bg-blue-500'
-                                        }`}></div>
-                                    </div>
-                                    
-                                    {/* Label connecting line */}
-                                    <div className="absolute top-full left-1/2 w-px h-8 bg-white/50"></div>
-                                    
-                                    {/* Label Box */}
-                                    <div className={`absolute top-8 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1.5 rounded-md border text-xs font-bold backdrop-blur-md shadow-xl ${
-                                        poi.type === 'error' ? 'bg-red-900/80 border-red-500 text-red-100' :
-                                        poi.type === 'action' ? 'bg-emerald-900/80 border-emerald-500 text-emerald-100' :
-                                        'bg-blue-900/80 border-blue-500 text-blue-100'
-                                    }`}>
-                                        <div className="flex items-center gap-2">
-                                            {poi.type === 'error' ? <AlertCircle className="w-3 h-3" /> :
-                                             poi.type === 'action' ? <MousePointer2 className="w-3 h-3" /> :
-                                             <Check className="w-3 h-3" />}
-                                            {poi.label}
+                                    {/* VATS Box */}
+                                    <div className="relative group/box cursor-pointer">
+                                        <div className="absolute -top-12 -left-8 bg-[#000] border-2 border-[#16f342] text-[#16f342] px-2 py-1 font-mono text-sm font-bold shadow-[0_0_10px_#16f342]">
+                                            {poi.pct}%
+                                        </div>
+                                        <div className={`w-16 h-16 border-2 border-[#16f342] -translate-x-1/2 -translate-y-1/2 bg-[#16f342]/10 hover:bg-[#16f342]/20 transition-colors`}>
+                                            <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-[#16f342]"></div>
+                                            <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-[#16f342]"></div>
+                                            <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-[#16f342]"></div>
+                                            <div className="absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 border-[#16f342]"></div>
+                                        </div>
+                                        
+                                        {/* Label Box */}
+                                        <div className={`absolute top-10 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1.5 bg-black/80 border border-[#16f342] text-[#16f342] text-xs font-bold shadow-xl backdrop-blur-md opacity-0 group-hover/box:opacity-100 transition-opacity z-30`}>
+                                            <div className="flex items-center gap-2">
+                                                {poi.type === 'error' ? <AlertCircle className="w-3 h-3" /> :
+                                                 poi.type === 'action' ? <MousePointer2 className="w-3 h-3" /> :
+                                                 <Check className="w-3 h-3" />}
+                                                {poi.label}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -195,7 +201,7 @@ const TheLens: React.FC = () => {
                             className="w-full mt-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-50"
                         >
                             {isAnalyzing ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Crosshair className="w-4 h-4" />}
-                            {isAnalyzing ? 'Analyzing...' : 'Capture & Analyze'}
+                            {isAnalyzing ? 'Scanning...' : 'Enter V.A.T.S.'}
                         </button>
                     </div>
 
@@ -230,7 +236,7 @@ const TheLens: React.FC = () => {
                                              </div>
                                              <div>
                                                  <div className="text-xs font-bold text-slate-200">{poi.label}</div>
-                                                 <div className="text-[10px] text-slate-500 uppercase">{poi.type}</div>
+                                                 <div className="text-[10px] text-slate-500 uppercase">{poi.type} | {poi.pct}%</div>
                                              </div>
                                              <Target className="w-4 h-4 text-slate-600 ml-auto" />
                                          </div>

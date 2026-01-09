@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OmniForge AI Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
@@ -13,12 +13,15 @@
             fontFamily: {
               sans: ['Inter', 'sans-serif'],
               mono: ['JetBrains Mono', 'monospace'],
+              pip: ['Share Tech Mono', 'monospace'],
             },
             colors: {
               'forge-dark': '#0f172a',
               'forge-panel': '#1e293b',
               'forge-accent': '#38bdf8',
               'terminal-green': '#22c55e',
+              'pip-green': '#16f342',
+              'pip-dim': '#0d3d15',
             }
           }
         }
@@ -82,6 +85,51 @@
       .markdown-body a {
         color: #38bdf8;
         text-decoration: underline;
+      }
+
+      /* --- PIP-BOY THEME OVERRIDES --- */
+      body.pip-boy-mode {
+        background-color: #050505 !important;
+        color: #16f342 !important;
+        font-family: 'Share Tech Mono', monospace !important;
+        text-shadow: 0 0 4px #16f342;
+      }
+      body.pip-boy-mode * {
+        border-color: #16f342 !important;
+        color: #16f342 !important;
+        font-family: 'Share Tech Mono', monospace !important;
+      }
+      body.pip-boy-mode div, body.pip-boy-mode section, body.pip-boy-mode nav, body.pip-boy-mode aside, body.pip-boy-mode main {
+        background-color: #050505 !important;
+      }
+      body.pip-boy-mode button:hover {
+        background-color: #16f342 !important;
+        color: #000 !important;
+        box-shadow: 0 0 15px #16f342;
+      }
+      body.pip-boy-mode input, body.pip-boy-mode textarea, body.pip-boy-mode select {
+        background-color: #001100 !important;
+        color: #16f342 !important;
+      }
+      /* Scanline Effect */
+      body.pip-boy-mode::after {
+        content: "";
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+        background-size: 100% 2px, 3px 100%;
+        pointer-events: none;
+        z-index: 9999;
+        opacity: 0.6;
+      }
+      /* CRT Curvature Vignette */
+      body.pip-boy-mode::before {
+        content: "";
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,20,0,0.4) 90%, rgba(0,20,0,0.8) 100%);
+        pointer-events: none;
+        z-index: 9998;
       }
     </style>
   <script type="importmap">
