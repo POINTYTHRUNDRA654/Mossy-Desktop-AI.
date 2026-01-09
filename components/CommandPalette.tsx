@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleGenAI } from "@google/genai";
-import { Search, Command, Zap, ArrowRight, CornerDownLeft, BrainCircuit, Loader2, FileCode, LayoutDashboard, Terminal, MessageSquare, Activity, Image, Mic2, Hexagon, Layers, Box, Settings, Sparkles, RefreshCw, Dna, Database, Shield, Radio, Map, Container, Camera, Aperture, Network, GitBranch, PenTool, FlaskConical, Bug, Package, Globe, Smartphone, Heart, Lock, Gamepad2, Monitor } from 'lucide-react';
+import { Search, Command, Zap, ArrowRight, CornerDownLeft, BrainCircuit, Loader2, FileCode, LayoutDashboard, Terminal, MessageSquare, Activity, Image, Mic2, Hexagon, Layers, Box, Settings, Sparkles, RefreshCw, Dna, Database, Shield, Radio, Map, Container, Camera, Aperture, Network, GitBranch, PenTool, FlaskConical, Bug, Package, Globe, Smartphone, Heart, Lock, Gamepad2, Monitor, Rocket } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface Action {
@@ -68,6 +68,7 @@ const CommandPalette: React.FC = () => {
         { id: 'nav-orchestrator', title: 'The Orchestrator', subtitle: 'Automated Workflow Pipelines', icon: GitBranch, group: 'Navigation', action: () => navigate('/orchestrator') },
         
         // System Actions
+        { id: 'sys-deploy', title: 'Deploy / Release', subtitle: 'Build Project & Invite Testers', icon: Rocket, group: 'System', action: () => navigate('/monitor') },
         { id: 'sys-voice', title: 'Toggle Voice Mode', subtitle: 'Enable/Disable TTS', icon: Mic2, group: 'System', action: () => { /* Logic integrated via context or event bus in real app */ alert('Voice Toggled'); } },
         { id: 'sys-bridge', title: 'Desktop Bridge Status', subtitle: 'Check Localhost Connection', icon: Monitor, group: 'System', action: () => navigate('/bridge') },
         { id: 'sys-reload', title: 'Reboot Core', subtitle: 'Reload Application', icon: RefreshCw, group: 'System', action: () => window.location.reload() },

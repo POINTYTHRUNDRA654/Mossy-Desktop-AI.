@@ -110,7 +110,7 @@ const TutorialOverlay: React.FC = () => {
                         <ul className="text-xs text-slate-400 space-y-1 list-disc pl-4">
                             <li>Windows 10/11 or Linux Kernel 5.15+</li>
                             <li>16GB RAM (32GB Recommended for Local LLM)</li>
-                            <li>NVIDIA GPU (RTX 3060+) for Neural Rendering</li>
+                            <li>NVIDIA GPU (RTX 2060+ or equivalent)</li>
                         </ul>
                     </div>
                 </div>
@@ -191,6 +191,32 @@ const TutorialOverlay: React.FC = () => {
                     <p className="text-slate-500 text-xs mt-2">
                         Navigate modules, run system commands, or ask Mossy a question instantly.
                     </p>
+                </div>
+            )
+        },
+        {
+            id: 'deploy-tour',
+            title: 'Deploy & Test',
+            position: 'center',
+            content: (
+                <div>
+                    <p className="text-slate-300 text-sm mb-4">
+                        Ready to share your work? Use the <strong>System Monitor</strong> to access the Deployment Center.
+                    </p>
+                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex items-start gap-3">
+                        <Package className="w-5 h-5 text-emerald-400 shrink-0 mt-1" />
+                        <div>
+                            <h4 className="text-white font-bold text-sm">Build Pipeline</h4>
+                            <p className="text-xs text-slate-400 mt-1">Compile your projects and generate installable artifacts.</p>
+                        </div>
+                    </div>
+                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex items-start gap-3 mt-2">
+                        <CheckCircle2 className="w-5 h-5 text-blue-400 shrink-0 mt-1" />
+                        <div>
+                            <h4 className="text-white font-bold text-sm">Beta Invites</h4>
+                            <p className="text-xs text-slate-400 mt-1">Generate access keys for your testers to collaborate.</p>
+                        </div>
+                    </div>
                 </div>
             )
         }
