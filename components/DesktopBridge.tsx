@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench } from 'lucide-react';
+import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench, FolderOpen, HardDrive } from 'lucide-react';
 
 interface Driver {
     id: string;
@@ -34,33 +34,8 @@ const DesktopBridge: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
   const [repairing, setRepairing] = useState(false);
-  const [autoConnect, setAutoConnect] = useState(true);
-
-  // Auto-connect simulates simulated local bridge existing
-  useEffect(() => {
-      const checkBridge = () => {
-          const active = localStorage.getItem('mossy_bridge_active') === 'true';
-          if (active && autoConnect) {
-              // Reconnect ALL drivers if bridge is globally active
-              addLog('System', 'Restoring previous session state...', 'warn');
-              drivers.forEach((d, i) => {
-                  setTimeout(() => {
-                      toggleDriver(d.id, true);
-                  }, i * 300);
-              });
-          }
-      };
-      
-      checkBridge();
-      
-      const handleConnect = () => {
-          localStorage.setItem('mossy_bridge_active', 'true');
-          checkBridge();
-          addLog('System', 'External Connection Signal Received.', 'ok');
-      };
-      window.addEventListener('mossy-bridge-connected', handleConnect);
-      return () => window.removeEventListener('mossy-bridge-connected', handleConnect);
-  }, []); // Run once on mount
+  const [directoryHandle, setDirectoryHandle] = useState<any>(null);
+  const [mountedPath, setMountedPath] = useState<string | null>(null);
 
   useEffect(() => {
       logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -71,7 +46,6 @@ const DesktopBridge: React.FC = () => {
       const interval = setInterval(() => {
           setDrivers(prev => prev.map(d => {
               if (d.status === 'active') {
-                  // Randomize latency slightly
                   return { ...d, latency: Math.max(1, Math.min(50, d.latency + (Math.random() * 4 - 2))) };
               }
               return d;
@@ -94,7 +68,6 @@ const DesktopBridge: React.FC = () => {
       setDrivers(prev => prev.map(d => {
           if (d.id !== id) return d;
           
-          // Determine new state
           const currentState = d.status;
           let targetState: 'active' | 'inactive' | 'mounting' = 'mounting';
           
@@ -104,43 +77,22 @@ const DesktopBridge: React.FC = () => {
               targetState = currentState === 'active' ? 'inactive' : 'mounting';
           }
 
-          // Immediate state update for force, delayed for toggle/mounting simulation
           if (targetState === 'mounting') {
               setTimeout(() => {
                   setDrivers(curr => curr.map(cd => cd.id === id ? { ...cd, status: 'active', latency: Math.floor(Math.random() * 10) + 5 } : cd));
                   addLog(d.name, 'Socket handshake established', 'ok');
-                  
-                  if (id === 'fs_watcher') {
-                      addLog(d.name, 'Indexing D:/Tutorials...', 'ok');
-                  }
-                  if (id === 'browser') {
-                      addLog(d.name, 'Synced with Chrome Profile 1', 'ok');
-                  }
-                  
-                  if (id === 'os_shell') {
-                      localStorage.setItem('mossy_bridge_active', 'true');
-                      window.dispatchEvent(new Event('storage'));
-                  }
               }, 800);
               addLog('Bridge', `Mounting driver: ${d.name}...`, 'warn');
               return { ...d, status: 'mounting' };
           } 
           
           if (targetState === 'active' && currentState !== 'active') {
-               // Immediate activation (used for restore)
                addLog(d.name, 'Connection restored.', 'success');
-               if (id === 'os_shell') {
-                   localStorage.setItem('mossy_bridge_active', 'true');
-               }
                return { ...d, status: 'active', latency: 12 };
           }
 
           if (targetState === 'inactive') {
               addLog(d.name, 'SIGTERM sent. Connection closed.', 'warn');
-              if (id === 'os_shell') {
-                  localStorage.removeItem('mossy_bridge_active');
-                  window.dispatchEvent(new Event('storage'));
-              }
               return { ...d, status: 'inactive', latency: 0 };
           }
 
@@ -148,10 +100,52 @@ const DesktopBridge: React.FC = () => {
       }));
   };
 
+  // --- NATIVE FILE SYSTEM ACCESS ---
+  const handleMountFileSystem = async () => {
+      try {
+          // @ts-ignore - window.showDirectoryPicker is experimental but supported in Chrome/Edge
+          if (!window.showDirectoryPicker) {
+              addLog('System', 'Browser does not support File System Access API. Use Chrome or Edge.', 'err');
+              return;
+          }
+
+          // @ts-ignore
+          const handle = await window.showDirectoryPicker();
+          setDirectoryHandle(handle);
+          setMountedPath(handle.name);
+          
+          addLog('FileSystem', `Access granted to: ${handle.name}`, 'success');
+          addLog('Indexer', 'Indexing files...', 'warn');
+
+          // Activate OS Shell Driver visually
+          toggleDriver('os_shell', true);
+          toggleDriver('fs_watcher', true);
+
+          // Deep Scan Simulation using the real handle name
+          let count = 0;
+          // @ts-ignore
+          for await (const entry of handle.values()) {
+              if (count < 5) {
+                  addLog('Indexer', `Found: ${entry.name}`, 'ok');
+              }
+              count++;
+          }
+          addLog('Indexer', `Index complete. ${count} items mapped.`, 'success');
+          
+          // Persist the "fact" that we have access (we can't persist the handle easily)
+          localStorage.setItem('mossy_bridge_active', 'true');
+          window.dispatchEvent(new Event('mossy-bridge-connected'));
+
+      } catch (err) {
+          console.error(err);
+          addLog('FileSystem', 'User denied access or error occurred.', 'err');
+      }
+  };
+
   const handleRepair = () => {
       if (repairing) return;
       setRepairing(true);
-      setLogs([]); // Clear logs for clarity
+      setLogs([]); 
       addLog('Diagnostics', 'Initiating full-stack neural repair...', 'warn');
       
       let step = 0;
@@ -159,18 +153,11 @@ const DesktopBridge: React.FC = () => {
           step++;
           if (step === 1) addLog('Diagnostics', 'Flushing socket buffers...', 'ok');
           if (step === 2) addLog('Diagnostics', 'Renewing TSL certificates...', 'ok');
-          if (step === 3) addLog('Diagnostics', 'Scanning local ports 21337-21342...', 'ok');
-          if (step === 4) {
+          if (step === 3) {
               clearInterval(interval);
-              // Force enable ALL
               drivers.forEach(d => toggleDriver(d.id, true));
               setRepairing(false);
               addLog('System', 'All Systems Nominal. Link Stabilized.', 'success');
-              
-              // Force global state update
-              localStorage.setItem('mossy_bridge_active', 'true');
-              window.dispatchEvent(new Event('storage'));
-              window.dispatchEvent(new CustomEvent('mossy-bridge-connected'));
           }
       }, 600);
   };
@@ -206,17 +193,37 @@ const DesktopBridge: React.FC = () => {
                     <Zap className={`w-4 h-4 ${repairing ? 'animate-spin' : 'fill-current'}`} />
                     {repairing ? 'Stabilizing...' : 'Repair Neural Link'}
                 </button>
-                <div className="h-10 w-px bg-slate-800"></div>
-                <div className="text-right">
-                    <div className="text-xs font-bold text-slate-500 uppercase">Active Threads</div>
-                    <div className="text-blue-400 font-mono text-lg">{drivers.filter(d => d.status === 'active').length}/{drivers.length}</div>
-                </div>
             </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1 min-h-0">
             {/* Driver Grid */}
             <div className="lg:col-span-2 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
+                
+                {/* MOUNT CONTROL */}
+                <div className="bg-slate-900 border border-emerald-500/30 rounded-xl p-6 flex justify-between items-center shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                    <div>
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            <HardDrive className="w-5 h-5 text-emerald-400" /> 
+                            Local File System Access
+                        </h3>
+                        <p className="text-sm text-slate-400 mt-1">
+                            {mountedPath ? `Linked to: ${mountedPath}` : "Grant permission to access local files/tutorials."}
+                        </p>
+                    </div>
+                    <button 
+                        onClick={handleMountFileSystem}
+                        className={`px-6 py-3 rounded-lg font-bold flex items-center gap-2 transition-all ${
+                            mountedPath 
+                            ? 'bg-slate-800 text-emerald-400 border border-emerald-500/50' 
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg'
+                        }`}
+                    >
+                        {mountedPath ? <CheckCircle2 className="w-5 h-5" /> : <FolderOpen className="w-5 h-5" />}
+                        {mountedPath ? 'Drive Mounted' : 'Initialize File Link'}
+                    </button>
+                </div>
+
                 <div className="flex justify-between items-center mb-2">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                         <Layers className="w-4 h-4" /> Driver Matrix
@@ -290,16 +297,6 @@ const DesktopBridge: React.FC = () => {
                                     </>
                                 )}
                             </div>
-
-                            {driver.status === 'active' && (
-                                <div className="mt-4 pt-4 border-t border-slate-800 flex flex-wrap gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {driver.permissions.map(perm => (
-                                        <span key={perm} className="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-400 border border-slate-700">
-                                            {perm}
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
                         </div>
                     ))}
                 </div>
@@ -307,7 +304,6 @@ const DesktopBridge: React.FC = () => {
 
             {/* Right: Telemetry & Log */}
             <div className="flex flex-col gap-6">
-                {/* Security Card */}
                 <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                         <Shield className="w-4 h-4" /> Security Protocols
@@ -321,10 +317,6 @@ const DesktopBridge: React.FC = () => {
                             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                             <span>Process Isolation</span>
                         </div>
-                        <div className="flex items-center gap-3 text-sm text-slate-300">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                            <span>Read-Only Default</span>
-                        </div>
                         <div className="mt-4 p-3 bg-red-900/10 border border-red-900/30 rounded-lg flex gap-3">
                             <AlertOctagon className="w-5 h-5 text-red-500 shrink-0" />
                             <div className="text-xs text-red-200">
@@ -335,7 +327,6 @@ const DesktopBridge: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Live Log */}
                 <div className="flex-1 bg-black border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
                     <div className="p-3 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
                         <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">

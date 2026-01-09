@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { BrainCircuit, Book, Link, Youtube, FileText, Plus, Trash2, Cpu, Zap, Activity, Sliders, CheckCircle2, RotateCcw, Lock, RefreshCw, Upload, Globe, Bookmark, FileCode, Play, Pause } from 'lucide-react';
+import { BrainCircuit, Book, Link, Youtube, FileText, Plus, Trash2, Cpu, Zap, Activity, Sliders, CheckCircle2, RotateCcw, Lock, RefreshCw, Upload, Globe, Bookmark, FileCode, Play, Pause, FolderOpen } from 'lucide-react';
 
 interface KnowledgeSource {
   id: string;
@@ -35,7 +35,6 @@ const TheCortex: React.FC = () => {
   });
 
   const [newInput, setNewInput] = useState('');
-  const [addMode, setAddMode] = useState<'web' | 'text' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isStudying, setIsStudying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,19 +115,46 @@ const TheCortex: React.FC = () => {
       setIsStudying(true);
   };
 
-  const handleImportBookmarks = () => {
-      setIsProcessing(true);
-      // Simulate fetching from browser
-      setTimeout(() => {
-          const bookmarks: KnowledgeSource[] = [
-              { id: 'bm-1', type: 'web', name: 'MDN Web Docs - Arrays', source: 'developer.mozilla.org', status: 'queued', progress: 0, tokens: 0, tags: ['bookmark'] },
-              { id: 'bm-2', type: 'web', name: 'Python 3.11 Tutorial', source: 'docs.python.org', status: 'queued', progress: 0, tokens: 0, tags: ['bookmark'] },
-              { id: 'bm-3', type: 'youtube', name: 'Complete React Course', source: 'youtube.com/playlist', status: 'queued', progress: 0, tokens: 0, tags: ['bookmark'] }
-          ];
-          setSources(prev => [...bookmarks, ...prev]);
+  const handleDeepLearningIngest = async () => {
+      try {
+          // @ts-ignore
+          if (!window.showDirectoryPicker) {
+              alert("Your browser does not support folder access. Please use Chrome or Edge.");
+              return;
+          }
+          // @ts-ignore
+          const dirHandle = await window.showDirectoryPicker();
+          
+          setIsProcessing(true);
+          
+          const newSources: KnowledgeSource[] = [];
+          
+          // @ts-ignore
+          for await (const entry of dirHandle.values()) {
+              if (entry.kind === 'file') {
+                  if (entry.name.endsWith('.pdf') || entry.name.endsWith('.txt') || entry.name.endsWith('.md')) {
+                      newSources.push({
+                          id: Math.random().toString(36).substr(2, 9),
+                          type: entry.name.endsWith('.pdf') ? 'pdf' : 'text',
+                          name: entry.name,
+                          source: `Local: ${dirHandle.name}/${entry.name}`,
+                          status: 'queued',
+                          progress: 0,
+                          tokens: 0,
+                          tags: ['deep-learning', 'tutorial']
+                      });
+                  }
+              }
+          }
+          
+          setSources(prev => [...newSources, ...prev]);
           setIsProcessing(false);
           setIsStudying(true);
-      }, 1500);
+
+      } catch (err) {
+          console.error(err);
+          setIsProcessing(false);
+      }
   };
 
   const removeSource = (id: string) => {
@@ -277,21 +303,21 @@ const TheCortex: React.FC = () => {
                            </div>
                        </div>
 
-                       {/* Browser Sync */}
+                       {/* Folder Ingest */}
                        <div className="bg-black/40 rounded-xl p-4 border border-slate-700 flex flex-col gap-3">
                            <label className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2">
-                               <Bookmark className="w-3 h-3" /> Browser Sync
+                               <FolderOpen className="w-3 h-3" /> Deep Learning Ingest
                            </label>
                            <p className="text-[10px] text-slate-500 leading-tight">
-                               Import bookmarks from your 'Learning' folder in Chrome/Edge.
+                               Select a folder of tutorials (PDF/TXT) to bulk train the model.
                            </p>
                            <button 
-                               onClick={handleImportBookmarks}
+                               onClick={handleDeepLearningIngest}
                                disabled={isProcessing}
-                               className="mt-auto w-full py-2 bg-blue-900/30 hover:bg-blue-600 border border-blue-500/30 text-blue-200 hover:text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
+                               className="mt-auto w-full py-2 bg-purple-900/30 hover:bg-purple-600 border border-purple-500/30 text-purple-200 hover:text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
                            >
-                               {isProcessing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                               Sync Bookmarks
+                               {isProcessing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <BrainCircuit className="w-3 h-3" />}
+                               Select Folder
                            </button>
                        </div>
                    </div>
