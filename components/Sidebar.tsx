@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical, Map, FileDigit, Library, Bug, Package, Watch, ShieldCheck, Feather } from 'lucide-react';
+import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical, Map, FileDigit, Library, Bug, Package, Watch, ShieldCheck, Feather, Power } from 'lucide-react';
+import { useLive } from './LiveContext';
 
 const Sidebar: React.FC = () => {
   const [bridgeConnected, setBridgeConnected] = useState(false);
@@ -10,6 +11,9 @@ const Sidebar: React.FC = () => {
   const [glowColor, setGlowColor] = useState('border-emerald-500/30');
   const [shadowColor, setShadowColor] = useState('shadow-[0_0_15px_rgba(16,185,129,0.2)]');
   const [coreColor, setCoreColor] = useState('bg-emerald-500');
+  
+  // Consume Global Live Context
+  const { isActive, status, disconnect } = useLive();
 
   // Toggle Pip-Boy Theme
   const togglePipBoy = () => {
@@ -139,7 +143,7 @@ const Sidebar: React.FC = () => {
             <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-slate-900 rounded-full transition-colors duration-500 z-20 ${bridgeConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></div>
         </div>
         
-        <div className="overflow-hidden">
+        <div className="overflow-hidden flex-1">
           <h1 className="text-xl font-bold text-white tracking-tighter leading-none">
             MOSSY<span className={`transition-colors duration-500 ${moodColor}`}>.AI</span>
           </h1>
@@ -158,6 +162,26 @@ const Sidebar: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Global Live Status */}
+      {isActive && (
+          <div className="px-4 py-2 bg-red-900/10 border-b border-red-500/20 flex justify-between items-center animate-fade-in">
+              <div className="flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </span>
+                  <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Live Voice Active</span>
+              </div>
+              <button 
+                  onClick={disconnect}
+                  className="p-1 hover:bg-red-500/20 rounded-full text-red-400 transition-colors"
+                  title="Disconnect Voice"
+              >
+                  <Power className="w-3 h-3" />
+              </button>
+          </div>
+      )}
 
       <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
         {navItems.map((item) => (

@@ -1,28 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { Mic, MicOff, Volume2, Activity, Wifi, Cpu, Disc, Power, Maximize2, Minimize2, Sparkles, Image as ImageIcon, Upload, Trash2 } from 'lucide-react';
+import { useLive } from './LiveContext';
 
 const LiveInterface: React.FC = () => {
-  const [active, setActive] = useState(false);
-  const [status, setStatus] = useState('Standby');
-  const [volume, setVolume] = useState(0);
-  const [transcription, setTranscription] = useState<string>("");
-  const [mode, setMode] = useState<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
+  const { isActive, status, volume, mode, transcription, connect, disconnect } = useLive();
   const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Custom Avatar State
   const [customAvatar, setCustomAvatar] = useState<string | null>(() => localStorage.getItem('mossy_avatar_custom'));
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Refs for audio handling
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const inputContextRef = useRef<AudioContext | null>(null);
-  const nextStartTimeRef = useRef<number>(0);
-  const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-  const sessionRef = useRef<Promise<any> | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
 
   // Canvas Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -35,18 +22,57 @@ const LiveInterface: React.FC = () => {
       if (file) processFile(file);
   };
 
-  const processFile = (file: File) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          if (event.target?.result) {
-              const result = event.target.result as string;
-              setCustomAvatar(result);
-              localStorage.setItem('mossy_avatar_custom', result);
-              // Notify other components
+  const processFile = async (file: File) => {
+      try {
+          // Resize and compress image to fit in localStorage
+          const compressed = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                  const img = new Image();
+                  img.onload = () => {
+                      const canvas = document.createElement('canvas');
+                      const maxSize = 400; // Limit size to 400px to ensure it saves
+                      let width = img.width;
+                      let height = img.height;
+                      
+                      if (width > height) {
+                          if (width > maxSize) {
+                              height *= maxSize / width;
+                              width = maxSize;
+                          }
+                      } else {
+                          if (height > maxSize) {
+                              width *= maxSize / height;
+                              height = maxSize;
+                          }
+                      }
+                      
+                      canvas.width = width;
+                      canvas.height = height;
+                      const ctx = canvas.getContext('2d');
+                      ctx?.drawImage(img, 0, 0, width, height);
+                      // Compress to JPEG 70% quality
+                      resolve(canvas.toDataURL('image/jpeg', 0.7));
+                  };
+                  img.src = e.target?.result as string;
+              };
+              reader.readAsDataURL(file);
+          });
+
+          setCustomAvatar(compressed);
+          try {
+              localStorage.setItem('mossy_avatar_custom', compressed);
+              // Manually dispatch storage event so MossyObserver updates immediately
               window.dispatchEvent(new Event('storage'));
+          } catch (e) {
+              console.error("Storage quota exceeded", e);
+              alert("Image saved for this session only (Storage Full).");
           }
-      };
-      reader.readAsDataURL(file);
+          
+      } catch (err) {
+          console.error("Failed to process avatar:", err);
+          alert("Could not process image. Try a standard JPG/PNG.");
+      }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -206,7 +232,7 @@ const LiveInterface: React.FC = () => {
 
 
         // --- 5. TEXT OVERLAY (Status) ---
-        if (active) {
+        if (isActive) {
             ctx.font = '10px "JetBrains Mono", monospace';
             ctx.fillStyle = `hsla(${baseHue}, 50%, 50%, 0.7)`;
             ctx.textAlign = 'center';
@@ -219,7 +245,7 @@ const LiveInterface: React.FC = () => {
 
     render();
     return () => cancelAnimationFrame(animationFrameRef.current);
-  }, [mode, volume, active, customAvatar]);
+  }, [mode, volume, isActive, customAvatar]);
 
   // Track Mouse
   useEffect(() => {
@@ -229,147 +255,6 @@ const LiveInterface: React.FC = () => {
       window.addEventListener('mousemove', handleMouseMove);
       return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
-
-
-  // --- AUDIO LOGIC ---
-  const createBlob = (data: Float32Array) => {
-    const l = data.length;
-    const int16 = new Int16Array(l);
-    for (let i = 0; i < l; i++) {
-      int16[i] = data[i] * 32768;
-    }
-    const uint8 = new Uint8Array(int16.buffer);
-    let binary = '';
-    const len = uint8.byteLength;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(uint8[i]);
-    }
-    const b64 = btoa(binary);
-    return {
-      data: b64,
-      mimeType: 'audio/pcm;rate=16000',
-    };
-  };
-
-  const decodeAudioData = async (base64String: string, ctx: AudioContext): Promise<AudioBuffer> => {
-    const binaryString = atob(base64String);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-    const dataInt16 = new Int16Array(bytes.buffer);
-    const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
-    const channelData = buffer.getChannelData(0);
-    for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
-    return buffer;
-  };
-
-  const startSession = async () => {
-    try {
-      setStatus('Initializing Neural Interface...');
-      setMode('processing');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-      inputContextRef.current = inputCtx;
-      const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      audioContextRef.current = outputCtx;
-
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      setStatus('Establishing Uplink...');
-      
-      const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-          systemInstruction: "You are Mossy, a sentient AI assistant. You are helpful, creative, and precise. Keep responses concise and conversational.",
-        },
-        callbacks: {
-          onopen: () => {
-            setStatus('Online');
-            setActive(true);
-            setMode('listening');
-            setTranscription(">> Listening channel open...");
-            
-            const source = inputCtx.createMediaStreamSource(stream);
-            const processor = inputCtx.createScriptProcessor(4096, 1, 1);
-            processorRef.current = processor;
-            
-            processor.onaudioprocess = (e) => {
-              const inputData = e.inputBuffer.getChannelData(0);
-              let sum = 0;
-              for (let i = 0; i < inputData.length; i++) sum += inputData[i] * inputData[i];
-              const rms = Math.sqrt(sum / inputData.length);
-              
-              if (rms > 0.02) setMode('listening'); 
-              
-              const pcmBlob = createBlob(inputData);
-              sessionPromise.then((session) => session.sendRealtimeInput({ media: pcmBlob }));
-            };
-            source.connect(processor);
-            processor.connect(inputCtx.destination);
-          },
-          onmessage: async (msg: LiveServerMessage) => {
-            const base64Audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-            if (base64Audio && audioContextRef.current) {
-               setMode('speaking');
-               setTranscription(">> Receiving audio stream...");
-               const ctx = audioContextRef.current;
-               nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
-               const buffer = await decodeAudioData(base64Audio, ctx);
-               const source = ctx.createBufferSource();
-               source.buffer = buffer;
-               source.connect(ctx.destination);
-               source.onended = () => {
-                 sourcesRef.current.delete(source);
-                 if (sourcesRef.current.size === 0) setMode('idle');
-               };
-               source.start(nextStartTimeRef.current);
-               nextStartTimeRef.current += buffer.duration;
-               sourcesRef.current.add(source);
-               
-               // Fake volume data from output for the visualizer
-               const duration = buffer.duration * 1000;
-               const startTime = Date.now();
-               const volInterval = setInterval(() => {
-                   if (Date.now() - startTime > duration) {
-                       clearInterval(volInterval);
-                       setVolume(0);
-                   }
-                   else setVolume(Math.random() * 50 + 20); 
-               }, 50);
-            }
-            if (msg.serverContent?.interrupted) {
-              setTranscription(">> Interrupted.");
-              sourcesRef.current.forEach(s => s.stop());
-              sourcesRef.current.clear();
-              nextStartTimeRef.current = 0;
-              setMode('idle');
-              setVolume(0);
-            }
-          },
-          onclose: () => { setStatus('Disconnected'); setActive(false); setMode('idle'); setVolume(0); },
-          onerror: (err) => { console.error(err); setStatus('Connection Error'); setActive(false); setMode('idle'); }
-        }
-      });
-      sessionRef.current = sessionPromise;
-    } catch (e) { console.error(e); setStatus('Init Failed'); setActive(false); }
-  };
-
-  const stopSession = () => {
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    processorRef.current?.disconnect();
-    inputContextRef.current?.close();
-    audioContextRef.current?.close();
-    sessionRef.current?.then((s: any) => s.close && s.close());
-    setActive(false);
-    setStatus('Offline');
-    setMode('idle');
-    setVolume(0);
-  };
-
-  useEffect(() => { return () => stopSession(); }, []);
 
   // Calculate glow color based on mode
   const glowColor = mode === 'speaking' ? 'rgba(16, 185, 129, 0.6)' : 
@@ -443,9 +328,9 @@ const LiveInterface: React.FC = () => {
               </div>
 
               <div className={`px-3 py-1 rounded-full border text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${
-                  active ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400' : 'bg-red-900/20 border-red-500/50 text-red-400'
+                  isActive ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400' : 'bg-red-900/20 border-red-500/50 text-red-400'
               }`}>
-                  <div className={`w-2 h-2 rounded-full ${active ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
+                  <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
                   {status}
               </div>
               <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors">
@@ -479,7 +364,7 @@ const LiveInterface: React.FC = () => {
                   />
                   
                   {/* Status Overlay Text */}
-                  {active && (
+                  {isActive && (
                       <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 text-xs font-mono text-slate-400 uppercase tracking-widest bg-black/50 px-3 py-1 rounded-full backdrop-blur">
                           {mode}
                       </div>
@@ -490,10 +375,10 @@ const LiveInterface: React.FC = () => {
           )}
           
           {/* Start Button Overlay (if inactive) */}
-          {!active && (
+          {!isActive && (
               <div className="absolute inset-0 flex items-center justify-center z-20">
                   <button 
-                      onClick={startSession}
+                      onClick={connect}
                       className="group relative"
                   >
                       <div className="absolute inset-0 bg-emerald-500 rounded-full blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-500 animate-pulse"></div>
@@ -512,7 +397,7 @@ const LiveInterface: React.FC = () => {
       <div className="absolute bottom-0 left-0 w-full p-8 z-20 flex flex-col items-center gap-6 pointer-events-auto bg-gradient-to-t from-black via-black/80 to-transparent">
           
           {/* Transcript Log */}
-          {active && (
+          {isActive && (
               <div className="w-full max-w-2xl text-center space-y-2">
                   <div className="h-px w-full bg-gradient-to-r from-transparent via-emerald-900 to-transparent mb-4"></div>
                   <div className="font-mono text-sm text-emerald-400/80 tracking-wide animate-pulse">
@@ -526,18 +411,10 @@ const LiveInterface: React.FC = () => {
           )}
 
           {/* Controls */}
-          {active && (
+          {isActive && (
               <div className="flex gap-4">
                   <button 
-                      onClick={() => setMode(mode === 'listening' ? 'processing' : 'listening')} // Manual toggle sim
-                      className={`p-4 rounded-full border transition-all duration-300 ${
-                          mode === 'listening' ? 'bg-amber-500/10 border-amber-500 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-400'
-                      }`}
-                  >
-                      {mode === 'listening' ? <Mic className="w-6 h-6 animate-pulse" /> : <MicOff className="w-6 h-6" />}
-                  </button>
-                  <button 
-                      onClick={stopSession}
+                      onClick={disconnect}
                       className="p-4 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500 text-red-400 transition-all hover:scale-105"
                   >
                       <Power className="w-6 h-6" />

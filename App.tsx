@@ -5,6 +5,7 @@ import MossyObserver from './components/MossyObserver';
 import CommandPalette from './components/CommandPalette';
 import TutorialOverlay from './components/TutorialOverlay';
 import { Loader2, Zap } from 'lucide-react';
+import { LiveProvider } from './components/LiveContext';
 
 // --- LAZY LOAD MODULES ---
 // This prevents the app from loading ALL code at startup.
@@ -117,54 +118,56 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <HashRouter>
-      <div className="flex h-screen w-screen overflow-hidden bg-forge-dark text-slate-200">
-        <NeuralController />
-        <CommandPalette />
-        <TutorialOverlay />
-        <Sidebar />
-        <main className="flex-1 relative overflow-hidden bg-[#050910]">
-          <MossyObserver />
-          <Suspense fallback={<ModuleLoader />}>
-            <Routes>
-              <Route path="/" element={<TheNexus />} />
-              <Route path="/monitor" element={<SystemMonitor />} />
-              <Route path="/chat" element={<ChatInterface />} />
-              <Route path="/lens" element={<TheLens />} />
-              <Route path="/synapse" element={<TheSynapse />} />
-              <Route path="/hive" element={<TheHive />} />
-              <Route path="/blueprint" element={<TheBlueprint />} />
-              <Route path="/genome" element={<TheGenome />} />
-              <Route path="/reverie" element={<TheReverie />} />
-              <Route path="/anima" element={<TheAnima />} />
-              <Route path="/splicer" element={<TheSplicer />} />
-              <Route path="/prism" element={<ThePrism />} />
-              <Route path="/fabric" element={<TheFabric />} />
-              <Route path="/catalyst" element={<TheCatalyst />} />
-              <Route path="/cartographer" element={<TheCartographer />} />
-              <Route path="/registry" element={<TheRegistry />} />
-              <Route path="/organizer" element={<TheOrganizer />} />
-              <Route path="/crucible" element={<TheCrucible />} />
-              <Route path="/assembler" element={<TheAssembler />} />
-              <Route path="/auditor" element={<TheAuditor />} />
-              <Route path="/scribe" element={<TheScribe />} />
-              <Route path="/conduit" element={<TheConduit />} />
-              <Route path="/cortex" element={<TheCortex />} />
-              <Route path="/terminal" element={<HyperTerminal />} />
-              <Route path="/orchestrator" element={<WorkflowOrchestrator />} />
-              <Route path="/lore" element={<Lorekeeper />} />
-              <Route path="/holo" element={<Holodeck />} />
-              <Route path="/vault" element={<TheVault />} />
-              <Route path="/workshop" element={<Workshop />} />
-              <Route path="/live" element={<LiveInterface />} />
-              <Route path="/images" element={<ImageSuite />} />
-              <Route path="/tts" element={<TTSPanel />} />
-              <Route path="/bridge" element={<DesktopBridge />} />
-            </Routes>
-          </Suspense>
-        </main>
-      </div>
-    </HashRouter>
+    <LiveProvider>
+      <HashRouter>
+        <div className="flex h-screen w-screen overflow-hidden bg-forge-dark text-slate-200">
+          <NeuralController />
+          <CommandPalette />
+          <TutorialOverlay />
+          <Sidebar />
+          <main className="flex-1 relative overflow-hidden bg-[#050910]">
+            <MossyObserver />
+            <Suspense fallback={<ModuleLoader />}>
+              <Routes>
+                <Route path="/" element={<TheNexus />} />
+                <Route path="/monitor" element={<SystemMonitor />} />
+                <Route path="/chat" element={<ChatInterface />} />
+                <Route path="/lens" element={<TheLens />} />
+                <Route path="/synapse" element={<TheSynapse />} />
+                <Route path="/hive" element={<TheHive />} />
+                <Route path="/blueprint" element={<TheBlueprint />} />
+                <Route path="/genome" element={<TheGenome />} />
+                <Route path="/reverie" element={<TheReverie />} />
+                <Route path="/anima" element={<TheAnima />} />
+                <Route path="/splicer" element={<TheSplicer />} />
+                <Route path="/prism" element={<ThePrism />} />
+                <Route path="/fabric" element={<TheFabric />} />
+                <Route path="/catalyst" element={<TheCatalyst />} />
+                <Route path="/cartographer" element={<TheCartographer />} />
+                <Route path="/registry" element={<TheRegistry />} />
+                <Route path="/organizer" element={<TheOrganizer />} />
+                <Route path="/crucible" element={<TheCrucible />} />
+                <Route path="/assembler" element={<TheAssembler />} />
+                <Route path="/auditor" element={<TheAuditor />} />
+                <Route path="/scribe" element={<TheScribe />} />
+                <Route path="/conduit" element={<TheConduit />} />
+                <Route path="/cortex" element={<TheCortex />} />
+                <Route path="/terminal" element={<HyperTerminal />} />
+                <Route path="/orchestrator" element={<WorkflowOrchestrator />} />
+                <Route path="/lore" element={<Lorekeeper />} />
+                <Route path="/holo" element={<Holodeck />} />
+                <Route path="/vault" element={<TheVault />} />
+                <Route path="/workshop" element={<Workshop />} />
+                <Route path="/live" element={<LiveInterface />} />
+                <Route path="/images" element={<ImageSuite />} />
+                <Route path="/tts" element={<TTSPanel />} />
+                <Route path="/bridge" element={<DesktopBridge />} />
+              </Routes>
+            </Suspense>
+          </main>
+        </div>
+      </HashRouter>
+    </LiveProvider>
   );
 };
 
