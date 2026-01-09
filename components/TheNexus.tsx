@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { GoogleGenAI } from "@google/genai";
-import { LayoutDashboard, Zap, Clock, Shield, Activity, Star, ArrowRight, MessageSquare, Terminal, Aperture, GitBranch, Cpu, AlertTriangle, Calendar, Bell, Gamepad2, Package, Library, Bug, Binary } from 'lucide-react';
+import { LayoutDashboard, Zap, Clock, Shield, Activity, Star, ArrowRight, MessageSquare, Terminal, Aperture, GitBranch, Cpu, AlertTriangle, Calendar, Bell, Gamepad2, Package, Library, Bug, Binary, BookOpen, PlayCircle, PauseCircle } from 'lucide-react';
 
 interface Insight {
   id: string;
@@ -17,6 +17,7 @@ const TheNexus: React.FC = () => {
   const [activeProject, setActiveProject] = useState<any>(null);
   const [bridgeStatus, setBridgeStatus] = useState(false);
   const [systemLoad, setSystemLoad] = useState(34);
+  const [tutorialState, setTutorialState] = useState<'start' | 'resume' | 'replay'>('start');
 
   useEffect(() => {
     // 1. Time-based Greeting
@@ -32,10 +33,22 @@ const TheNexus: React.FC = () => {
     const bridge = localStorage.getItem('mossy_bridge_active') === 'true';
     setBridgeStatus(bridge);
 
-    // 3. Generate Daily Briefing (Simulated AI)
+    // 3. Check Tutorial State
+    const tutStep = parseInt(localStorage.getItem('mossy_tutorial_step') || '0', 10);
+    const tutCompleted = localStorage.getItem('mossy_tutorial_completed') === 'true';
+    
+    if (tutCompleted) {
+        setTutorialState('replay');
+    } else if (tutStep > 0) {
+        setTutorialState('resume');
+    } else {
+        setTutorialState('start');
+    }
+
+    // 4. Generate Daily Briefing (Simulated AI)
     generateBriefing();
     
-    // 4. Fake live load
+    // 5. Fake live load
     const interval = setInterval(() => {
         setSystemLoad(prev => Math.min(100, Math.max(10, prev + (Math.random() * 10 - 5))));
     }, 2000);
@@ -59,6 +72,13 @@ const TheNexus: React.FC = () => {
       setInsights(mockInsights);
   };
 
+  const startTutorial = () => {
+      const event = new CustomEvent('start-tutorial');
+      window.dispatchEvent(event);
+      // Optimistic update
+      setTutorialState('resume'); 
+  };
+
   return (
     <div className="h-full flex flex-col bg-forge-dark text-slate-200 overflow-y-auto custom-scrollbar p-8">
       
@@ -78,20 +98,29 @@ const TheNexus: React.FC = () => {
           </div>
           
           <div className="flex gap-4">
+              <button 
+                  onClick={startTutorial}
+                  className="bg-slate-800 hover:bg-slate-700 p-4 rounded-2xl border border-slate-700 min-w-[160px] text-left transition-colors group relative overflow-hidden"
+              >
+                  <div className="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                      {tutorialState === 'resume' ? <PlayCircle className="w-12 h-12" /> : <BookOpen className="w-12 h-12" />}
+                  </div>
+                  <div className="text-slate-500 text-xs uppercase font-bold mb-1 flex items-center gap-2 relative z-10">
+                      <BookOpen className="w-3 h-3" /> Orientation
+                  </div>
+                  <div className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors relative z-10">
+                      {tutorialState === 'resume' ? 'Resume Tutorial' : tutorialState === 'replay' ? 'Replay Tutorial' : 'Start Tutorial'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1 relative z-10">
+                      {tutorialState === 'resume' ? 'Continue where you left off' : 'Learn to use Mossy'}
+                  </div>
+              </button>
+
               <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 min-w-[140px]">
                   <div className="text-slate-500 text-xs uppercase font-bold mb-1">Neural Load</div>
                   <div className="text-2xl font-mono text-emerald-400">{systemLoad.toFixed(0)}%</div>
                   <div className="w-full bg-slate-900 h-1.5 rounded-full mt-2 overflow-hidden">
                       <div className="bg-emerald-500 h-full transition-all duration-500" style={{width: `${systemLoad}%`}}></div>
-                  </div>
-              </div>
-              <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 min-w-[140px]">
-                  <div className="text-slate-500 text-xs uppercase font-bold mb-1">Active Tasks</div>
-                  <div className="text-2xl font-mono text-blue-400">4</div>
-                  <div className="flex -space-x-2 mt-2">
-                      <div className="w-4 h-4 rounded-full bg-blue-500 border border-slate-800"></div>
-                      <div className="w-4 h-4 rounded-full bg-purple-500 border border-slate-800"></div>
-                      <div className="w-4 h-4 rounded-full bg-yellow-500 border border-slate-800"></div>
                   </div>
               </div>
           </div>

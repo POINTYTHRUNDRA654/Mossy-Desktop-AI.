@@ -34,6 +34,7 @@ import TheCrucible from './components/TheCrucible';
 import TheAssembler from './components/TheAssembler';
 import MossyObserver from './components/MossyObserver';
 import CommandPalette from './components/CommandPalette';
+import TutorialOverlay from './components/TutorialOverlay';
 
 // Define window interface for AI Studio helpers
 declare global {
@@ -66,6 +67,7 @@ const App: React.FC = () => {
     <HashRouter>
       <div className="flex h-screen w-screen overflow-hidden bg-forge-dark text-slate-200">
         <CommandPalette />
+        <TutorialOverlay />
         <Sidebar />
         <main className="flex-1 relative overflow-hidden">
           <MossyObserver />
