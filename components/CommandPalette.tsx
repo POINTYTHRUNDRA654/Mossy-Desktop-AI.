@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleGenAI } from "@google/genai";
-import { Search, Command, Zap, ArrowRight, CornerDownLeft, BrainCircuit, Loader2, FileCode, LayoutDashboard, Terminal, MessageSquare, Activity, Image, Mic2, Hexagon, Layers, Box, Settings, Sparkles, RefreshCw, Dna, Database, Shield, Radio, Map, Container, Camera, Aperture, Network, GitBranch, PenTool, FlaskConical, Bug, Package, Globe, Smartphone, Heart, Lock, Gamepad2, Monitor, Rocket } from 'lucide-react';
+import { Search, Command, Zap, ArrowRight, CornerDownLeft, BrainCircuit, Loader2, FileCode, LayoutDashboard, Terminal, MessageSquare, Activity, Image, Mic2, Hexagon, Layers, Box, Settings, Sparkles, RefreshCw, Dna, Database, Shield, Radio, Map, Container, Camera, Aperture, Network, GitBranch, PenTool, FlaskConical, Bug, Package, Globe, Smartphone, Heart, Lock, Gamepad2, Monitor, Rocket, ShieldCheck, Feather } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface Action {
@@ -64,6 +64,8 @@ const CommandPalette: React.FC = () => {
         { id: 'nav-cartographer', title: 'The Cartographer', subtitle: 'Level Design & Mapping', icon: Map, group: 'Navigation', action: () => navigate('/cartographer') },
         { id: 'nav-organizer', title: 'The Organizer', subtitle: 'Mod Load Order Tool', icon: Layers, group: 'Navigation', action: () => navigate('/organizer') },
         { id: 'nav-crucible', title: 'The Crucible', subtitle: 'Crash Log Forensics', icon: Bug, group: 'Navigation', action: () => navigate('/crucible') },
+        { id: 'nav-auditor', title: 'The Auditor', subtitle: 'Mod QA & Integrity Check', icon: ShieldCheck, group: 'Navigation', action: () => navigate('/auditor') },
+        { id: 'nav-scribe', title: 'The Scribe', subtitle: 'Documentation & Publishing', icon: Feather, group: 'Navigation', action: () => navigate('/scribe') },
         { id: 'nav-assembler', title: 'The Assembler', subtitle: 'FOMOD Installer Creator', icon: Package, group: 'Navigation', action: () => navigate('/assembler') },
         { id: 'nav-orchestrator', title: 'The Orchestrator', subtitle: 'Automated Workflow Pipelines', icon: GitBranch, group: 'Navigation', action: () => navigate('/orchestrator') },
         

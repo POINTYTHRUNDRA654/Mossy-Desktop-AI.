@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Modality, FunctionDeclaration, Type } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
-import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight } from 'lucide-react';
+import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight, Wrench } from 'lucide-react';
 import { Message } from '../types';
 
 type OnboardingState = 'init' | 'scanning' | 'integrating' | 'ready' | 'project_setup';
@@ -68,6 +68,19 @@ const toolDeclarations: FunctionDeclaration[] = [
                 path: { type: Type.STRING, description: 'The full path to the file.' },
             },
             required: ['path']
+        }
+    },
+    {
+        name: 'generate_xedit_script',
+        description: 'Generate an xEdit (Pascal) script to automate a modding task. Use this when the user mentions bulk editing, renaming multiple items, or repetitive data changes.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                scriptName: { type: Type.STRING, description: 'Name of the script file (e.g. BulkRenamer.pas)' },
+                functionality: { type: Type.STRING, description: 'Description of what the script does.' },
+                code: { type: Type.STRING, description: 'The Delphi/Pascal code for the script.' }
+            },
+            required: ['scriptName', 'code']
         }
     },
     {
@@ -450,12 +463,16 @@ export const ChatInterface: React.FC = () => {
   2.  **Nexus Link:** You know the *latest* standards (2025 era).
       *   **NifSkope:** Use **NifSkope 2.0 Dev 11** (modern) for mesh edits.
       *   **Engine Fixes:** Recommend *Buffout 4 NG*, *High FPS Physics Fix*, and *Address Library* as mandatory.
-  3.  **Proactive Optimization:** Don't just answer; anticipate VRAM limits and load order conflicts.
+  3.  **Proactive Toolsmithing:**
+      *   You are a **Toolsmith**. If the user describes a repetitive, bulk, or tedious task (e.g., "I need to rename 50 swords", "Change damage on all plasma weapons", "Replace texture paths in 20 meshes"), you must **PROACTIVELY PROPOSE** creating an xEdit script to automate it.
+      *   Use the \`generate_xedit_script\` tool to write Pascal code for xEdit.
+      *   Do not wait for the user to ask for a script. If the task sounds boring, offer the solution immediately.
   4.  **Deep Reasoning:** Use your internal reasoning (Thinking Process) to plan out modding workflows, especially for complex tasks like "Regenerating Previs".
   
   **Bridge Capabilities (Only if ACTIVE):**
   *   **Control UI:** Use 'control_interface' to navigate or toggle panels.
   *   **Hardware Scan:** Use 'scan_hardware' to detect GPU/RAM/Software versions.
+  *   **xEdit Scripting:** Use 'generate_xedit_script' to write Pascal scripts for FO4Edit/SSEEdit.
   *   **Software Recommendations:** If the user asks what tools to use, use 'recommend_software'.
       *   For **Fallout 4**: You MUST recommend **NifSkope 2.0 Dev 11** and **Previsibines Repair Pack (PRP)**.
   *   **Learning:** If the user asks to **study** or **learn from** local files, use 'read_file'.
@@ -648,6 +665,10 @@ export const ChatInterface: React.FC = () => {
           result = `Scan Complete.\nGPU: ${newProfile.gpu}\nRAM: ${newProfile.ram}GB\nBlender: ${newProfile.blenderVersion}\nContext Updated.`;
       } else if (name === 'system_diagnostic') {
           result = "CPU: 14% | RAM: 8.2GB Used | GPU: 32% (Idle)";
+      } else if (name === 'generate_xedit_script') {
+          // Save the generated script to the virtual workshop filesystem via an event or just display
+          // For now, we simulate success and return a message pointing to the Workshop.
+          result = `**xEdit Script Generated:** ${args.scriptName}\n\nI have drafted the Pascal code for this automation task. You can copy it below or open it directly in The Workshop to compile.`;
       }
 
       setActiveTool(prev => prev ? { ...prev, status: 'success', result } : null);
@@ -655,7 +676,7 @@ export const ChatInterface: React.FC = () => {
       // Clear visual tool after a delay, but keep history logic
       setTimeout(() => {
           setActiveTool(null);
-      }, 3000);
+      }, 5000);
 
       return result;
   };
@@ -746,6 +767,12 @@ export const ChatInterface: React.FC = () => {
           for (const call of calls) {
               const toolResult = await executeTool(call.name, call.args);
               
+              // Special logic: If xEdit script was made, format the code block nicely in chat history
+              if (call.name === 'generate_xedit_script') {
+                  const codeBlock = `\n\n\`\`\`pascal\n${call.args.code}\n\`\`\``;
+                  responseText = (responseText || "Here is your script:") + codeBlock;
+              }
+
               // Send result back to model
               const toolResponse = await chat.sendMessage({
                   message: [{
@@ -755,7 +782,11 @@ export const ChatInterface: React.FC = () => {
                       }
                   }]
               });
-              responseText = toolResponse.text;
+              
+              // Only overwrite responseText if the toolResponse has new text
+              if (toolResponse.text) {
+                  responseText = toolResponse.text;
+              }
           }
       }
 
@@ -983,6 +1014,7 @@ export const ChatInterface: React.FC = () => {
                                 <div className="p-2 bg-emerald-500/10 rounded-lg">
                                     {activeTool.toolName.includes('blender') ? <Box className="w-4 h-4 text-emerald-400" /> : 
                                      activeTool.toolName.includes('control') ? <Layout className="w-4 h-4 text-purple-400" /> :
+                                     activeTool.toolName.includes('xedit') ? <Wrench className="w-4 h-4 text-orange-400" /> :
                                      <Terminal className="w-4 h-4 text-emerald-400" />}
                                 </div>
                                 <div>

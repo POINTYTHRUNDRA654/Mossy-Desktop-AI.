@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Map, Layout, Box, Target, Shield, Skull, Zap, Download, RefreshCw, ZoomIn, ZoomOut, Maximize, Navigation, Layers } from 'lucide-react';
+import { Map, Layout, Box, Target, Shield, Skull, Zap, Download, RefreshCw, ZoomIn, ZoomOut, Maximize, Navigation, Layers, Wind, Sun, Volume2, Thermometer, Radio } from 'lucide-react';
 
 interface Room {
     id: string;
@@ -21,6 +21,14 @@ interface Entity {
     y: number;
 }
 
+interface EnvironmentConfig {
+    lighting: 'Dark' | 'Dim' | 'Bright' | 'Strobe' | 'Emergency';
+    atmosphere: 'Clean' | 'Dusty' | 'Radioactive' | 'Foggy' | 'Void';
+    audioTrack: 'Silence' | 'Industrial_Hum' | 'Combat_Music' | 'Eerie_Wind';
+    gravity: number; // 1.0 is standard
+    hazardLevel: number; // 0-10
+}
+
 interface LevelData {
     name: string;
     width: number;
@@ -28,6 +36,7 @@ interface LevelData {
     rooms: Room[];
     entities: Entity[];
     connections: { from: string, to: string }[];
+    environment: EnvironmentConfig; // New Field
 }
 
 const TheCartographer: React.FC = () => {
@@ -37,6 +46,7 @@ const TheCartographer: React.FC = () => {
     const [zoom, setZoom] = useState(1);
     const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
     const [showPrevis, setShowPrevis] = useState(false);
+    const [viewLayer, setViewLayer] = useState<'layout' | 'env'>('layout');
     
     // Canvas Refs
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -63,6 +73,13 @@ const TheCartographer: React.FC = () => {
         
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.translate(2 * cellSize, 2 * cellSize); // Margin
+
+        // Draw Environment Background if enabled
+        if (viewLayer === 'env') {
+            const hazardColor = levelData.environment.hazardLevel > 5 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.05)';
+            ctx.fillStyle = hazardColor;
+            ctx.fillRect(0, 0, levelData.width * cellSize, levelData.height * cellSize);
+        }
 
         // Draw Grid
         ctx.strokeStyle = '#1e293b';
@@ -95,11 +112,20 @@ const TheCartographer: React.FC = () => {
             const isSelected = selectedRoom?.id === room.id;
             
             // Fill
-            ctx.fillStyle = room.type === 'start' ? '#059669' : 
-                           room.type === 'boss' ? '#b91c1c' : 
-                           room.type === 'corridor' ? '#334155' : '#0f172a';
+            if (viewLayer === 'env') {
+                // Environment Mode Color coding
+                ctx.fillStyle = '#0f172a'; // Base dark
+                // Overlay fog/lighting visual
+                if (levelData.environment.lighting === 'Dark') ctx.fillStyle = '#020617';
+                if (levelData.environment.lighting === 'Emergency') ctx.fillStyle = '#450a0a';
+            } else {
+                // Standard Layout Mode
+                ctx.fillStyle = room.type === 'start' ? '#059669' : 
+                               room.type === 'boss' ? '#b91c1c' : 
+                               room.type === 'corridor' ? '#334155' : '#0f172a';
+            }
             
-            if (isSelected) ctx.fillStyle = '#38bdf8';
+            if (isSelected) ctx.fillStyle = '#0ea5e9'; // Selection overrides
 
             ctx.fillRect(room.x * cellSize, room.y * cellSize, room.w * cellSize, room.h * cellSize);
             
@@ -147,7 +173,7 @@ const TheCartographer: React.FC = () => {
             ctx.fill();
         });
 
-    }, [levelData, zoom, selectedRoom, showPrevis]);
+    }, [levelData, zoom, selectedRoom, showPrevis, viewLayer]);
 
     const handleCanvasClick = (e: React.MouseEvent) => {
         if (!levelData || !canvasRef.current) return;
@@ -191,6 +217,7 @@ const TheCartographer: React.FC = () => {
                - Keep coordinates integer based.
             3. connections: array of { from: roomId, to: roomId } representing doorways.
             4. entities: array of { id, type: 'enemy'|'loot'|'trap', label, x, y } placed inside valid room bounds.
+            5. environment: object { lighting: 'Dark'|'Dim'|'Bright'|'Strobe'|'Emergency', atmosphere: 'Clean'|'Dusty'|'Radioactive'|'Foggy'|'Void', audioTrack: string, gravity: float (default 1.0), hazardLevel: int (0-10) }.
             `;
 
             const response = await ai.models.generateContent({
@@ -234,6 +261,22 @@ const TheCartographer: React.FC = () => {
                 </div>
                 
                 <div className="flex items-center gap-4">
+                    {/* View Layer Toggle */}
+                    <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
+                        <button 
+                            onClick={() => setViewLayer('layout')} 
+                            className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${viewLayer === 'layout' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            Layout
+                        </button>
+                        <button 
+                            onClick={() => setViewLayer('env')} 
+                            className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${viewLayer === 'env' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            Environment
+                        </button>
+                    </div>
+
                     {/* Previs Toggle */}
                     <button 
                         onClick={() => setShowPrevis(!showPrevis)}
@@ -281,7 +324,7 @@ const TheCartographer: React.FC = () => {
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
                             placeholder="Describe the level (e.g. 'A haunted mansion with a grand hall and a secret basement')..."
-                            className="w-full h-32 bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm text-white focus:outline-none focus:border-orange-500 resize-none mb-4"
+                            className="w-full h-24 bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm text-white focus:outline-none focus:border-orange-500 resize-none mb-4"
                         />
                         <button 
                             onClick={handleGenerate}
@@ -294,6 +337,43 @@ const TheCartographer: React.FC = () => {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4">
+                        {/* Environment Panel */}
+                        {levelData && !selectedRoom && (
+                            <div className="space-y-4 animate-fade-in">
+                                <h3 className="text-xs font-bold text-teal-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+                                    <Radio className="w-3 h-3" /> Sector Environment
+                                </h3>
+                                
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+                                        <div className="text-[10px] text-slate-500 uppercase mb-1 flex items-center gap-1"><Sun className="w-3 h-3"/> Lighting</div>
+                                        <div className="text-sm font-bold text-white">{levelData.environment.lighting}</div>
+                                    </div>
+                                    <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+                                        <div className="text-[10px] text-slate-500 uppercase mb-1 flex items-center gap-1"><Wind className="w-3 h-3"/> Atmos</div>
+                                        <div className="text-sm font-bold text-white">{levelData.environment.atmosphere}</div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+                                    <div className="text-[10px] text-slate-500 uppercase mb-1 flex items-center gap-1"><Volume2 className="w-3 h-3"/> Audio Loop</div>
+                                    <div className="text-sm font-mono text-emerald-400">{levelData.environment.audioTrack}.wav</div>
+                                </div>
+
+                                <div className="p-3 rounded-lg border border-slate-700 bg-black/20">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="text-[10px] text-slate-500 uppercase flex items-center gap-1"><Skull className="w-3 h-3"/> Hazard Level</div>
+                                        <div className={`text-xs font-bold ${levelData.environment.hazardLevel > 5 ? 'text-red-500' : 'text-emerald-500'}`}>
+                                            {levelData.environment.hazardLevel}/10
+                                        </div>
+                                    </div>
+                                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                        <div className={`h-full ${levelData.environment.hazardLevel > 5 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{width: `${levelData.environment.hazardLevel * 10}%`}}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {selectedRoom ? (
                             <div className="space-y-4 animate-fade-in">
                                 <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
@@ -339,10 +419,12 @@ const TheCartographer: React.FC = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center justify-center h-full text-slate-600 gap-2">
-                                <Navigation className="w-8 h-8 opacity-20" />
-                                <span className="text-xs">Select a room to inspect details.</span>
-                            </div>
+                            !levelData && (
+                                <div className="flex flex-col items-center justify-center h-40 text-slate-600 gap-2">
+                                    <Navigation className="w-8 h-8 opacity-20" />
+                                    <span className="text-xs">No active map data.</span>
+                                </div>
+                            )
                         )}
                     </div>
 

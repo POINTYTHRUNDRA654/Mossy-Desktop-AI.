@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Cpu, HardDrive, Activity, Terminal, Trash2, Search, CheckCircle2, Database, Layers, Radio, ShieldCheck, Zap, History, Archive, FileCode, XCircle, RefreshCw, Save, Clock, RotateCcw, Upload, Download, DownloadCloud, Box, Settings, Hexagon, BrainCircuit, Package, Share2, Users, Key, Globe, Lock, Link, FileText, Copy, Command, Play, HardDriveDownload, Network, Monitor, AlertTriangle } from 'lucide-react';
+import { Cpu, HardDrive, Activity, Terminal, Trash2, Search, CheckCircle2, Database, Layers, Radio, ShieldCheck, Zap, History, Archive, FileCode, XCircle, RefreshCw, Save, Clock, RotateCcw, Upload, Download, DownloadCloud, Box, Settings, Hexagon, BrainCircuit, Package, Share2, Users, Key, Globe, Lock, Link, FileText, Copy, Command, Play, HardDriveDownload, Network, Monitor, AlertTriangle, GitBranch, Map, Container } from 'lucide-react';
 
 interface LogEntry {
   id: string;
@@ -47,6 +47,15 @@ const modulesList: SystemModule[] = [
     { id: 'assembler', name: 'The Assembler', status: 'standby', load: 0 },
     { id: 'registry', name: 'The Registry', status: 'online', load: 20 },
     { id: 'reverie', name: 'The Reverie', status: 'online', load: 95 },
+    // Advanced Modules
+    { id: 'orchestrator', name: 'Orchestrator', status: 'online', load: 15 },
+    { id: 'lore', name: 'Lorekeeper', status: 'standby', load: 5 },
+    { id: 'carto', name: 'Cartographer', status: 'standby', load: 0 },
+    { id: 'holo', name: 'Holodeck', status: 'offline', load: 0 },
+    { id: 'vault', name: 'The Vault', status: 'online', load: 40 },
+    { id: 'organizer', name: 'Organizer', status: 'online', load: 60 },
+    { id: 'auditor', name: 'The Auditor', status: 'online', load: 25 },
+    { id: 'scribe', name: 'The Scribe', status: 'standby', load: 0 },
 ];
 
 const SystemMonitor: React.FC = () => {
@@ -562,7 +571,7 @@ const SystemMonitor: React.FC = () => {
                     {modules.map(mod => (
                         <div key={mod.id} className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex flex-col gap-2">
                             <div className="flex justify-between items-center">
-                                <span className="text-xs font-bold text-slate-300">{mod.name}</span>
+                                <span className="text-xs font-bold text-slate-300 truncate pr-1" title={mod.name}>{mod.name}</span>
                                 <div className={`w-2 h-2 rounded-full ${mod.status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></div>
                             </div>
                             <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">

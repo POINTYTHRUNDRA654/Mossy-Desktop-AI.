@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Folder, FileCode, FileImage, FileBox, ChevronRight, ChevronDown, Play, Save, RefreshCw, Box, Layers, Code, CheckCircle2, AlertCircle, Share2, Workflow, Plus, Zap, ArrowRight, Package, BookOpen, Copy, Lightbulb } from 'lucide-react';
+import { Folder, FileCode, FileImage, FileBox, ChevronRight, ChevronDown, Play, Save, RefreshCw, Box, Layers, Code, CheckCircle2, AlertCircle, Share2, Workflow, Plus, Zap, ArrowRight, Package, BookOpen, Copy, Lightbulb, Database } from 'lucide-react';
 
 // --- Types ---
 interface FileNode {
@@ -87,6 +87,40 @@ EndEvent`
         ]
       },
       {
+        id: 'xedit',
+        name: 'Edit Scripts',
+        type: 'folder',
+        isOpen: false,
+        children: [
+            {
+                id: 'xscript1',
+                name: 'BulkRenamer.pas',
+                type: 'file',
+                fileType: 'script',
+                content: `unit BulkRenamer;
+
+// xEdit Automation Script
+// Replaces string in all selected WEAP records
+
+function Process(e: IInterface): integer;
+var
+  s: string;
+begin
+  if Signature(e) <> 'WEAP' then Exit;
+  
+  s := GetElementEditValues(e, 'FULL');
+  if Pos('Rusty', s) > 0 then begin
+    s := StringReplace(s, 'Rusty', 'Polished', [rfReplaceAll]);
+    SetElementEditValues(e, 'FULL', s);
+    AddMessage('Renamed: ' + Name(e));
+  end;
+end;
+
+end.`
+            }
+        ]
+      },
+      {
         id: 'meshes',
         name: 'Meshes',
         type: 'folder',
@@ -125,6 +159,14 @@ const papyrusSnippets = [
     { label: 'Remote Event', code: 'RegisterForRemoteEvent(PlayerRef, "OnItemAdded")\n\nEvent ObjectReference.OnItemAdded(ObjectReference akSender, Form akBaseItem, int aiItemCount, ObjectReference akItemReference, ObjectReference akSourceContainer)\n    ; Code\nEndEvent' },
     { label: 'Loop (While)', code: 'while (condition)\n    ; Code\nendWhile' },
     { label: 'Message Box', code: 'int button = MyMessage.Show()\nif button == 0\n    ; Option 1\nelseif button == 1\n    ; Option 2\nendif' },
+];
+
+const xEditSnippets = [
+    { label: 'Process Loop', code: 'function Process(e: IInterface): integer;\nbegin\n  // Code here runs for every selected record\nend;' },
+    { label: 'Get Element', code: 'val := GetElementEditValues(e, \'path\\to\\element\');' },
+    { label: 'Set Element', code: 'SetElementEditValues(e, \'path\\to\\element\', \'NewValue\');' },
+    { label: 'Check Signature', code: 'if Signature(e) <> \'WEAP\' then Exit;' },
+    { label: 'Log Message', code: 'AddMessage(\'Processing: \' + Name(e));' }
 ];
 
 const mockSuggestions = {
@@ -346,7 +388,7 @@ const Workshop: React.FC = () => {
   const [deploying, setDeploying] = useState(false);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([
       "Mossy Workshop v2.4 initialized.",
-      "Target Context: Fallout 4 (Papyrus)",
+      "Target Context: Fallout 4 (Papyrus/Pascal)",
       "Connected to Local Bridge: ACTIVE",
       "Ready for input."
   ]);
@@ -423,16 +465,22 @@ const Workshop: React.FC = () => {
 
   const handleCompile = () => {
       setCompiling(true);
+      const isPascal = selectedFile?.name.endsWith('.pas');
+      
       setConsoleOutput(prev => [...prev, `> Compiling ${selectedFile?.name}...`]);
-      setConsoleOutput(prev => [...prev, `> Linking against Fallout4.esm...`]);
+      if (isPascal) {
+          setConsoleOutput(prev => [...prev, `> Interpreting xEdit Script...`]);
+      } else {
+          setConsoleOutput(prev => [...prev, `> Linking against Fallout4.esm...`]);
+      }
       
       setTimeout(() => {
           setCompiling(false);
           const success = Math.random() > 0.1; // 90% success
           if (success) {
-              setConsoleOutput(prev => [...prev, `> Compilation SUCCESS (0 Errors, 0 Warnings)`, "> Object script attached to Data/Scripts/Source/User/"]);
+              setConsoleOutput(prev => [...prev, `> Compilation SUCCESS (0 Errors, 0 Warnings)`, "> Script ready for execution."]);
           } else {
-              setConsoleOutput(prev => [...prev, `> Compilation FAILED`, `> Error on Line 14: mismatched types (Int vs Float)`]);
+              setConsoleOutput(prev => [...prev, `> Compilation FAILED`, `> Error on Line 14: mismatched types`]);
           }
       }, 1500);
   };
@@ -473,7 +521,9 @@ const Workshop: React.FC = () => {
                       node.isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />
                   )}
                   {node.type === 'folder' ? <Folder className="w-4 h-4 text-emerald-500" /> : 
-                   node.fileType === 'script' ? <FileCode className="w-4 h-4 text-yellow-500" /> :
+                   node.fileType === 'script' ? (
+                       node.name.endsWith('.pas') ? <Database className="w-4 h-4 text-orange-400" /> : <FileCode className="w-4 h-4 text-yellow-500" />
+                   ) :
                    node.fileType === 'mesh' ? <Box className="w-4 h-4 text-blue-400" /> :
                    <FileImage className="w-4 h-4 text-purple-400" />
                   }
@@ -485,6 +535,9 @@ const Workshop: React.FC = () => {
           </div>
       ));
   };
+
+  const isPascalFile = selectedFile?.name.endsWith('.pas');
+  const activeSnippets = isPascalFile ? xEditSnippets : papyrusSnippets;
 
   return (
     <div className="h-full flex flex-col bg-forge-dark text-slate-200 overflow-hidden">
@@ -542,7 +595,9 @@ const Workshop: React.FC = () => {
               <div className="flex bg-slate-900 border-b border-slate-700 justify-between items-center pr-2">
                   <div className="flex">
                     <div className="px-4 py-2 text-xs font-medium bg-slate-800 border-r border-slate-700 border-t-2 border-t-forge-accent text-slate-200 flex items-center gap-2">
-                        {selectedFile?.fileType === 'script' ? <FileCode className="w-3 h-3" /> : <Box className="w-3 h-3" />}
+                        {selectedFile?.fileType === 'script' ? (
+                            isPascalFile ? <Database className="w-3 h-3 text-orange-400" /> : <FileCode className="w-3 h-3 text-yellow-500" />
+                        ) : <Box className="w-3 h-3" />}
                         {selectedFile?.name}
                         <span className="ml-2 hover:bg-slate-700 rounded-full p-0.5"><code className="text-[10px]">x</code></span>
                     </div>
@@ -608,11 +663,12 @@ const Workshop: React.FC = () => {
                             {/* Snippets Sidebar */}
                             {showSnippets && (
                                 <div className="absolute right-0 top-0 bottom-0 w-56 bg-slate-900 border-l border-slate-700 flex flex-col animate-slide-in-right z-10">
-                                    <div className="p-3 text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-slate-700/50">
-                                        Papyrus Kit
+                                    <div className="p-3 text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-slate-700/50 flex items-center justify-between">
+                                        {isPascalFile ? 'xEdit Pascal Kit' : 'Papyrus Kit'}
+                                        <code className="text-[9px] bg-slate-800 px-1 rounded text-slate-400">{isPascalFile ? '.pas' : '.psc'}</code>
                                     </div>
                                     <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                                        {papyrusSnippets.map((snip, i) => (
+                                        {activeSnippets.map((snip, i) => (
                                             <div key={i} className="group bg-slate-800 p-2 rounded border border-slate-700 hover:border-slate-500 transition-colors">
                                                 <div className="flex justify-between items-center mb-1">
                                                     <span className="text-xs font-bold text-slate-300">{snip.label}</span>

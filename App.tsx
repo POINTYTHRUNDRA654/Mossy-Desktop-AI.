@@ -32,6 +32,8 @@ import TheRegistry from './components/TheRegistry';
 import TheOrganizer from './components/TheOrganizer';
 import TheCrucible from './components/TheCrucible';
 import TheAssembler from './components/TheAssembler';
+import TheAuditor from './components/TheAuditor';
+import TheScribe from './components/TheScribe';
 import MossyObserver from './components/MossyObserver';
 import CommandPalette from './components/CommandPalette';
 import TutorialOverlay from './components/TutorialOverlay';
@@ -126,6 +128,8 @@ const App: React.FC = () => {
             <Route path="/organizer" element={<TheOrganizer />} />
             <Route path="/crucible" element={<TheCrucible />} />
             <Route path="/assembler" element={<TheAssembler />} />
+            <Route path="/auditor" element={<TheAuditor />} />
+            <Route path="/scribe" element={<TheScribe />} />
             <Route path="/conduit" element={<TheConduit />} />
             <Route path="/cortex" element={<TheCortex />} />
             <Route path="/terminal" element={<HyperTerminal />} />

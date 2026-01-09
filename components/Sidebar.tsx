@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical, Map, FileDigit, Library, Bug, Package, Watch } from 'lucide-react';
+import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical, Map, FileDigit, Library, Bug, Package, Watch, ShieldCheck, Feather } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
   const [bridgeConnected, setBridgeConnected] = useState(false);
@@ -67,7 +67,7 @@ const Sidebar: React.FC = () => {
           setGlowColor('border-blue-500/50');
           setShadowColor('shadow-[0_0_15px_rgba(96,165,250,0.3)]');
           setCoreColor('bg-blue-500');
-      } else if (path.includes('workshop') || path.includes('assembler')) {
+      } else if (path.includes('workshop') || path.includes('assembler') || path.includes('auditor') || path.includes('scribe')) {
           setMoodColor('text-amber-400');
           setGlowColor('border-amber-500/50');
           setShadowColor('shadow-[0_0_15px_rgba(251,191,36,0.3)]');
@@ -85,6 +85,8 @@ const Sidebar: React.FC = () => {
     { to: '/chat', icon: MessageSquare, label: 'Talk to Mossy' },
     { to: '/organizer', icon: Library, label: 'The Organizer' },
     { to: '/assembler', icon: Package, label: 'The Assembler' },
+    { to: '/auditor', icon: ShieldCheck, label: 'The Auditor' },
+    { to: '/scribe', icon: Feather, label: 'The Scribe' },
     { to: '/crucible', icon: Bug, label: 'The Crucible' },
     { to: '/catalyst', icon: FlaskConical, label: 'The Catalyst' },
     { to: '/fabric', icon: PenTool, label: 'The Fabric' },
@@ -178,15 +180,13 @@ const Sidebar: React.FC = () => {
       
       {/* Footer Info & Pip-Boy Toggle */}
       <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center">
-        <div className="text-[10px] text-slate-600 font-mono">
-          v2.5.0-RC1
-        </div>
+        <div className="text-[10px] text-slate-600 font-mono">CORE: v2.4.2</div>
         <button 
-            onClick={togglePipBoy} 
-            className={`p-2 rounded-full transition-all ${isPipBoy ? 'text-green-400 bg-green-900/30 shadow-[0_0_10px_#16f342]' : 'text-slate-500 hover:text-white'}`}
-            title="Toggle Pip-Boy 3000 Mode"
+            onClick={togglePipBoy}
+            className={`p-2 rounded-full transition-colors ${isPipBoy ? 'bg-amber-900/20 text-amber-400 border border-amber-500/30' : 'bg-slate-800 text-slate-500 hover:text-white border border-slate-700'}`}
+            title="Toggle Pip-Boy Theme"
         >
-            <Watch className="w-4 h-4" />
+            <Radio className="w-3 h-3" />
         </button>
       </div>
     </div>
