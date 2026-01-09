@@ -1,31 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Dna, Zap, Plus, Code, CheckCircle2, AlertTriangle, Fingerprint, Microscope, Activity, ArrowRight, Loader2, Play, Cpu } from 'lucide-react';
+import { Dna, Zap, Plus, Code, CheckCircle2, AlertTriangle, Fingerprint, Microscope, Activity, ArrowRight, Loader2, Play, Cpu, Globe, Download, Upload, Share2, Users } from 'lucide-react';
 
 interface Gene {
     id: string;
     name: string;
     description: string;
     version: string;
-    type: 'core' | 'synthetic';
-    status: 'active' | 'evolving' | 'dormant';
+    type: 'core' | 'local' | 'global';
+    status: 'active' | 'evolving' | 'dormant' | 'downloading';
+    author?: string; // 'You' or Username
+    popularity?: number; // Downloads
     code?: string;
 }
 
-const initialGenes: Gene[] = [
-    { id: '1', name: 'Natural Language Processor', description: 'Core linguistic understanding engine.', version: '3.5.0', type: 'core', status: 'active' },
-    { id: '2', name: 'Visual Cortex', description: 'Image generation and analysis subsystem.', version: '2.1.0', type: 'core', status: 'active' },
-    { id: '3', name: 'Code Synthesizer', description: 'Polyglot programming capability.', version: '4.0.0', type: 'core', status: 'active' },
-    { id: '4', name: 'Web Scraper Logic', description: 'Custom trait: Parse HTML structure.', version: '1.0.0', type: 'synthetic', status: 'active' },
+const initialLocalGenes: Gene[] = [
+    { id: '1', name: 'Natural Language Processor', description: 'Core linguistic understanding engine.', version: '3.5.0', type: 'core', status: 'active', author: 'System' },
+    { id: '2', name: 'Visual Cortex', description: 'Image generation and analysis subsystem.', version: '2.1.0', type: 'core', status: 'active', author: 'System' },
+    { id: '3', name: 'Web Scraper Logic', description: 'Custom trait: Parse HTML structure.', version: '1.0.0', type: 'local', status: 'active', author: 'You' },
+];
+
+const mockGlobalGenes: Gene[] = [
+    { id: 'g1', name: 'Papyrus Debugger', description: 'Advanced stack trace analysis for Fallout 4 logs.', version: '1.2', type: 'global', status: 'dormant', author: 'NexusModder99', popularity: 8420 },
+    { id: 'g2', name: 'Blender NIF Optimizer', description: 'Auto-corrects vertex normals for Bethesda games.', version: '0.9', type: 'global', status: 'dormant', author: 'MeshWizard', popularity: 3100 },
+    { id: 'g3', name: 'React Component Weaver', description: 'Generates Tailwind UI components from text.', version: '2.0', type: 'global', status: 'dormant', author: 'DevOps_Dave', popularity: 12500 },
 ];
 
 const TheGenome: React.FC = () => {
-    const [genes, setGenes] = useState<Gene[]>(initialGenes);
+    const [activeTab, setActiveTab] = useState<'local' | 'global'>('local');
+    const [localGenes, setLocalGenes] = useState<Gene[]>(initialLocalGenes);
+    const [globalGenes, setGlobalGenes] = useState<Gene[]>(mockGlobalGenes);
+    
     const [prompt, setPrompt] = useState('');
     const [isEvolving, setIsEvolving] = useState(false);
-    const [evolutionStage, setEvolutionStage] = useState(0); // 0: Idle, 1: Sequencing, 2: Coding, 3: Integrating
+    const [evolutionStage, setEvolutionStage] = useState(0); 
     const [generatedCode, setGeneratedCode] = useState('');
     const [newGeneName, setNewGeneName] = useState('');
+
+    // --- Actions ---
 
     const handleEvolve = async () => {
         if (!prompt) return;
@@ -56,9 +68,7 @@ const TheGenome: React.FC = () => {
             setGeneratedCode(result.code);
             setNewGeneName(result.name);
             
-            // Artificial delay for effect
             await new Promise(r => setTimeout(r, 1000));
-            
             setEvolutionStage(3);
 
         } catch (e) {
@@ -74,16 +84,46 @@ const TheGenome: React.FC = () => {
             name: newGeneName,
             description: `Auto-evolved trait: ${prompt}`,
             version: '1.0.0',
-            type: 'synthetic',
+            type: 'local',
             status: 'active',
+            author: 'You',
             code: generatedCode
         };
         
-        setGenes(prev => [...prev, newGene]);
+        setLocalGenes(prev => [...prev, newGene]);
         setIsEvolving(false);
         setEvolutionStage(0);
         setPrompt('');
         setGeneratedCode('');
+    };
+
+    const handleContribute = (geneId: string) => {
+        // Simulate upload
+        setLocalGenes(prev => prev.map(g => {
+            if (g.id === geneId) {
+                // In a real app, this would push to the DB
+                return { ...g, type: 'global', author: 'You (Published)' };
+            }
+            return g;
+        }));
+        
+        // Add to global list for visual feedback
+        const gene = localGenes.find(g => g.id === geneId);
+        if (gene) {
+            setGlobalGenes(prev => [{...gene, type: 'global', author: 'You', popularity: 1, status: 'dormant'}, ...prev]);
+        }
+    };
+
+    const handleDownload = (geneId: string) => {
+        setGlobalGenes(prev => prev.map(g => g.id === geneId ? { ...g, status: 'downloading' } : g));
+        
+        setTimeout(() => {
+            const gene = globalGenes.find(g => g.id === geneId);
+            if (gene) {
+                setLocalGenes(prev => [...prev, { ...gene, type: 'local', status: 'active' }]);
+                setGlobalGenes(prev => prev.map(g => g.id === geneId ? { ...g, status: 'active' } : g));
+            }
+        }, 1500);
     };
 
     return (
@@ -108,67 +148,135 @@ const TheGenome: React.FC = () => {
                         <Dna className="w-8 h-8 text-forge-accent animate-pulse-slow" />
                         The Genome
                     </h1>
-                    <p className="text-xs text-slate-400 font-mono mt-1">Self-Modification & Trait Evolution Engine</p>
+                    <p className="text-xs text-slate-400 font-mono mt-1">Federated Skill Matrix & Evolution Engine</p>
                 </div>
                 <div className="flex gap-4">
-                    <div className="text-right">
-                        <div className="text-xs font-bold text-slate-500 uppercase">Core Stability</div>
-                        <div className="text-emerald-400 font-mono">99.9%</div>
-                    </div>
-                    <div className="w-px h-8 bg-slate-700"></div>
-                    <div className="text-right">
-                        <div className="text-xs font-bold text-slate-500 uppercase">Active Traits</div>
-                        <div className="text-blue-400 font-mono">{genes.length}</div>
+                    <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
+                        <button 
+                            onClick={() => setActiveTab('local')}
+                            className={`px-4 py-1.5 rounded text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'local' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            <Cpu className="w-3 h-3" /> My Traits
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('global')}
+                            className={`px-4 py-1.5 rounded text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'global' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            <Globe className="w-3 h-3" /> Global Library
+                        </button>
                     </div>
                 </div>
             </div>
 
             <div className="flex-1 flex overflow-hidden z-10">
-                {/* Left: Active Genes */}
+                {/* Main List */}
                 <div className="flex-1 p-8 overflow-y-auto">
-                    <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
-                        <Fingerprint className="w-4 h-4" /> Active Sequence
-                    </h2>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {genes.map(gene => (
-                            <div 
-                                key={gene.id} 
-                                className={`relative p-5 rounded-2xl border transition-all duration-300 hover:-translate-y-1 ${
-                                    gene.type === 'core' 
-                                    ? 'bg-slate-900/50 border-slate-700 hover:border-blue-500/50 hover:shadow-blue-500/10' 
-                                    : 'bg-emerald-900/10 border-emerald-500/30 hover:border-emerald-500/50 hover:shadow-emerald-500/10'
-                                }`}
-                            >
-                                <div className="flex justify-between items-start mb-3">
-                                    <div className={`p-2 rounded-lg ${
-                                        gene.type === 'core' ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400'
-                                    }`}>
-                                        {gene.type === 'core' ? <Cpu className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
-                                    </div>
-                                    <div className="text-[10px] font-mono text-slate-500">v{gene.version}</div>
-                                </div>
-                                <h3 className="font-bold text-slate-200 mb-1">{gene.name}</h3>
-                                <p className="text-xs text-slate-400 leading-relaxed mb-3">{gene.description}</p>
-                                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
-                                    <div className={`w-1.5 h-1.5 rounded-full ${gene.status === 'active' ? 'bg-emerald-500' : 'bg-yellow-500'}`}></div>
-                                    <span className={gene.status === 'active' ? 'text-emerald-500' : 'text-yellow-500'}>{gene.status}</span>
-                                </div>
-                                {gene.type === 'synthetic' && (
-                                    <div className="absolute top-0 right-0 p-2">
-                                        <div className="w-2 h-2 rounded-full bg-forge-accent shadow-[0_0_10px_#38bdf8]"></div>
-                                    </div>
-                                )}
+                    {activeTab === 'local' ? (
+                        <>
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                                    <Fingerprint className="w-4 h-4" /> Local Capabilities (Private)
+                                </h2>
+                                <span className="text-xs text-slate-500">Installed: {localGenes.length}</span>
                             </div>
-                        ))}
-                    </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {localGenes.map(gene => (
+                                    <div 
+                                        key={gene.id} 
+                                        className={`relative p-5 rounded-2xl border transition-all duration-300 hover:-translate-y-1 ${
+                                            gene.type === 'core' 
+                                            ? 'bg-slate-900/50 border-slate-700' 
+                                            : 'bg-emerald-900/10 border-emerald-500/30'
+                                        }`}
+                                    >
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div className={`p-2 rounded-lg ${
+                                                gene.type === 'core' ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400'
+                                            }`}>
+                                                {gene.type === 'core' ? <Cpu className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
+                                            </div>
+                                            {gene.type === 'local' && (
+                                                <button 
+                                                    onClick={() => handleContribute(gene.id)}
+                                                    className="flex items-center gap-1 text-[10px] bg-slate-800 hover:bg-purple-600 hover:text-white px-2 py-1 rounded text-slate-400 transition-colors"
+                                                    title="Upload to Global Collective"
+                                                >
+                                                    <Share2 className="w-3 h-3" /> Share
+                                                </button>
+                                            )}
+                                        </div>
+                                        <h3 className="font-bold text-slate-200 mb-1">{gene.name}</h3>
+                                        <p className="text-xs text-slate-400 leading-relaxed mb-3 h-10">{gene.description}</p>
+                                        <div className="flex justify-between items-center text-[10px] font-mono text-slate-500">
+                                            <span>v{gene.version}</span>
+                                            <span className="text-slate-400">Author: {gene.author}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-sm font-bold text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                                    <Globe className="w-4 h-4" /> The Collective (Shared Skills)
+                                </h2>
+                                <span className="text-xs text-slate-500">Available: {globalGenes.length}</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {globalGenes.map(gene => {
+                                    const isInstalled = localGenes.some(l => l.name === gene.name);
+                                    return (
+                                        <div 
+                                            key={gene.id} 
+                                            className="relative p-5 rounded-2xl border border-purple-500/20 bg-purple-900/5 hover:border-purple-500/50 transition-all duration-300"
+                                        >
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
+                                                    <Users className="w-5 h-5" />
+                                                </div>
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                                                        <Download className="w-3 h-3" /> {gene.popularity}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <h3 className="font-bold text-slate-200 mb-1">{gene.name}</h3>
+                                            <p className="text-xs text-slate-400 leading-relaxed mb-3 h-10">{gene.description}</p>
+                                            
+                                            {isInstalled ? (
+                                                <button disabled className="w-full py-2 rounded bg-slate-800 text-emerald-500 text-xs font-bold border border-slate-700 flex items-center justify-center gap-2">
+                                                    <CheckCircle2 className="w-3 h-3" /> Installed
+                                                </button>
+                                            ) : (
+                                                <button 
+                                                    onClick={() => handleDownload(gene.id)}
+                                                    disabled={gene.status === 'downloading'}
+                                                    className="w-full py-2 rounded bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-2"
+                                                >
+                                                    {gene.status === 'downloading' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                                                    {gene.status === 'downloading' ? 'Syncing...' : 'Install Skill'}
+                                                </button>
+                                            )}
+                                            
+                                            <div className="mt-2 text-[9px] text-center text-slate-600 font-mono">
+                                                Authored by: {gene.author}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Right: Evolution Panel */}
-                <div className="w-[450px] bg-slate-900 border-l border-slate-800 flex flex-col shadow-2xl">
+                <div className="w-[400px] bg-slate-900 border-l border-slate-800 flex flex-col shadow-2xl">
                     <div className="p-6 border-b border-slate-800 bg-slate-900/50">
                         <h3 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
-                            <Microscope className="w-4 h-4 text-purple-400" /> Evolution Chamber
+                            <Microscope className="w-4 h-4 text-orange-400" /> Evolution Chamber
                         </h3>
                     </div>
 
@@ -205,22 +313,21 @@ const TheGenome: React.FC = () => {
                                             onClick={handleIntegrate}
                                             className="w-full mt-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded flex items-center justify-center gap-2 transition-colors"
                                         >
-                                            <CheckCircle2 className="w-4 h-4" /> Integrate Trait
+                                            <CheckCircle2 className="w-4 h-4" /> Integrate Locally
                                         </button>
                                     </div>
                                 )}
                             </div>
                         ) : (
                             <div className="flex-1 flex flex-col">
-                                <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 rounded-xl p-6 border border-white/5 mb-6">
+                                <div className="bg-gradient-to-br from-orange-900/20 to-red-900/20 rounded-xl p-6 border border-white/5 mb-6">
                                     <h4 className="text-lg font-bold text-white mb-2">Mutate Capabilities</h4>
                                     <p className="text-sm text-slate-400 mb-4">
-                                        Describe a new skill or behavior. Mossy will generate the underlying logic and integrate it into her neural pathways.
+                                        Describe a new skill. Mossy will generate the logic locally. You can verify it before installation or sharing.
                                     </p>
                                     <div className="flex flex-wrap gap-2">
                                         <span className="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-400 border border-slate-700">Stock Analysis</span>
                                         <span className="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-400 border border-slate-700">File Sorting</span>
-                                        <span className="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-400 border border-slate-700">Log Parsing</span>
                                     </div>
                                 </div>
 

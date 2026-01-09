@@ -49,6 +49,14 @@ const TheAuditor: React.FC = () => {
 
     const selectedFile = files.find(f => f.id === selectedFileId);
 
+    // Load previous scan if available
+    useEffect(() => {
+        const saved = localStorage.getItem('mossy_scan_auditor');
+        if (saved) {
+            setFiles(JSON.parse(saved));
+        }
+    }, []);
+
     // Mock Scan Logic
     const runAudit = () => {
         setIsScanning(true);
@@ -69,7 +77,7 @@ const TheAuditor: React.FC = () => {
     };
 
     const performAnalysis = () => {
-        setFiles(prev => prev.map(f => {
+        const updatedFiles = files.map(f => {
             const newIssues: AuditIssue[] = [];
             let status: ModFile['status'] = 'clean';
 
@@ -113,7 +121,13 @@ const TheAuditor: React.FC = () => {
             }
 
             return { ...f, issues: newIssues, status };
-        }));
+        });
+
+        setFiles(updatedFiles);
+        
+        // BROADCAST TO SHARED MEMORY
+        localStorage.setItem('mossy_scan_auditor', JSON.stringify(updatedFiles));
+        window.dispatchEvent(new Event('mossy-memory-update'));
     };
 
     const getMossyAdvice = async (issue: AuditIssue) => {
@@ -144,7 +158,7 @@ const TheAuditor: React.FC = () => {
     const handleAutoFix = (fileId: string, issueId: string) => {
         setIsFixing(true);
         setTimeout(() => {
-            setFiles(prev => prev.map(f => {
+            const updatedFiles = files.map(f => {
                 if (f.id === fileId) {
                     const remainingIssues = f.issues.filter(i => i.id !== issueId);
                     const newStatus = remainingIssues.length === 0 ? 'clean' : 
@@ -152,7 +166,12 @@ const TheAuditor: React.FC = () => {
                     return { ...f, issues: remainingIssues, status: newStatus };
                 }
                 return f;
-            }));
+            });
+            
+            setFiles(updatedFiles);
+            localStorage.setItem('mossy_scan_auditor', JSON.stringify(updatedFiles));
+            window.dispatchEvent(new Event('mossy-memory-update'));
+            
             setIsFixing(false);
             setMossyAdvice("Fixed! I've updated the file header.");
         }, 1000);

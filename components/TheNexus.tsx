@@ -20,7 +20,7 @@ const TheNexus: React.FC = () => {
   const [tutorialState, setTutorialState] = useState<'start' | 'resume' | 'replay'>('start');
 
   useEffect(() => {
-    // 1. Time-based Greeting
+    // 1. Time-based Greeting (Fallout Style)
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Good Morning, Vault Dweller.");
     else if (hour < 18) setGreeting("Good Afternoon, Vault Dweller.");
@@ -45,8 +45,16 @@ const TheNexus: React.FC = () => {
         setTutorialState('start');
     }
 
-    // 4. Generate Daily Briefing (Simulated AI)
-    generateBriefing();
+    // 4. Generate Daily Briefing
+    const mockInsights: Insight[] = [
+          { id: '1', type: 'info', message: 'F4SE (Script Extender) requires an update check.', action: 'Verify Version', actionLink: '/organizer' },
+          { id: '2', type: 'suggestion', message: '3 Papyrus scripts pending compilation in The Workshop.', action: 'Compile', actionLink: '/workshop' },
+    ];
+
+    if (!bridge) {
+          mockInsights.push({ id: '3', type: 'warning', message: 'Pip-Boy Uplink (Bridge) disconnected. Local file access restricted.', action: 'Connect', actionLink: '/bridge' });
+    }
+    setInsights(mockInsights);
     
     // 5. Fake live load
     const interval = setInterval(() => {
@@ -55,22 +63,6 @@ const TheNexus: React.FC = () => {
 
     return () => clearInterval(interval);
   }, []);
-
-  const generateBriefing = async () => {
-      // In a real app, this would query recent logs/events
-      // We simulate an AI summary of "Recent Events"
-      
-      const mockInsights: Insight[] = [
-          { id: '1', type: 'info', message: 'Havok Content Tools Compendium ingested. Physics analysis available in The Splicer.', action: 'Open Splicer', actionLink: '/splicer' },
-          { id: '2', type: 'suggestion', message: 'You have 3 uncompiled scripts in The Workshop.', action: 'Open Workshop', actionLink: '/workshop' },
-      ];
-
-      if (!localStorage.getItem('mossy_bridge_active')) {
-          mockInsights.push({ id: '3', type: 'warning', message: 'Desktop Bridge is disconnected. File access limited.', action: 'Connect', actionLink: '/bridge' });
-      }
-
-      setInsights(mockInsights);
-  };
 
   const startTutorial = () => {
       const event = new CustomEvent('start-tutorial');
@@ -87,13 +79,13 @@ const TheNexus: React.FC = () => {
           <div>
               <div className="flex items-center gap-2 text-emerald-400 mb-2 font-mono text-xs tracking-widest uppercase">
                   <Activity className="w-3 h-3 animate-pulse" />
-                  System Online
+                  RobCo Termlink Active
               </div>
               <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight mb-2">
                   {greeting}
               </h1>
               <p className="text-slate-400 max-w-lg">
-                  Mossy Core v2.4 running. All neural subsystems are functioning within normal parameters.
+                  Mossy FO4 Core v2.4 online. All systems nominal.
               </p>
           </div>
           
@@ -106,18 +98,18 @@ const TheNexus: React.FC = () => {
                       {tutorialState === 'resume' ? <PlayCircle className="w-12 h-12" /> : <BookOpen className="w-12 h-12" />}
                   </div>
                   <div className="text-slate-500 text-xs uppercase font-bold mb-1 flex items-center gap-2 relative z-10">
-                      <BookOpen className="w-3 h-3" /> Orientation
+                      <BookOpen className="w-3 h-3" /> G.O.A.T. Orientation
                   </div>
                   <div className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors relative z-10">
-                      {tutorialState === 'resume' ? 'Resume Tutorial' : tutorialState === 'replay' ? 'Replay Tutorial' : 'Start Tutorial'}
+                      {tutorialState === 'resume' ? 'Resume Training' : tutorialState === 'replay' ? 'Replay Training' : 'Start Training'}
                   </div>
                   <div className="text-[10px] text-slate-500 mt-1 relative z-10">
-                      {tutorialState === 'resume' ? 'Continue where you left off' : 'Learn to use Mossy'}
+                      {tutorialState === 'resume' ? 'Continue session' : 'Learn the systems'}
                   </div>
               </button>
 
               <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 min-w-[140px]">
-                  <div className="text-slate-500 text-xs uppercase font-bold mb-1">Neural Load</div>
+                  <div className="text-slate-500 text-xs uppercase font-bold mb-1">Reactor Output</div>
                   <div className="text-2xl font-mono text-emerald-400">{systemLoad.toFixed(0)}%</div>
                   <div className="w-full bg-slate-900 h-1.5 rounded-full mt-2 overflow-hidden">
                       <div className="bg-emerald-500 h-full transition-all duration-500" style={{width: `${systemLoad}%`}}></div>
@@ -138,7 +130,7 @@ const TheNexus: React.FC = () => {
                       <Zap className="w-32 h-32 text-white" />
                   </div>
                   <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                      <Bell className="w-5 h-5 text-yellow-400" /> Insight Feed
+                      <Bell className="w-5 h-5 text-yellow-400" /> Overseer's Feed
                   </h2>
                   <div className="space-y-3 relative z-10">
                       {insights.map(insight => (
@@ -169,7 +161,7 @@ const TheNexus: React.FC = () => {
               <div className="bg-forge-panel rounded-3xl p-6 border border-slate-700">
                   <div className="flex justify-between items-center mb-6">
                       <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                          <GitBranch className="w-5 h-5 text-purple-400" /> Active Project
+                          <GitBranch className="w-5 h-5 text-purple-400" /> Active Mod Project
                       </h2>
                       <Link to="/workshop" className="text-xs text-slate-400 hover:text-white">View All</Link>
                   </div>
@@ -187,10 +179,10 @@ const TheNexus: React.FC = () => {
                           </div>
                           <div className="mt-4 flex gap-2">
                               <Link to="/workshop" className="flex-1 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-bold rounded-lg text-center transition-colors">
-                                  Open Workspace
+                                  Open Workbench
                               </Link>
-                              <Link to="/orchestrator" className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-bold rounded-lg text-center transition-colors">
-                                  Deploy
+                              <Link to="/assembler" className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-bold rounded-lg text-center transition-colors">
+                                  Build FOMOD
                               </Link>
                           </div>
                       </div>
@@ -218,11 +210,11 @@ const TheNexus: React.FC = () => {
                           <span className="text-sm font-bold text-slate-200">Chat</span>
                       </Link>
 
-                      <Link to="/splicer" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-purple-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
+                      <Link to="/workshop" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-purple-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
                           <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                              <Binary className="w-5 h-5 text-purple-400" />
+                              <Terminal className="w-5 h-5 text-purple-400" />
                           </div>
-                          <span className="text-sm font-bold text-slate-200">Splicer</span>
+                          <span className="text-sm font-bold text-slate-200">Scripting</span>
                       </Link>
 
                       <Link to="/organizer" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-yellow-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
@@ -239,11 +231,11 @@ const TheNexus: React.FC = () => {
                           <span className="text-sm font-bold text-slate-200">Crucible</span>
                       </Link>
 
-                      <Link to="/lens" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-blue-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
+                      <Link to="/registry" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-blue-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
                           <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
                               <Aperture className="w-5 h-5 text-blue-400" />
                           </div>
-                          <span className="text-sm font-bold text-slate-200">Lens</span>
+                          <span className="text-sm font-bold text-slate-200">Registry</span>
                       </Link>
 
                       <Link to="/holo" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-pink-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Flame, Heart, Smile, Zap, Activity, BrainCircuit, Calendar, MessageSquare, Plus, RefreshCw, Lock, Globe, Shield, ToggleRight, ToggleLeft, Share2, Layers, HardDrive } from 'lucide-react';
+import { Flame, Heart, Smile, Zap, Activity, BrainCircuit, Calendar, MessageSquare, Plus, RefreshCw, Lock, Globe, Shield, ToggleRight, ToggleLeft, Share2, Layers, HardDrive, Network } from 'lucide-react';
 
 interface Memory {
     id: string;
@@ -239,37 +239,37 @@ const TheAnima: React.FC = () => {
                 {/* Right: Identity Matrix */}
                 <div className="w-96 bg-slate-900 border-l border-slate-800 flex flex-col">
                     
-                    {/* Data Sovereignty Panel */}
-                    <div className="p-6 border-b border-slate-800 bg-red-900/10">
+                    {/* Federated Learning Panel */}
+                    <div className="p-6 border-b border-slate-800 bg-purple-900/10">
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-xs font-bold text-red-300 uppercase tracking-widest flex items-center gap-2">
-                                <Shield className="w-4 h-4" /> Data Sovereignty
+                            <h3 className="text-xs font-bold text-purple-300 uppercase tracking-widest flex items-center gap-2">
+                                <Network className="w-4 h-4" /> Hive Mind Protocol
                             </h3>
-                            <div className="px-2 py-0.5 rounded bg-red-900/50 text-red-200 text-[10px] font-bold border border-red-500/30 flex items-center gap-1">
-                                <Lock className="w-3 h-3" /> ENCRYPTED
+                            <div className="px-2 py-0.5 rounded bg-purple-900/50 text-purple-200 text-[10px] font-bold border border-purple-500/30 flex items-center gap-1">
+                                {shareLearning ? 'SYNCED' : 'OFFLINE'}
                             </div>
                         </div>
                         
                         <div className="space-y-3">
                             <div className="flex items-center justify-between bg-slate-800/50 p-3 rounded-lg border border-slate-700">
                                 <div>
-                                    <div className="text-xs font-bold text-white mb-0.5">Share Learned Patterns</div>
+                                    <div className="text-xs font-bold text-white mb-0.5">Federated Skill Sharing</div>
                                     <div className="text-[10px] text-slate-400 leading-tight">
-                                        Contribute abstract skills to the hive mind. <br/>
-                                        <span className="text-red-300">Personal data remains local.</span>
+                                        Upload evolved traits to the Collective.<br/>
+                                        <span className="text-emerald-400">Download other users' skills.</span>
                                     </div>
                                 </div>
                                 <button 
                                     onClick={() => setShareLearning(!shareLearning)}
-                                    className={`transition-colors ${shareLearning ? 'text-emerald-400' : 'text-slate-600'}`}
+                                    className={`transition-colors ${shareLearning ? 'text-purple-400' : 'text-slate-600'}`}
                                 >
                                     {shareLearning ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
                                 </button>
                             </div>
                             
                             <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                                <Activity className="w-3 h-3" />
-                                <span>Memory Partition: <span className="text-emerald-400 font-mono">ISOLATED_LOCAL_STORAGE</span></span>
+                                <Shield className="w-3 h-3 text-emerald-400" />
+                                <span>Personal Data (Files/Chat) is <span className="text-emerald-400 font-bold">NEVER</span> shared.</span>
                             </div>
                         </div>
                     </div>

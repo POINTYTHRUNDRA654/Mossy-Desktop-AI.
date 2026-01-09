@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Library, Folder, File, AlertTriangle, Play, Settings, RefreshCw, Zap, ArrowDown, ArrowUp, Minus, Plus, Search, Layers, Database, Check, Wrench, Download, Box, Link, MapPin, BookOpen, Scroll, Flag } from 'lucide-react';
+import { Library, Folder, File, AlertTriangle, Play, Settings, RefreshCw, Zap, ArrowDown, ArrowUp, Minus, Plus, Search, Layers, Database, Check, Wrench, Download, Box, Link, MapPin, BookOpen, Scroll, Flag, Lock } from 'lucide-react';
 
 interface QuestStage {
     id: number;
@@ -163,7 +163,7 @@ const TheOrganizer: React.FC = () => {
             
             const prompt = `
             Act as LOOT (Load Order Optimization Tool).
-            Analyze this list of mods and suggest an optimal load order priority (0 is top/first loaded, highest number is bottom/last loaded).
+            Analyze this list of Fallout 4 mods and suggest an optimal load order priority (0 is top/first loaded, highest number is bottom/last loaded).
             Mods:
             ${modList}
             
@@ -247,14 +247,12 @@ const TheOrganizer: React.FC = () => {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                    <div className="relative">
+                    <div className="relative opacity-80 cursor-not-allowed" title="Context Locked">
                         <Play className="w-4 h-4 text-green-500 absolute left-2 top-1.5" />
-                        <select className="bg-[#1e1e1e] border border-slate-600 rounded pl-8 pr-2 py-1 text-xs text-white outline-none w-48 font-bold">
-                            <option>Fallout 4</option>
-                            <option>Fallout 4 Launcher</option>
-                            <option>F4SE</option>
-                            <option>Creation Kit</option>
-                        </select>
+                        <div className="bg-[#1e1e1e] border border-slate-600 rounded pl-8 pr-2 py-1 text-xs text-white w-48 font-bold flex items-center justify-between">
+                            <span>Fallout 4</span>
+                            <Lock className="w-3 h-3 text-slate-500" />
+                        </div>
                     </div>
                     <button className="px-4 py-1 bg-gradient-to-b from-slate-700 to-slate-800 border border-slate-600 rounded text-xs font-bold hover:from-slate-600 hover:to-slate-700">Run</button>
                     {activeTab !== 'utils' && (

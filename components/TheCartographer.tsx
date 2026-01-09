@@ -54,7 +54,10 @@ const TheCartographer: React.FC = () => {
 
     // Initial dummy data for visual test
     useEffect(() => {
-        if (!levelData) {
+        const saved = localStorage.getItem('mossy_scan_cartographer');
+        if (saved) {
+            setLevelData(JSON.parse(saved));
+        } else if (!levelData) {
             setPrompt("A small underground bunker with a hidden lab.");
         }
     }, []);
@@ -228,6 +231,10 @@ const TheCartographer: React.FC = () => {
 
             const data = JSON.parse(response.text);
             setLevelData(data);
+            
+            // BROADCAST TO SHARED MEMORY
+            localStorage.setItem('mossy_scan_cartographer', JSON.stringify(data));
+            window.dispatchEvent(new Event('mossy-memory-update'));
 
         } catch (e) {
             console.error(e);

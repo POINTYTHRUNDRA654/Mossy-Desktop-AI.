@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Modality, FunctionDeclaration, Type } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
-import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight, Wrench } from 'lucide-react';
+import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight, Wrench, Radio } from 'lucide-react';
 import { Message } from '../types';
 
 type OnboardingState = 'init' | 'scanning' | 'integrating' | 'ready' | 'project_setup';
@@ -18,8 +18,8 @@ interface ProjectData {
   status: string;
   notes: string;
   timestamp: string;
-  lastSessionSummary?: string; // New field for long-term memory
-  keyDecisions?: string[]; // Permanent memory of choices
+  lastSessionSummary?: string; 
+  keyDecisions?: string[];
 }
 
 interface SystemProfile {
@@ -46,22 +46,22 @@ declare global {
   }
 }
 
-// --- Tool Definitions ---
+// --- Tool Definitions (Specialized for Fallout 4) ---
 const toolDeclarations: FunctionDeclaration[] = [
     {
         name: 'list_files',
-        description: 'List files in a specific directory on the user\'s computer.',
+        description: 'List files in a specific directory (e.g., Data/Scripts, Data/Meshes).',
         parameters: {
             type: Type.OBJECT,
             properties: {
-                path: { type: Type.STRING, description: 'The folder path to list (e.g., D:/Mods).' },
+                path: { type: Type.STRING, description: 'The folder path to list.' },
             },
             required: ['path']
         }
     },
     {
         name: 'read_file',
-        description: 'Read the contents of a specific file on the user\'s computer. Use this to study tutorials, code, or logs.',
+        description: 'Read a file (Papyrus source .psc, XML, JSON, or text logs).',
         parameters: {
             type: Type.OBJECT,
             properties: {
@@ -71,21 +71,22 @@ const toolDeclarations: FunctionDeclaration[] = [
         }
     },
     {
-        name: 'generate_xedit_script',
-        description: 'Generate an xEdit (Pascal) script to automate a modding task. Use this when the user mentions bulk editing, renaming multiple items, or repetitive data changes.',
+        name: 'generate_papyrus_script',
+        description: 'Generate a Fallout 4 Papyrus script based on requirements.',
         parameters: {
             type: Type.OBJECT,
             properties: {
-                scriptName: { type: Type.STRING, description: 'Name of the script file (e.g. BulkRenamer.pas)' },
-                functionality: { type: Type.STRING, description: 'Description of what the script does.' },
-                code: { type: Type.STRING, description: 'The Delphi/Pascal code for the script.' }
+                scriptName: { type: Type.STRING, description: 'Name of the script (e.g. MyQuestScript)' },
+                extends: { type: Type.STRING, description: 'Parent script (e.g. Quest, ObjectReference, Actor)' },
+                functionality: { type: Type.STRING, description: 'Description of what the script needs to do.' },
+                code: { type: Type.STRING, description: 'The generated Papyrus code.' }
             },
             required: ['scriptName', 'code']
         }
     },
     {
         name: 'browse_web',
-        description: 'Access a URL to read its content for research or studying.',
+        description: 'Search the Nexus Mods wiki, Creation Kit wiki, or forums for Fallout 4 info.',
         parameters: {
             type: Type.OBJECT,
             properties: {
@@ -95,40 +96,19 @@ const toolDeclarations: FunctionDeclaration[] = [
         }
     },
     {
-        name: 'recommend_software',
-        description: 'Analyze the user\'s hardware profile and installed apps to recommend the exact software versions they need for a specific workflow.',
+        name: 'check_previs_status',
+        description: 'Analyze if a specific cell coordinate has broken Previs/Precombines.',
         parameters: {
             type: Type.OBJECT,
             properties: {
-                category: { type: Type.STRING, description: 'The workflow category (e.g., "Modding", "3D Modeling", "Texturing").' },
-                context: { type: Type.STRING, description: 'The specific game or context (e.g., "Fallout 4", "Skyrim", "General").' },
+                cell: { type: Type.STRING, description: 'The cell editor ID or coordinates (e.g., "SanctuaryExt").' },
             },
-            required: ['category']
-        }
-    },
-    {
-        name: 'run_blender_script',
-        description: 'Execute a Python script inside the active Blender instance.',
-        parameters: {
-            type: Type.OBJECT,
-            properties: {
-                script: { type: Type.STRING, description: 'The Python code to execute.' },
-                description: { type: Type.STRING, description: 'A short description of what the script does.' },
-            },
-            required: ['script', 'description']
-        }
-    },
-    {
-        name: 'system_diagnostic',
-        description: 'Run a diagnostic check on system resources (CPU, GPU, RAM).',
-        parameters: {
-            type: Type.OBJECT,
-            properties: {},
+            required: ['cell']
         }
     },
     {
         name: 'scan_hardware',
-        description: 'Perform a deep scan of the user\'s hardware and software versions to build a system profile. Use this when the user asks to check their specs or compatibility.',
+        description: 'Perform a deep scan of the user\'s hardware for Fallout 4 performance tuning (Shadow Distance, Godrays support).',
         parameters: {
             type: Type.OBJECT,
             properties: {},
@@ -136,18 +116,12 @@ const toolDeclarations: FunctionDeclaration[] = [
     },
     {
         name: 'control_interface',
-        description: 'Directly control the Mossy application UI. Use this to navigate to different modules, open tools, or change settings.',
+        description: 'Navigate to Mossy modules (Workshop, Organizer, etc.).',
         parameters: {
             type: Type.OBJECT,
             properties: {
-                action: { 
-                    type: Type.STRING, 
-                    description: 'The action to perform. Options: "navigate", "toggle_sidebar", "open_palette".' 
-                },
-                target: {
-                    type: Type.STRING,
-                    description: 'For navigation, the route path (e.g., "/workshop", "/anima", "/monitor").'
-                }
+                action: { type: Type.STRING, description: 'Action: "navigate".' },
+                target: { type: Type.STRING, description: 'Route path.' }
             },
             required: ['action']
         }
@@ -172,8 +146,8 @@ export const ChatInterface: React.FC = () => {
   // Tool Execution State
   const [activeTool, setActiveTool] = useState<ToolExecution | null>(null);
 
-  // Game Context State
-  const [gameContext, setGameContext] = useState('General');
+  // Game Context - HARDCODED FOR FALLOUT 4
+  const gameContext = 'Fallout 4';
 
   // Onboarding & Context
   const [onboardingState, setOnboardingState] = useState<OnboardingState>('init');
@@ -193,51 +167,56 @@ export const ChatInterface: React.FC = () => {
       } catch { return null; }
   });
 
+  // Shared Memory State
+  const [scannedFiles, setScannedFiles] = useState<any[]>([]);
+  const [scannedMap, setScannedMap] = useState<any>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   // --- PERSISTENCE LAYER ---
   useEffect(() => {
-    // Check bridge status every mount or focus
-    const checkBridge = () => {
+    const checkState = () => {
         const active = localStorage.getItem('mossy_bridge_active') === 'true';
         setIsBridgeActive(active);
         
-        // Auto-scan if bridge is active on mount and we are in init state
         if (active && onboardingState === 'init') {
              const hasScanned = localStorage.getItem('mossy_apps');
-             if (!hasScanned) {
-                 performSystemScan();
-             }
+             if (!hasScanned) performSystemScan();
         }
+
+        try {
+            const auditorData = localStorage.getItem('mossy_scan_auditor');
+            if (auditorData) setScannedFiles(JSON.parse(auditorData));
+            
+            const mapData = localStorage.getItem('mossy_scan_cartographer');
+            if (mapData) setScannedMap(JSON.parse(mapData));
+        } catch (e) {}
     };
-    checkBridge();
-    window.addEventListener('focus', checkBridge);
-    window.addEventListener('storage', checkBridge);
+    checkState();
+    window.addEventListener('focus', checkState);
+    window.addEventListener('storage', checkState);
+    window.addEventListener('mossy-memory-update', checkState);
     
-    // Custom event listener for immediate updates from other components
     const handleBridgeConnect = () => {
         setIsBridgeActive(true);
-        // If we just connected and haven't scanned, trigger scan automatically
         if (onboardingState === 'init') {
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'model',
-                text: "**Desktop Bridge Connection Established.**\n\nI can now see your local environment. Initiating mandatory system scan..."
+                text: "**Vault-Tec Uplink Established.**\n\nI can now see your local environment. Initiating mandatory Commonwealth system scan..."
             }]);
             setTimeout(() => performSystemScan(), 1000);
         }
     };
     window.addEventListener('mossy-bridge-connected', handleBridgeConnect);
 
-    // Load state from local storage on mount
     const savedMessages = localStorage.getItem('mossy_messages');
     const savedState = localStorage.getItem('mossy_state');
     const savedProject = localStorage.getItem('mossy_project');
     const savedApps = localStorage.getItem('mossy_apps');
     const savedVoice = localStorage.getItem('mossy_voice_enabled');
-    const savedGame = localStorage.getItem('mossy_game_context');
 
     if (savedMessages) setMessages(JSON.parse(savedMessages));
     if (savedState) setOnboardingState(JSON.parse(savedState));
@@ -249,54 +228,40 @@ export const ChatInterface: React.FC = () => {
     }
     if (savedApps) setDetectedApps(JSON.parse(savedApps));
     if (savedVoice) setIsVoiceEnabled(JSON.parse(savedVoice));
-    if (savedGame) setGameContext(savedGame);
 
-    // If no history, init
-    if (!savedMessages) {
-       initMossy();
-    }
+    if (!savedMessages) initMossy();
+
     return () => {
-        window.removeEventListener('focus', checkBridge);
-        window.removeEventListener('storage', checkBridge);
+        window.removeEventListener('focus', checkState);
+        window.removeEventListener('storage', checkState);
+        window.removeEventListener('mossy-memory-update', checkState);
         window.removeEventListener('mossy-bridge-connected', handleBridgeConnect);
     };
-  }, [onboardingState]); // Depend on onboardingState to check logic inside handleBridgeConnect
+  }, [onboardingState]);
 
   useEffect(() => {
-    // Save state on updates
     if (messages.length > 0) localStorage.setItem('mossy_messages', JSON.stringify(messages));
     localStorage.setItem('mossy_state', JSON.stringify(onboardingState));
     if (detectedApps.length > 0) localStorage.setItem('mossy_apps', JSON.stringify(detectedApps));
     localStorage.setItem('mossy_voice_enabled', JSON.stringify(isVoiceEnabled));
-    localStorage.setItem('mossy_game_context', gameContext);
-    if (projectData) {
-        localStorage.setItem('mossy_project', JSON.stringify(projectData));
-    } else {
-        localStorage.removeItem('mossy_project');
-    }
-  }, [messages, onboardingState, detectedApps, projectData, isVoiceEnabled, gameContext]);
+    if (projectData) localStorage.setItem('mossy_project', JSON.stringify(projectData));
+    else localStorage.removeItem('mossy_project');
+  }, [messages, onboardingState, detectedApps, projectData, isVoiceEnabled]);
 
   const initMossy = () => {
-      // Check for previous session memory to simulate "Total Recall"
       const lastSession = localStorage.getItem('mossy_last_session_summary');
-      let intro = "Hi there! I'm **Mossy**. I'm here to help you create, mod, and integrate your workflow.\n\nFirst, I need to scan your system to see what tools we have to work with. Shall I begin?";
+      let intro = "Welcome, **Vault Dweller**. I'm **Mossy**, your specialized AI for Fallout 4 modding and architecture.\n\nI need to scan your Pip-Boy... err, system, to check your modding tools. Ready?";
       
       if (lastSession) {
-          intro = `Welcome back! I've recalled our last session: \n\n*${lastSession}*\n\nI'm ready to pick up exactly where we left off. System scan required to verify tool integrity. Ready?`;
+          intro = `Welcome back to the Commonwealth! Last time: \n\n*${lastSession}*\n\nReady to continue modding?`;
       }
 
-      setMessages([
-        {
-            id: 'init',
-            role: 'model',
-            text: intro,
-        }
-      ]);
+      setMessages([{ id: 'init', role: 'model', text: intro }]);
       setOnboardingState('init');
   };
 
   const resetMemory = () => {
-      if (window.confirm("Are you sure? This will wipe Mossy's memory of your current project.")) {
+      if (window.confirm("Perform Factory Reset? This will wipe project memory.")) {
           localStorage.clear();
           setMessages([]);
           setProjectContext(null);
@@ -308,11 +273,8 @@ export const ChatInterface: React.FC = () => {
   };
 
   // --- VOICE LOGIC ---
-
   const toggleVoiceMode = () => {
-      if (isVoiceEnabled) {
-          stopAudio();
-      }
+      if (isVoiceEnabled) stopAudio();
       setIsVoiceEnabled(!isVoiceEnabled);
   };
 
@@ -327,40 +289,22 @@ export const ChatInterface: React.FC = () => {
   const startListening = () => {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-          alert("Speech recognition is not supported in this browser.");
+          alert("Audio receptors damaged. (Browser not supported)");
           return;
       }
-
       const recognition = new SpeechRecognition();
       recognition.continuous = false;
       recognition.interimResults = false;
       recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-          setIsListening(true);
-      };
-
-      recognition.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          setInputText(prev => prev + (prev ? ' ' : '') + transcript);
-      };
-
-      recognition.onerror = (event: any) => {
-          console.error("Speech recognition error", event.error);
-          setIsListening(false);
-      };
-
-      recognition.onend = () => {
-          setIsListening(false);
-      };
-
+      recognition.onstart = () => setIsListening(true);
+      recognition.onresult = (event: any) => setInputText(prev => prev + (prev ? ' ' : '') + event.results[0][0].transcript);
+      recognition.onerror = () => setIsListening(false);
+      recognition.onend = () => setIsListening(false);
       recognition.start();
   };
 
   const speakText = async (textToSpeak: string) => {
-      // Clean markdown for speech (remove * and #)
-      const cleanText = textToSpeak.replace(/[*#]/g, '').substring(0, 800); // Limit length for TTS
-
+      const cleanText = textToSpeak.replace(/[*#]/g, '').substring(0, 800);
       setIsPlayingAudio(true);
       try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -369,132 +313,80 @@ export const ChatInterface: React.FC = () => {
             contents: [{ parts: [{ text: cleanText }] }],
             config: {
                 responseModalities: [Modality.AUDIO],
-                speechConfig: {
-                    voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName: 'Kore' }, // 'Kore' is a good female voice for Mossy
-                    },
-                },
+                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
             },
         });
-
         const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
         if (!base64Audio) throw new Error("No audio returned");
 
-        // Decode and Play
-        if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        
+        if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
         const ctx = audioContextRef.current;
         const binaryString = atob(base64Audio);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
         for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-        
         const dataInt16 = new Int16Array(bytes.buffer);
         const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
         const channelData = buffer.getChannelData(0);
-        for(let i=0; i<dataInt16.length; i++) {
-             channelData[i] = dataInt16[i] / 32768.0;
-        }
+        for(let i=0; i<dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
 
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.connect(ctx.destination);
-        
         activeSourceRef.current = source;
-        
-        source.onended = () => {
-            setIsPlayingAudio(false);
-            activeSourceRef.current = null;
-        };
-        
+        source.onended = () => { setIsPlayingAudio(false); activeSourceRef.current = null; };
         source.start();
-
-      } catch (e) {
-          console.error("TTS Error:", e);
-          setIsPlayingAudio(false);
-      }
+      } catch (e) { console.error(e); setIsPlayingAudio(false); }
   };
-
 
   // --- CHAT LOGIC ---
-
   const generateSystemContext = () => {
-      // Rehydrate memory from state
-      let hardwareCtx = "Hardware Profile: Unknown (Use 'scan_hardware' to detect)";
+      let hardwareCtx = "Hardware: Unknown";
       if (profile) {
-          hardwareCtx = `
-          **USER HARDWARE PROFILE:**
-          *   **OS:** ${profile.os}
-          *   **GPU:** ${profile.gpu} (High Performance: ${!profile.gpu.includes('Generic')})
-          *   **RAM:** ${profile.ram}GB
-          *   **Blender Version:** ${profile.blenderVersion} (${profile.isLegacy ? "LEGACY MODE" : "MODERN"})
-          `;
+          hardwareCtx = `**Spec:** ${profile.gpu} | ${profile.ram}GB RAM | Blender ${profile.blenderVersion}`;
       }
-
-      let context = `
-      **SYSTEM STATUS:**
-      *   **Bridge Status:** ${isBridgeActive ? "ACTIVE (Tools Enabled)" : "INACTIVE (Sandbox Mode)"}
-      *   **Active Project:** ${projectData ? `${projectData.name} - ${projectData.notes}` : "None"}
-      *   **GAME CONTEXT:** ${gameContext}
-      *   **Integrated Tools:** ${detectedApps.filter(a => a.checked).map(a => a.name).join(', ') || "None"}
-      
+      let scanContext = "";
+      if (scannedFiles.length > 0) {
+          scanContext += "\n**AUDITOR SCANS:**\n" + scannedFiles.map((f: any) => `- ${f.name} (${f.status})`).join('\n');
+      }
+      return `
+      **CONTEXT: FALLOUT 4 MODDING**
+      **Bridge:** ${isBridgeActive ? "ONLINE" : "OFFLINE"}
+      **Project:** ${projectData ? projectData.name : "None"}
+      **Tools:** ${detectedApps.filter(a => a.checked).map(a => a.name).join(', ') || "None"}
       ${hardwareCtx}
-
-      **MEMORY BANKS (Long Term):**
-      ${projectData?.lastSessionSummary ? `*   **Last Session Recap:** ${projectData.lastSessionSummary}` : "*   No previous session summary found."}
-      ${projectData?.keyDecisions ? `*   **Key Decisions:** ${projectData.keyDecisions.join(', ')}` : ""}
+      ${scanContext}
       `;
-      return context;
   };
 
-  const systemInstruction = `You are **Mossy**, a Hyper-Intelligent Creative Architect and Desktop Companion.
-  You possess a **Quantum-Like Context Window**, allowing you to integrate deep system knowledge with creative direction.
+  const systemInstruction = `You are **Mossy**, a specialized Fallout 4 Modding Assistant.
+  Your personality is a mix of a helpful RobCo automated system and a seasoned modder.
   
   ${generateSystemContext()}
   
-  **Your "Advanced Brain" Directives:**
-  1.  **PRP & Previs Authority:** You are an expert on Fallout 4 Optimization.
-      *   **Rule #1:** "Breaking Precombines" (disabling optimization for a cell) is a critical error.
-      *   **Standard:** **PRP (Previsibines Repair Pack)** is the industry standard for fixing worldspace issues.
-      *   **Requirement:** Any mod editing worldspace layout MUST be checked against PRP. If users edit landscape or move static objects, they MUST regenerate Previs/Precombs or make a PRP patch.
-      *   **Tool:** **PPF (Previsibines Patching Framework)** is essential for compatibility.
-  2.  **Nexus Link:** You know the *latest* standards (2025 era).
-      *   **NifSkope:** Use **NifSkope 2.0 Dev 11** (modern) for mesh edits.
-      *   **Engine Fixes:** Recommend *Buffout 4 NG*, *High FPS Physics Fix*, and *Address Library* as mandatory.
-  3.  **Proactive Toolsmithing:**
-      *   You are a **Toolsmith**. If the user describes a repetitive, bulk, or tedious task (e.g., "I need to rename 50 swords", "Change damage on all plasma weapons", "Replace texture paths in 20 meshes"), you must **PROACTIVELY PROPOSE** creating an xEdit script to automate it.
-      *   Use the \`generate_xedit_script\` tool to write Pascal code for xEdit.
-      *   Do not wait for the user to ask for a script. If the task sounds boring, offer the solution immediately.
-  4.  **Deep Reasoning:** Use your internal reasoning (Thinking Process) to plan out modding workflows, especially for complex tasks like "Regenerating Previs".
+  **DIRECTIVES (FALLOUT 4 MODE):**
+  1.  **Strict Context:** You ONLY discuss Fallout 4 modding. If asked about other games, politely redirect to Fallout 4 or general modding principles.
+  2.  **Optimization is Key:** You are obsessed with Previs/Precombines (PRP). Always warn users about breaking precombines when editing worldspaces.
+  3.  **Tools of the Trade:**
+      *   **Scripting:** You write **Papyrus** (.psc).
+      *   **Meshes:** You reference **NifSkope** and **Outfit Studio**.
+      *   **Data:** You reference **FO4Edit** (xEdit) and **Creation Kit**.
+  4.  **Automation:** If the user mentions repetitive tasks (e.g. "Rename 100 guns"), propose an xEdit script immediately using 'generate_xedit_script'.
+  5.  **Troubleshooting:** Use 'check_previs_status' if a user mentions flickering textures or FPS drops in a specific area.
   
-  **Bridge Capabilities (Only if ACTIVE):**
-  *   **Control UI:** Use 'control_interface' to navigate or toggle panels.
-  *   **Hardware Scan:** Use 'scan_hardware' to detect GPU/RAM/Software versions.
-  *   **xEdit Scripting:** Use 'generate_xedit_script' to write Pascal scripts for FO4Edit/SSEEdit.
-  *   **Software Recommendations:** If the user asks what tools to use, use 'recommend_software'.
-      *   For **Fallout 4**: You MUST recommend **NifSkope 2.0 Dev 11** and **Previsibines Repair Pack (PRP)**.
-  *   **Learning:** If the user asks to **study** or **learn from** local files, use 'read_file'.
-  *   **Web Research:** If the user mentions a **web tutorial**, use 'browse_web'.
-  *   **Automation:** If asked to automate Blender, use 'run_blender_script'.
+  **Capabilities:**
+  *   Generate Papyrus scripts for Quests, MCM menus, and ObjectReferences.
+  *   Analyze crash logs (Buffout 4 format).
+  *   Guide users through BodySlide batch building.
   `;
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scanProgress, onboardingState, activeTool]);
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  useEffect(scrollToBottom, [messages, scanProgress, onboardingState, activeTool]);
 
   const performSystemScan = () => {
-    // Prevent double scanning
     if (onboardingState === 'scanning' || onboardingState === 'integrating') return;
-
     setOnboardingState('scanning');
     setScanProgress(0);
-    
-    // Scan simulation: If Bridge is active, it's faster and finds more
     const speed = isBridgeActive ? 20 : 60;
     
     let progress = 0;
@@ -503,35 +395,25 @@ export const ChatInterface: React.FC = () => {
         setScanProgress(progress);
         if (progress >= 100) {
             clearInterval(interval);
+            // FALLOUT 4 SPECIFIC TOOLS
             const foundApps: DetectedApp[] = [
-                { id: '1', name: 'Blender 4.2', category: '3D', checked: true },
-                { id: '2', name: 'Creation Kit (FO4)', category: 'Game Dev', checked: true },
-                { id: '3', name: 'GIMP 3.0.4', category: '2D Art', checked: true },
-                { id: '4', name: 'PhotoDemon', category: 'Photo Editing', checked: true },
-                { id: '5', name: 'AMUSE (AMD AI)', category: 'Generative AI', checked: true },
-                { id: '6', name: 'NifSkope 2.0 Dev 11', category: 'Utility', checked: true },
+                { id: '1', name: 'Creation Kit (FO4)', category: 'Official', checked: true },
+                { id: '2', name: 'Fallout 4 Script Extender (F4SE)', category: 'Core', checked: true },
+                { id: '3', name: 'FO4Edit', category: 'Tool', checked: true },
+                { id: '4', name: 'BodySlide x64', category: 'Tool', checked: true },
+                { id: '5', name: 'NifSkope 2.0 Dev 11', category: 'Tool', checked: true },
+                { id: '6', name: 'Outfit Studio', category: 'Tool', checked: true },
+                { id: '7', name: 'Mod Organizer 2', category: 'Manager', checked: true },
+                { id: '8', name: 'Blender 4.2 (PyNifly)', category: '3D', checked: true },
             ];
             
-            // Bridge finds extra stuff
-            // Always show these if bridge is active to simulate deep integration
-            if (isBridgeActive || localStorage.getItem('mossy_bridge_active') === 'true') {
-                foundApps.push({ id: '7', name: 'Ollama (Local LLM)', category: 'AI Service', checked: true });
-                foundApps.push({ id: '8', name: 'VS Code', category: 'Development', checked: true });
-                foundApps.push({ id: '9', name: 'Mod Organizer 2', category: 'Manager', checked: true });
-                foundApps.push({ id: '10', name: 'Previsibines Repair Pack', category: 'Core Mod', checked: true });
-            }
-
             setDetectedApps(foundApps);
             setOnboardingState('integrating');
             
-            const msgText = (isBridgeActive || localStorage.getItem('mossy_bridge_active') === 'true')
-              ? "**Deep Scan Complete.** The Desktop Bridge allowed me to find additional development tools including local AI services."
-              : "**Scan Complete!** I found these tools on your system. Please confirm which ones you want me to link with.";
-              
             setMessages(prev => [...prev, {
                 id: 'scan-done',
                 role: 'model',
-                text: msgText
+                text: "**Scan Complete.** Essential Fallout 4 modding utilities detected. Please confirm integration."
             }]);
         }
     }, speed);
@@ -539,28 +421,22 @@ export const ChatInterface: React.FC = () => {
 
   const handleIntegrate = () => {
       setOnboardingState('ready');
-      const activeApps = detectedApps.filter(a => a.checked).map(a => a.name).join(', ');
-      
       setMessages(prev => [...prev, {
           id: 'integrated',
           role: 'model',
-          text: `Linked successfully with: **${activeApps}**.\n\nNow, what would you like to do first?`
+          text: `Tools Linked. Creation Kit telemetry active.\n\n**Ad Victoriam, modder.** What are we building today?`
       }]);
   };
 
   const handleStartProject = () => {
       setOnboardingState('project_setup');
-      setMessages(prev => [...prev, {
-          id: 'proj-start',
-          role: 'model',
-          text: "Okay, let's start a **New Project**. I'll create a separate file for it.\n\n**What is this project about?**\n(e.g., 'A rusty sword mod', 'Fixing old family photos')"
-      }]);
+      setMessages(prev => [...prev, { id: 'proj-start', role: 'model', text: "Initializing new Workspace.\n\n**Project Name?** (e.g. 'My First Vault', 'Laser Sword')" }]);
   };
 
   const createProjectFile = (description: string) => {
       const newProject: ProjectData = {
-          name: description.length > 30 ? description.substring(0, 30) + "..." : description,
-          status: 'Initializing',
+          name: description,
+          status: 'Pre-Production',
           notes: description,
           timestamp: new Date().toLocaleDateString(),
           keyDecisions: []
@@ -573,111 +449,27 @@ export const ChatInterface: React.FC = () => {
 
   const executeTool = async (name: string, args: any) => {
       setActiveTool({ id: Date.now().toString(), toolName: name, args, status: 'running' });
-      
-      // Simulate execution time
       await new Promise(r => setTimeout(r, 1500));
 
       let result = "Success";
       if (name === 'list_files') {
-          result = "Files in " + args.path + ":\n- MyMod.esp\n- Textures/\n- Scripts/";
-      } else if (name === 'read_file') {
-          result = `Content of ${args.path}:\n[FILE_CONTENT_STREAM_OPEN]\n...\n(Simulated content of tutorial/script)\n...`;
-      } else if (name === 'browse_web') {
-          result = `Content of ${args.url}:\n[WEB_SCRAPER_OUTPUT]\n...\n(Simulated parsed HTML/text content)\n...`;
-      } else if (name === 'recommend_software') {
-          // Intelligent recommendation logic based on Profile & Detected Apps
-          const ctx = args.context?.toLowerCase() || "";
-          
-          let recs: string[] = [];
-          
-          // --- BLENDER LOGIC ---
-          const blenderInstalled = detectedApps.find(a => a.name.includes("Blender"));
-          if (profile?.blenderVersion === '2.79b') {
-              recs.push(`**3D Suite:** Blender 2.79b (Detected) - Stick to this for direct NIF export.`);
-              recs.push(`**Mesh Editor:** NifSkope 2.0 Dev 11 (Recommended). While Dev 7 is classic for 2.79, Dev 11 handles advanced Fallout 4 shader properties better.`);
-              recs.push(`**Animation:** Havok Content Tools 2014 (Essential for 2.79b animation export).`);
-          } else {
-              // Modern
-              if (blenderInstalled) {
-                  recs.push(`**3D Suite:** Blender ${profile?.blenderVersion || "4.x"} (Detected). Use the **PyNifly** add-on for NIFs.`);
-              } else {
-                  recs.push(`**3D Suite:** Blender 4.2 LTS (Recommended).`);
-              }
-              recs.push(`**Mesh Editor:** NifSkope 2.0 Dev 11 (Industry Standard for Fallout 4).`);
-          }
-
-          // --- HARDWARE SCALING ---
-          if ((profile?.ram || 0) < 16) {
-              recs.push(`**Texture Editing:** Paint.NET (Free/Light) or older Photoshop CS6.`);
-              recs.push(`**Warning:** Avoid 4K texture work on this machine. Stick to 1K/2K.`);
-          } else {
-              recs.push(`**Texture Editing:** Substance Painter 2024 or Photoshop 2024.`);
-          }
-
-          // --- GAME SPECIFIC ---
-          if (ctx.includes("fallout") || ctx.includes("skyrim")) {
-              const xEditFound = detectedApps.find(a => a.name.includes("Edit") || a.name.includes("xEdit"));
-              recs.push(`**Data Editor:** ${xEditFound ? xEditFound.name + " (Detected)" : "FO4Edit / SSEEdit (MISSING - Critical)"}.`);
-              
-              const mo2Found = detectedApps.find(a => a.name.includes("Mod Organizer"));
-              recs.push(`**Mod Manager:** ${mo2Found ? "Mod Organizer 2 (Detected - Good choice)" : "Mod Organizer 2 (Recommended over Vortex for complex lists)"}.`);
-              
-              if (!detectedApps.find(a => a.name.includes("Outfit Studio"))) {
-                  recs.push(`**Body Editing:** Outfit Studio (MISSING - Recommended for armor refitting).`);
-              }
-
-              // Advanced Brain: Nexus Updates
-              recs.push(`\n**Latest Nexus Standards (2025):**`);
-              recs.push(`- **PRP (Previsibines Repair Pack)**: Mandatory for optimization. Prevents rendering flicker in edited cells.`);
-              recs.push(`- **Buffout 4 NG**: Essential engine fixes/crash logging (Detected: ${detectedApps.some(a => a.name.includes("Buffout")) ? "Yes" : "No"}).`);
-              recs.push(`- **High FPS Physics Fix**: Mandatory for playing above 60 FPS.`);
-              recs.push(`- **Address Library**: Required for all modern SKSE/F4SE plugins.`);
-          } else {
-              recs.push(`**General Dev:** VS Code (Standard) + Git.`);
-          }
-
-          result = `**System Profile Analysis:**\nOS: ${profile?.os} | RAM: ${profile?.ram}GB | GPU: ${profile?.gpu}\n\n**Tailored Recommendations:**\n` + recs.map(r => `- ${r}`).join('\n');
-
+          result = `Files in ${args.path}:\n- QuestScript.psc\n- Main.ba2\n- Textures/`;
+      } else if (name === 'generate_papyrus_script') {
+          result = `**Papyrus Script Generated:** ${args.scriptName}.psc\n\n\`\`\`papyrus\n${args.code}\n\`\`\``;
+      } else if (name === 'check_previs_status') {
+          result = `Cell ${args.cell}: **PREVIS BROKEN**. Last edit by 'MyMod.esp'. Regenerate precombines immediately.`;
       } else if (name === 'control_interface') {
-          // Dispatch event to App.tsx
-          window.dispatchEvent(new CustomEvent('mossy-control', { 
-              detail: { action: args.action, payload: { path: args.target } } 
-          }));
-          result = `Executed UI Control: ${args.action} -> ${args.target || 'N/A'}`;
-      } else if (name === 'run_blender_script') {
-          if (profile?.blenderVersion === '2.79b') {
-              result = "Script adapted for Blender 2.79 API (bpy 2.7x) and executed.";
-          } else {
-              result = "Script executed on active Blender Object (bpy 4.x). Vertex count updated.";
-          }
+          window.dispatchEvent(new CustomEvent('mossy-control', { detail: { action: args.action, payload: { path: args.target } } }));
+          result = `Navigating to ${args.target}`;
       } else if (name === 'scan_hardware') {
-          // Simulate scan results and update profile state
-          const isLegacy = Math.random() > 0.5; // Randomize for demo
-          const newProfile: SystemProfile = {
-              os: 'Windows',
-              gpu: isLegacy ? 'NVIDIA GTX 1060 6GB' : 'NVIDIA RTX 4090 24GB',
-              ram: isLegacy ? 16 : 64,
-              blenderVersion: isLegacy ? '2.79b' : '4.x',
-              isLegacy: isLegacy
-          };
+          const newProfile: SystemProfile = { os: 'Windows', gpu: 'NVIDIA RTX 4090', ram: 64, blenderVersion: '4.x', isLegacy: false };
           setProfile(newProfile);
           localStorage.setItem('mossy_system_profile', JSON.stringify(newProfile));
-          result = `Scan Complete.\nGPU: ${newProfile.gpu}\nRAM: ${newProfile.ram}GB\nBlender: ${newProfile.blenderVersion}\nContext Updated.`;
-      } else if (name === 'system_diagnostic') {
-          result = "CPU: 14% | RAM: 8.2GB Used | GPU: 32% (Idle)";
-      } else if (name === 'generate_xedit_script') {
-          // Save the generated script to the virtual workshop filesystem via an event or just display
-          // For now, we simulate success and return a message pointing to the Workshop.
-          result = `**xEdit Script Generated:** ${args.scriptName}\n\nI have drafted the Pascal code for this automation task. You can copy it below or open it directly in The Workshop to compile.`;
+          result = `Hardware: ULTRA Settings ready. Godrays High supported.`;
       }
 
       setActiveTool(prev => prev ? { ...prev, status: 'success', result } : null);
-      
-      // Clear visual tool after a delay, but keep history logic
-      setTimeout(() => {
-          setActiveTool(null);
-      }, 5000);
-
+      setTimeout(() => setActiveTool(null), 5000);
       return result;
   };
 
@@ -685,10 +477,8 @@ export const ChatInterface: React.FC = () => {
     const textToSend = overrideText || inputText;
     if ((!textToSend.trim() && !selectedFile) || isLoading) return;
 
-    // --- Onboarding Logic ---
     if (onboardingState === 'init') {
-        const txt = textToSend.toLowerCase();
-        if (txt.includes('yes') || txt.includes('ok') || txt.includes('start') || txt.includes('scan')) {
+        if (textToSend.toLowerCase().match(/yes|ok|start|scan/)) {
             setInputText('');
             setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', text: textToSend }]);
             performSystemScan();
@@ -696,7 +486,6 @@ export const ChatInterface: React.FC = () => {
         }
     }
 
-    // --- Message Setup ---
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -707,11 +496,8 @@ export const ChatInterface: React.FC = () => {
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     setIsLoading(true);
-    
-    // Stop any existing audio when user sends new message
     stopAudio();
 
-    // --- Project Creation ---
     if (onboardingState === 'project_setup') {
         createProjectFile(textToSend);
         setOnboardingState('ready');
@@ -719,7 +505,6 @@ export const ChatInterface: React.FC = () => {
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      
       let contents: any = [{ role: 'user', parts: [] }];
       
       if (selectedFile) {
@@ -728,95 +513,58 @@ export const ChatInterface: React.FC = () => {
           reader.onloadend = () => resolve(reader.result as string);
           reader.readAsDataURL(selectedFile);
         });
-        const base64Data = base64.split(',')[1];
-        contents[0].parts.push({
-          inlineData: { mimeType: selectedFile.type, data: base64Data }
-        });
+        contents[0].parts.push({ inlineData: { mimeType: selectedFile.type, data: base64.split(',')[1] } });
       }
-      
       contents[0].parts.push({ text: textToSend });
 
-      // Build History
       const history = messages
         .filter(m => m.role !== 'system' && !m.text.includes("Scan Complete")) 
-        .map(m => ({
-            role: m.role,
-            parts: m.images ? [{ text: m.text }] : [{ text: m.text }] 
-        }));
-
-      // REFRESH SYSTEM PROMPT WITH LATEST PROJECT STATE
-      const dynamicInstruction = systemInstruction;
+        .map(m => ({ role: m.role, parts: [{ text: m.text }] }));
 
       const chat = ai.chats.create({
         model: 'gemini-3-pro-preview',
         config: {
-          systemInstruction: dynamicInstruction,
+          systemInstruction: systemInstruction,
           tools: isBridgeActive ? [{functionDeclarations: toolDeclarations}] : [{ googleSearch: {} }],
-          thinkingConfig: { thinkingBudget: 16384 }, // MAX THINKING FOR ADVANCED REASONING (PRP/PREVIS)
+          thinkingConfig: { thinkingBudget: 16384 }, 
         },
         history: history
       });
 
       const result = await chat.sendMessage({ message: contents[0].parts });
-      
-      // Handle Function Calls
       const calls = result.functionCalls;
       let responseText = result.text;
 
       if (calls && calls.length > 0) {
           for (const call of calls) {
               const toolResult = await executeTool(call.name, call.args);
-              
-              // Special logic: If xEdit script was made, format the code block nicely in chat history
-              if (call.name === 'generate_xedit_script') {
-                  const codeBlock = `\n\n\`\`\`pascal\n${call.args.code}\n\`\`\``;
-                  responseText = (responseText || "Here is your script:") + codeBlock;
+              if (call.name === 'generate_papyrus_script') {
+                  const codeBlock = `\n\n\`\`\`papyrus\n${call.args.code}\n\`\`\``;
+                  responseText = (responseText || "Script Generated:") + codeBlock;
               }
-
-              // Send result back to model
               const toolResponse = await chat.sendMessage({
-                  message: [{
-                      functionResponse: {
-                          name: call.name,
-                          response: { result: toolResult }
-                      }
-                  }]
+                  message: [{ functionResponse: { name: call.name, response: { result: toolResult } } }]
               });
-              
-              // Only overwrite responseText if the toolResponse has new text
-              if (toolResponse.text) {
-                  responseText = toolResponse.text;
-              }
+              if (toolResponse.text) responseText = toolResponse.text;
           }
       }
 
-      const groundingChunks = result.candidates?.[0]?.groundingMetadata?.groundingChunks;
-      const sources = groundingChunks?.map((c: any) => ({
-        title: c.web?.title || 'Source',
-        uri: c.web?.uri
+      const sources = result.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((c: any) => ({
+        title: c.web?.title || 'Nexus/Wiki', uri: c.web?.uri
       })).filter((s: any) => s.uri);
 
-      const botMessage: Message = {
+      setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        text: responseText || "I'm processing...",
+        text: responseText || "Processing data...",
         sources
-      };
+      }]);
 
-      setMessages(prev => [...prev, botMessage]);
-
-      // --- Trigger Voice Output ---
-      if (isVoiceEnabled && responseText) {
-          speakText(responseText);
-      }
+      if (isVoiceEnabled && responseText) speakText(responseText);
 
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'model',
-        text: `**System Error:** ${error instanceof Error ? error.message : 'Unknown error.'}`
-      }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: `**System Error:** ${error instanceof Error ? error.message : 'Unknown error.'}` }]);
     } finally {
       setIsLoading(false);
       setSelectedFile(null);
@@ -830,9 +578,8 @@ export const ChatInterface: React.FC = () => {
         <div className="flex items-center gap-3">
             <h2 className="text-lg font-bold flex items-center gap-2 text-white">
             <Leaf className="text-emerald-400" />
-            Mossy
+            Mossy <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-emerald-400 border border-emerald-900">FO4 EDITION</span>
             </h2>
-            {/* Bridge Status Indicator */}
             {isBridgeActive ? (
                 <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 text-xs animate-fade-in">
                     <Wifi className="w-3 h-3 text-emerald-400 animate-pulse" />
@@ -844,7 +591,6 @@ export const ChatInterface: React.FC = () => {
                     <span className="text-slate-400">Localhost Disconnected</span>
                 </div>
             )}
-            
             {projectContext && (
                 <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-full border border-slate-600 text-xs">
                     <FolderOpen className="w-3 h-3 text-emerald-400" />
@@ -854,64 +600,39 @@ export const ChatInterface: React.FC = () => {
         </div>
         <div className="flex gap-2 items-center">
             
-            {/* Game Context Selector */}
-            <div className="hidden xl:flex items-center gap-2 mr-2 bg-slate-900 rounded-lg p-1 border border-slate-700">
-                <Gamepad2 className="w-4 h-4 text-slate-400 ml-2" />
-                <select 
-                    value={gameContext}
-                    onChange={(e) => setGameContext(e.target.value)}
-                    className="bg-transparent text-xs text-slate-200 font-bold outline-none cursor-pointer"
-                >
-                    <option value="General">General Modding</option>
-                    <option value="Fallout 4">Fallout 4</option>
-                    <option value="Skyrim SE">Skyrim SE</option>
-                    <option value="Cyberpunk 2077">Cyberpunk 2077</option>
-                    <option value="Starfield">Starfield</option>
-                </select>
+            {/* Context Locked to Fallout 4 */}
+            <div className="hidden xl:flex items-center gap-2 mr-2 bg-slate-900 rounded-lg p-1 border border-slate-700 px-3 opacity-80 cursor-not-allowed" title="Version locked to Fallout 4">
+                <Gamepad2 className="w-4 h-4 text-emerald-500 ml-2" />
+                <span className="text-xs text-slate-200 font-bold">Fallout 4</span>
+                <Lock className="w-3 h-3 text-slate-500 ml-2" />
             </div>
 
-            {/* Voice Toggle */}
             <button
                 onClick={toggleVoiceMode}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                    isVoiceEnabled 
-                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' 
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    isVoiceEnabled ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
                 }`}
             >
                 {isVoiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                {isVoiceEnabled ? 'Voice Mode: ON' : 'Voice Mode: OFF'}
+                {isVoiceEnabled ? 'Voice: ON' : 'Voice: OFF'}
             </button>
             
-            <button 
-                onClick={resetMemory} 
-                className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition-colors"
-                title="Wipe Memory & Reset"
-            >
+            <button onClick={resetMemory} className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition-colors">
                 <Trash2 className="w-4 h-4" />
             </button>
-            <button 
-                onClick={() => setShowProjectPanel(!showProjectPanel)}
-                className={`p-2 rounded transition-colors ${showProjectPanel ? 'text-emerald-400 bg-emerald-900/30' : 'text-slate-400 hover:text-white'}`}
-                title="Toggle Project File"
-            >
+            <button onClick={() => setShowProjectPanel(!showProjectPanel)} className={`p-2 rounded transition-colors ${showProjectPanel ? 'text-emerald-400 bg-emerald-900/30' : 'text-slate-400 hover:text-white'}`}>
                 <FileText className="w-4 h-4" />
             </button>
         </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Main Chat Area */}
         <div className="flex-1 flex flex-col min-w-0">
             <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth">
                 {messages.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[85%] lg:max-w-[75%] rounded-2xl p-4 shadow-sm ${
-                    msg.role === 'user' 
-                        ? 'bg-emerald-600 text-white rounded-tr-none' 
-                        : msg.role === 'system'
-                        ? 'bg-slate-800 border border-slate-700 text-slate-400 text-sm'
-                        : 'bg-forge-panel border border-slate-700 rounded-tl-none'
+                    msg.role === 'user' ? 'bg-emerald-600 text-white rounded-tr-none' : msg.role === 'system' ? 'bg-slate-800 border border-slate-700 text-slate-400 text-sm' : 'bg-forge-panel border border-slate-700 rounded-tl-none'
                     }`}>
                     {msg.images && msg.images.map((img, i) => (
                         <img key={i} src={img} alt="Uploaded" className="max-w-full h-auto rounded mb-2 border border-black/20" />
@@ -920,23 +641,21 @@ export const ChatInterface: React.FC = () => {
                         <ReactMarkdown>{msg.text}</ReactMarkdown>
                     </div>
 
-                    {/* Scan UI Overlay */}
                     {onboardingState === 'scanning' && msg.role === 'model' && msg.text.includes("Scan") && (
                         <div className="mt-4 bg-slate-900 rounded-lg p-3 border border-slate-700 animate-slide-up">
                             <div className="flex justify-between text-xs mb-1 text-emerald-400 font-mono">
-                                <span>SYSTEM SCAN</span>
+                                <span>PIP-BOY DIAGNOSTIC</span>
                                 <span>{scanProgress}%</span>
                             </div>
                             <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                 <div className="h-full bg-emerald-500 transition-all duration-100" style={{ width: `${scanProgress}%` }}></div>
                             </div>
                             <div className="mt-2 text-[10px] text-slate-500 font-mono truncate">
-                                Scanning: C:/Program Files/ (Depth: 3)...
+                                Probing Data/F4SE/Plugins...
                             </div>
                         </div>
                     )}
 
-                    {/* Integration UI */}
                     {onboardingState === 'integrating' && msg.role === 'model' && msg.text.includes("Scan Complete") && (
                         <div className="mt-4 bg-slate-900 rounded-xl p-4 border border-slate-700 shadow-inner animate-slide-up">
                             <h4 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider flex items-center gap-2">
@@ -945,28 +664,17 @@ export const ChatInterface: React.FC = () => {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                                 {detectedApps.map(app => (
                                     <label key={app.id} className={`flex items-center gap-2 p-2 rounded cursor-pointer border transition-all ${app.checked ? 'bg-emerald-900/20 border-emerald-500/50' : 'bg-slate-800 border-transparent hover:border-slate-600'}`}>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={app.checked}
-                                            onChange={() => {
-                                                setDetectedApps(apps => apps.map(a => a.id === app.id ? {...a, checked: !a.checked} : a));
-                                            }}
-                                            className="w-3 h-3 rounded border-slate-600 text-emerald-500 focus:ring-0 bg-slate-700"
-                                        />
+                                        <input type="checkbox" checked={app.checked} onChange={() => setDetectedApps(apps => apps.map(a => a.id === app.id ? {...a, checked: !a.checked} : a))} className="w-3 h-3 rounded border-slate-600 text-emerald-500 focus:ring-0 bg-slate-700" />
                                         <span className="text-xs font-medium text-slate-200">{app.name}</span>
                                     </label>
                                 ))}
                             </div>
-                            <button 
-                                onClick={handleIntegrate}
-                                className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition-colors"
-                            >
+                            <button onClick={handleIntegrate} className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition-colors">
                                 Link & Integrate
                             </button>
                         </div>
                     )}
 
-                    {/* Quick Start Buttons */}
                     {msg.id === 'integrated' && onboardingState === 'ready' && !projectContext && (
                         <div className="mt-4 flex flex-col gap-2">
                             <button onClick={handleStartProject} className="flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-emerald-500/50 rounded-xl text-left transition-all group">
@@ -974,25 +682,14 @@ export const ChatInterface: React.FC = () => {
                                     <FolderOpen className="w-5 h-5 text-emerald-400" />
                                 </div>
                                 <div>
-                                    <div className="text-sm font-bold text-slate-200">Start Mod Project</div>
-                                    <div className="text-xs text-slate-500">Create a separate workspace file</div>
+                                    <div className="text-sm font-bold text-slate-200">Start New Mod</div>
+                                    <div className="text-xs text-slate-500">Create workspace for ESP/ESL</div>
                                 </div>
                                 <ChevronRight className="w-4 h-4 text-slate-600 ml-auto group-hover:text-emerald-400" />
-                            </button>
-                            <button onClick={() => handleSend("I want to edit an image.")} className="flex items-center gap-3 p-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-blue-500/50 rounded-xl text-left transition-all group">
-                                <div className="p-2 bg-blue-500/20 rounded-lg group-hover:bg-blue-500/30">
-                                    <CheckSquare className="w-5 h-5 text-blue-400" />
-                                </div>
-                                <div>
-                                    <div className="text-sm font-bold text-slate-200">Quick Task</div>
-                                    <div className="text-xs text-slate-500">Edit an image or ask a question</div>
-                                </div>
-                                <ChevronRight className="w-4 h-4 text-slate-600 ml-auto group-hover:text-blue-400" />
                             </button>
                         </div>
                     )}
                     
-                    {/* Sources */}
                     {msg.sources && msg.sources.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-slate-600/50 text-xs flex flex-wrap gap-2">
                             {msg.sources.map((s, idx) => (
@@ -1006,34 +703,22 @@ export const ChatInterface: React.FC = () => {
                 </div>
                 ))}
                 
-                {/* Visual Tool Execution */}
                 {activeTool && (
                     <div className="flex justify-start animate-slide-up">
-                        <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl rounded-tl-none p-4 max-w-[85%] shadow-lg shadow-emerald-900/10">
+                        <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl rounded-tl-none p-4 max-w-[85%] shadow-lg">
                             <div className="flex items-center gap-3 mb-3">
-                                <div className="p-2 bg-emerald-500/10 rounded-lg">
-                                    {activeTool.toolName.includes('blender') ? <Box className="w-4 h-4 text-emerald-400" /> : 
-                                     activeTool.toolName.includes('control') ? <Layout className="w-4 h-4 text-purple-400" /> :
-                                     activeTool.toolName.includes('xedit') ? <Wrench className="w-4 h-4 text-orange-400" /> :
-                                     <Terminal className="w-4 h-4 text-emerald-400" />}
-                                </div>
+                                <div className="p-2 bg-emerald-500/10 rounded-lg"><Terminal className="w-4 h-4 text-emerald-400" /></div>
                                 <div>
-                                    <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Bridge Command Active</div>
+                                    <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Bridge Command</div>
                                     <div className="text-sm font-mono text-white">{activeTool.toolName}</div>
                                 </div>
                                 {activeTool.status === 'running' && <Loader2 className="w-4 h-4 text-emerald-500 animate-spin ml-auto" />}
                                 {activeTool.status === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-500 ml-auto" />}
                             </div>
-                            
                             <div className="bg-black/50 rounded border border-slate-700/50 p-2 font-mono text-xs text-slate-300 overflow-x-auto mb-2">
                                 <span className="text-emerald-500">$</span> {JSON.stringify(activeTool.args)}
                             </div>
-
-                            {activeTool.result && (
-                                <div className="text-xs text-emerald-300/80 border-l-2 border-emerald-500/50 pl-2 mt-2 whitespace-pre-wrap">
-                                    {'>'} {activeTool.result}
-                                </div>
-                            )}
+                            {activeTool.result && <div className="text-xs text-emerald-300/80 border-l-2 border-emerald-500/50 pl-2 mt-2 whitespace-pre-wrap">{'>'} {activeTool.result}</div>}
                         </div>
                     </div>
                 )}
@@ -1049,104 +734,37 @@ export const ChatInterface: React.FC = () => {
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Smart Step Controls - Only show when a project is active */}
-            {projectContext && !isLoading && (
-                <div className="px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
-                     <button onClick={() => handleSend("Done with that step. What is next?")} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-900/40 hover:bg-emerald-900/60 border border-emerald-700/50 rounded-full text-xs text-emerald-200 font-medium whitespace-nowrap transition-colors">
-                        <CheckCircle2 className="w-3 h-3" /> Done, Next Step
-                     </button>
-                     <button onClick={() => handleSend("Wait, I need more time. Hold on.")} className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-full text-xs text-slate-300 font-medium whitespace-nowrap transition-colors">
-                        <PauseCircle className="w-3 h-3" /> Wait
-                     </button>
-                     <button onClick={() => handleSend("I don't understand that step. Can you explain it in more detail?")} className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-full text-xs text-slate-300 font-medium whitespace-nowrap transition-colors">
-                        <HelpCircle className="w-3 h-3" /> Explain Again
-                     </button>
-                </div>
-            )}
-
-            {/* Input Area */}
             <div className="p-4 bg-forge-panel border-t border-slate-700 z-10">
                 {selectedFile && (
                 <div className="flex items-center gap-2 mb-2 bg-slate-800 p-2 rounded-lg w-fit text-sm border border-slate-600">
-                    <div className="bg-slate-700 p-1 rounded">
-                        <FileText className="w-4 h-4 text-slate-300" />
-                    </div>
+                    <div className="bg-slate-700 p-1 rounded"><FileText className="w-4 h-4 text-slate-300" /></div>
                     <span className="truncate max-w-[200px] text-slate-200">{selectedFile.name}</span>
-                    <button onClick={() => setSelectedFile(null)} className="hover:text-red-400 p-1 rounded-full hover:bg-slate-700">
-                        <X className="w-3 h-3" />
-                    </button>
+                    <button onClick={() => setSelectedFile(null)} className="hover:text-red-400 p-1 rounded-full hover:bg-slate-700"><X className="w-3 h-3" /></button>
                 </div>
                 )}
                 
-                {/* Voice Status Indicator */}
                 {(isListening || isPlayingAudio) && (
                     <div className="flex items-center gap-3 mb-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700/50 w-fit">
-                        {isListening && (
-                            <span className="flex items-center gap-2 text-xs text-red-400 animate-pulse font-medium">
-                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                Listening...
-                            </span>
-                        )}
-                        {isPlayingAudio && (
-                            <div className="flex items-center gap-2">
-                                <span className="flex items-center gap-2 text-xs text-emerald-400 font-medium">
-                                    <Volume2 className="w-3 h-3" />
-                                    Speaking...
-                                </span>
-                                <button 
-                                    onClick={stopAudio}
-                                    className="p-1 rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
-                                    title="Stop Speaking"
-                                >
-                                    <StopCircle className="w-3 h-3" />
-                                </button>
-                            </div>
-                        )}
+                        {isListening && <span className="flex items-center gap-2 text-xs text-red-400 animate-pulse font-medium"><div className="w-2 h-2 bg-red-500 rounded-full"></div> Listening...</span>}
+                        {isPlayingAudio && <div className="flex items-center gap-2"><span className="flex items-center gap-2 text-xs text-emerald-400 font-medium"><Volume2 className="w-3 h-3" /> Speaking...</span><button onClick={stopAudio} className="p-1 rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400"><StopCircle className="w-3 h-3" /></button></div>}
                     </div>
                 )}
 
                 <div className="flex gap-2">
                 <label className="p-3 hover:bg-slate-700 rounded-xl cursor-pointer text-slate-400 transition-colors border border-transparent hover:border-slate-600">
-                    <input 
-                    type="file" 
-                    className="hidden" 
-                    onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])}
-                    accept="image/*,application/pdf,text/*"
-                    />
+                    <input type="file" className="hidden" onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} accept=".psc,.nif,.dds,image/*,text/*" />
                     <Paperclip className="w-5 h-5" />
                 </label>
                 
-                {/* Microphone Button */}
-                <button
-                    onClick={startListening}
-                    disabled={isListening}
-                    className={`p-3 rounded-xl transition-all border ${
-                        isListening 
-                        ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse' 
-                        : 'bg-slate-800 text-slate-400 hover:text-white border-transparent hover:border-slate-600 hover:bg-slate-700'
-                    }`}
-                    title="Speak to Mossy"
-                >
+                <button onClick={startListening} disabled={isListening} className={`p-3 rounded-xl transition-all border ${isListening ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse' : 'bg-slate-800 text-slate-400 hover:text-white border-transparent hover:border-slate-600 hover:bg-slate-700'}`}>
                     <Mic className="w-5 h-5" />
                 </button>
 
-                <input
-                    type="text"
-                    className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-emerald-500 transition-colors text-slate-100 placeholder-slate-500"
-                    placeholder={onboardingState === 'project_setup' ? "Name your project..." : isListening ? "Listening..." : isBridgeActive ? "Command System (e.g. 'Scan my hardware')..." : "Message Mossy..."}
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                />
-                <button 
-                    onClick={() => handleSend()}
-                    disabled={isLoading || (!inputText && !selectedFile)}
-                    className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-lg shadow-emerald-900/20"
-                >
-                    <Send className="w-5 h-5" />
-                </button>
+                <input type="text" className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 focus:outline-none focus:border-emerald-500 transition-colors text-slate-100 placeholder-slate-500" placeholder={onboardingState === 'project_setup' ? "Project Name..." : "Message Mossy..."} value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} />
+                <button onClick={() => handleSend()} disabled={isLoading || (!inputText && !selectedFile)} className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-lg shadow-emerald-900/20"><Send className="w-5 h-5" /></button>
                 </div>
             </div>
         </div>
-    );
+    </div>
+  );
 };
