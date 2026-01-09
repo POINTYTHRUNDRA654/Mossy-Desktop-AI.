@@ -16,7 +16,7 @@ interface LogEntry {
     timestamp: string;
     source: string;
     event: string;
-    status: 'ok' | 'warn' | 'err';
+    status: 'ok' | 'warn' | 'err' | 'success';
 }
 
 const initialDrivers: Driver[] = [
@@ -31,13 +31,25 @@ const DesktopBridge: React.FC = () => {
   const [drivers, setDrivers] = useState<Driver[]>(initialDrivers);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const [repairing, setRepairing] = useState(false);
 
   // Auto-connect simulates simulated local bridge existing
   useEffect(() => {
-      const active = localStorage.getItem('mossy_bridge_active') === 'true';
-      if (active) {
-          toggleDriver('os_shell', true);
-      }
+      const checkBridge = () => {
+          const active = localStorage.getItem('mossy_bridge_active') === 'true';
+          if (active) {
+              toggleDriver('os_shell', true);
+          }
+      };
+      
+      checkBridge();
+      
+      const handleConnect = () => {
+          checkBridge();
+          addLog('System', 'External Connection Signal Received.', 'ok');
+      };
+      window.addEventListener('mossy-bridge-connected', handleConnect);
+      return () => window.removeEventListener('mossy-bridge-connected', handleConnect);
   }, []);
 
   useEffect(() => {
@@ -57,7 +69,7 @@ const DesktopBridge: React.FC = () => {
       return () => clearInterval(interval);
   }, []);
 
-  const addLog = (source: string, event: string, status: 'ok' | 'warn' | 'err' = 'ok') => {
+  const addLog = (source: string, event: string, status: 'ok' | 'warn' | 'err' | 'success' = 'ok') => {
       setLogs(prev => [...prev.slice(-19), {
           id: Date.now().toString() + Math.random(),
           timestamp: new Date().toLocaleTimeString(),
@@ -81,16 +93,45 @@ const DesktopBridge: React.FC = () => {
                   addLog(d.name, `PID Attached. Latency: 12ms`, 'ok');
                   
                   // If shell, update global state
-                  if (id === 'os_shell') localStorage.setItem('mossy_bridge_active', 'true');
+                  if (id === 'os_shell') {
+                      localStorage.setItem('mossy_bridge_active', 'true');
+                      window.dispatchEvent(new Event('storage'));
+                  }
               }, 1500);
               addLog('Bridge', `Mounting driver: ${d.name}...`, 'warn');
           } else if (newState === 'inactive') {
               addLog(d.name, 'SIGTERM sent. Connection closed.', 'warn');
-              if (id === 'os_shell') localStorage.removeItem('mossy_bridge_active');
+              if (id === 'os_shell') {
+                  localStorage.removeItem('mossy_bridge_active');
+                  window.dispatchEvent(new Event('storage'));
+              }
           }
 
           return { ...d, status: newState };
       }));
+  };
+
+  const handleRepair = () => {
+      if (repairing) return;
+      setRepairing(true);
+      addLog('Diagnostics', 'Initiating self-repair sequence...', 'warn');
+      
+      let step = 0;
+      const interval = setInterval(() => {
+          step++;
+          if (step === 1) addLog('Diagnostics', 'Scanning local ports 21337-21340...', 'ok');
+          if (step === 2) addLog('Diagnostics', 'Flushing socket buffers...', 'ok');
+          if (step === 3) {
+              clearInterval(interval);
+              toggleDriver('os_shell', true);
+              setRepairing(false);
+              addLog('System', 'Bridge connection re-established.', 'success');
+              // Force global update
+              localStorage.setItem('mossy_bridge_active', 'true');
+              window.dispatchEvent(new Event('storage'));
+              window.dispatchEvent(new CustomEvent('mossy-bridge-connected'));
+          }
+      }, 1000);
   };
 
   return (
@@ -108,11 +149,14 @@ const DesktopBridge: React.FC = () => {
                     Localhost Bridge Service v2.4.0 <span className="text-slate-600">|</span> Port: 21337
                 </p>
             </div>
-            <div className="flex gap-4">
-                <div className="text-right">
-                    <div className="text-xs font-bold text-slate-500 uppercase">Total Throughput</div>
-                    <div className="text-emerald-400 font-mono text-lg">128 MB/s</div>
-                </div>
+            <div className="flex gap-4 items-center">
+                <button 
+                    onClick={handleRepair}
+                    className={`flex items-center gap-2 px-4 py-2 rounded bg-slate-800 border border-slate-600 text-xs font-bold hover:bg-slate-700 transition-colors ${repairing ? 'opacity-50 cursor-wait' : ''}`}
+                >
+                    <RefreshCw className={`w-3 h-3 ${repairing ? 'animate-spin' : ''}`} />
+                    {repairing ? 'Diagnosing...' : 'Repair Link'}
+                </button>
                 <div className="h-10 w-px bg-slate-800"></div>
                 <div className="text-right">
                     <div className="text-xs font-bold text-slate-500 uppercase">Active Threads</div>
@@ -246,11 +290,13 @@ const DesktopBridge: React.FC = () => {
                             <div key={log.id} className="flex gap-3 animate-fade-in">
                                 <span className="text-slate-600 shrink-0">[{log.timestamp}]</span>
                                 <span className={`font-bold shrink-0 w-20 truncate ${
-                                    log.status === 'err' ? 'text-red-500' : 'text-blue-400'
+                                    log.status === 'err' ? 'text-red-500' : 
+                                    log.status === 'success' ? 'text-emerald-400' : 'text-blue-400'
                                 }`}>{log.source}</span>
                                 <span className={`break-all ${
                                     log.status === 'warn' ? 'text-yellow-400' :
                                     log.status === 'err' ? 'text-red-400' :
+                                    log.status === 'success' ? 'text-emerald-400' :
                                     'text-slate-300'
                                 }`}>
                                     {log.event}

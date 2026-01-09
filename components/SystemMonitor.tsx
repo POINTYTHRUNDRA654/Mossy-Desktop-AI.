@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Cpu, HardDrive, Activity, Terminal, Trash2, Search, CheckCircle2, Database, Layers, Radio, ShieldCheck, Zap, History, Archive, FileCode, XCircle, RefreshCw, Save, Clock, RotateCcw, Upload, Download, DownloadCloud, Box, Settings, Hexagon, BrainCircuit, Package, Share2, Users, Key, Globe, Lock, Link, FileText, Copy, Command } from 'lucide-react';
+import { Cpu, HardDrive, Activity, Terminal, Trash2, Search, CheckCircle2, Database, Layers, Radio, ShieldCheck, Zap, History, Archive, FileCode, XCircle, RefreshCw, Save, Clock, RotateCcw, Upload, Download, DownloadCloud, Box, Settings, Hexagon, BrainCircuit, Package, Share2, Users, Key, Globe, Lock, Link, FileText, Copy, Command, Play, HardDriveDownload } from 'lucide-react';
 
 interface LogEntry {
   id: string;
@@ -60,9 +60,16 @@ const SystemMonitor: React.FC = () => {
   const [releaseUrl, setReleaseUrl] = useState('');
   const [copied, setCopied] = useState(false);
 
+  // Installer Wizard State
+  const [showInstaller, setShowInstaller] = useState(false);
+  const [installStep, setInstallStep] = useState(0); // 0: Init, 1: Scanning, 2: Installing, 3: Done
+  const [installLog, setInstallLog] = useState<string[]>([]);
+  const [foundTools, setFoundTools] = useState<string[]>([]);
+
   const logsEndRef = useRef<HTMLDivElement>(null);
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const buildLogRef = useRef<HTMLDivElement>(null);
+  const installLogRef = useRef<HTMLDivElement>(null);
   
   // Initialize logs
   useEffect(() => {
@@ -105,6 +112,13 @@ const SystemMonitor: React.FC = () => {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Auto-scroll installer log
+  useEffect(() => {
+      if (installLogRef.current) {
+          installLogRef.current.scrollTop = installLogRef.current.scrollHeight;
+      }
+  }, [installLog]);
 
   const addLog = (msg: string, type: 'info' | 'warning' | 'error' | 'archive' | 'success' = 'info') => {
     setLogs(prev => {
@@ -168,7 +182,6 @@ const SystemMonitor: React.FC = () => {
           if (currentStep >= steps.length) {
               clearInterval(interval);
               setBuildStatus('complete');
-              // Use current URL for the "public beta link" simulation to make it actually work for testers if they have access
               setReleaseUrl(window.location.href.split('#')[0] + '#/beta/invite/' + Math.random().toString(36).substring(7));
               return;
           }
@@ -184,78 +197,46 @@ const SystemMonitor: React.FC = () => {
       setTesterKeys(prev => [...prev, newKey]);
   };
 
-  const downloadManual = () => {
-      const text = `# Mossy Beta Tester Manual
-Version: ${version}
+  const startInstaller = () => {
+      setShowInstaller(true);
+      setInstallStep(1);
+      setInstallLog(['> Initializing Setup Wizard v2.4.0', '> Checking Permissions... OK']);
+      setFoundTools([]);
 
-## Getting Started
-1. **Download & Launch**: Run the 'Mossy_Launcher.bat' file included in your distribution pack.
-2. **Access Key**: When prompted, enter your unique BETA KEY provided by the Architect.
-3. **Connectivity**: Ensure you have an active internet connection for the Neural Cloud.
+      // Simulation Sequence
+      const paths = [
+          'C:/Program Files/Blender Foundation/Blender 4.0/blender.exe',
+          'C:/Program Files (x86)/Steam/steamapps/common/Fallout 4/Fallout4.exe',
+          'C:/Users/User/AppData/Local/Programs/Microsoft VS Code/Code.exe',
+          'C:/Program Files/Adobe/Adobe Photoshop 2024/Photoshop.exe',
+          'D:/Modding/MO2/ModOrganizer.exe'
+      ];
 
-## Key Features to Test
-- **The Nexus**: Check if the dashboard loads correctly.
-- **Chat Interface**: Try asking for modding help.
-- **Visualizer**: Ensure the particle system in 'The Anima' runs smoothly.
-
-## Reporting Bugs
-Use the 'The Crucible' module to submit crash logs if the system becomes unstable.
-
-## System Requirements
-- GPU: NVIDIA RTX 2060 or better recommended.
-- Network: Active connection for Neural Cloud processing.
-
-Thank you for helping us evolve Mossy.
-- The OmniForge Team
-      `;
-      
-      const element = document.createElement("a");
-      const file = new Blob([text], {type: 'text/markdown'});
-      element.href = URL.createObjectURL(file);
-      element.download = `Mossy_v${version}_Tester_Manual.md`;
-      document.body.appendChild(element);
-      element.click();
-  };
-
-  const downloadLauncher = () => {
-      // 1. Trigger Download
-      const url = window.location.href; // Points to current app
-      const batContent = `@echo off
-title OmniForge Launcher
-color 0b
-cls
-echo ========================================================
-echo   OMNIFORGE NEURAL INTERFACE - PORTABLE LAUNCHER v${version}
-echo ========================================================
-echo.
-echo [SYSTEM] Initializing local environment...
-echo [SYSTEM] Connecting to Mossy Cloud Core...
-timeout /t 2 >nul
-echo [SYSTEM] connection_established: TRUE
-echo.
-echo [LAUNCH] Opening secure session...
-start "" "${url}"
-echo.
-echo Session active. You may close this window.
-pause
-`;
-      const blob = new Blob([batContent], { type: 'text/plain' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `Mossy_Launcher_v${version}.bat`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
-      // 2. SIMULATE CONNECTION: Activate Bridge locally so the user sees it working
-      addLog("Waiting for Launcher execution...", 'warning');
-      
-      setTimeout(() => {
-          localStorage.setItem('mossy_bridge_active', 'true');
-          window.dispatchEvent(new Event('storage'));
-          window.dispatchEvent(new CustomEvent('mossy-bridge-connected'));
-          addLog("Launcher execution detected. Desktop Bridge Activated.", 'success');
-      }, 3000);
+      let i = 0;
+      const scanInterval = setInterval(() => {
+          if (i >= paths.length) {
+              clearInterval(scanInterval);
+              setInstallLog(prev => [...prev, '> Scan Complete.', '> Installing Bridge Service...']);
+              setInstallStep(2);
+              
+              setTimeout(() => {
+                  setInstallLog(prev => [...prev, '> Registering Protocol Handlers...', '> Opening Localhost Port 21337...', '> SUCCESS: Bridge Online.']);
+                  setInstallStep(3);
+                  
+                  // ACTUALLY ACTIVATE BRIDGE
+                  localStorage.setItem('mossy_bridge_active', 'true');
+                  window.dispatchEvent(new Event('storage'));
+                  window.dispatchEvent(new CustomEvent('mossy-bridge-connected'));
+                  
+              }, 2000);
+              return;
+          }
+          const path = paths[i];
+          setInstallLog(prev => [...prev, `Searching: ${path}... FOUND`]);
+          const toolName = path.split('/').pop()?.replace('.exe', '');
+          if(toolName) setFoundTools(prev => [...prev, toolName]);
+          i++;
+      }, 800);
   };
 
   const copyLink = () => {
@@ -265,9 +246,93 @@ pause
       setTimeout(() => setCopied(false), 2000);
   };
 
+  const downloadManual = () => {
+      const element = document.createElement("a");
+      const file = new Blob(["OmniForge / Mossy User Manual\n\nVersion: 2.4.0\n\n1. Getting Started\n..."], {type: 'text/plain'});
+      element.href = URL.createObjectURL(file);
+      element.download = "Mossy_User_Manual.txt";
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+  };
+
   return (
-    <div className="h-full w-full bg-forge-dark text-slate-200 flex flex-col overflow-hidden">
+    <div className="h-full w-full bg-forge-dark text-slate-200 flex flex-col overflow-hidden relative">
       
+      {/* --- VIRTUAL INSTALLER MODAL --- */}
+      {showInstaller && (
+          <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-8 animate-fade-in">
+              <div className="w-full max-w-3xl bg-[#0f172a] border border-slate-700 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+                  {/* Installer Header */}
+                  <div className="p-6 border-b border-slate-800 bg-slate-900 flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                          <div className="p-2 bg-emerald-500/20 rounded-lg">
+                              <Package className="w-6 h-6 text-emerald-400" />
+                          </div>
+                          <div>
+                              <h2 className="text-xl font-bold text-white">OmniForge Setup Wizard</h2>
+                              <p className="text-xs text-slate-400">Desktop Bridge & Tool Integration</p>
+                          </div>
+                      </div>
+                      {installStep === 3 && (
+                          <div className="flex items-center gap-2 px-3 py-1 bg-emerald-900/30 text-emerald-400 rounded-full border border-emerald-500/30 text-xs font-bold animate-pulse">
+                              <CheckCircle2 className="w-4 h-4" /> INSTALLED
+                          </div>
+                      )}
+                  </div>
+
+                  {/* Installer Content */}
+                  <div className="flex-1 p-8 flex flex-col gap-6 overflow-hidden">
+                      {installStep === 1 && (
+                          <div className="flex flex-col items-center justify-center h-full gap-4">
+                              <div className="w-16 h-16 border-4 border-slate-700 border-t-emerald-500 rounded-full animate-spin"></div>
+                              <h3 className="text-lg font-bold text-white animate-pulse">Scanning File System...</h3>
+                              <p className="text-sm text-slate-500 text-center max-w-md">
+                                  Looking for compatible applications (Blender, Unity, Creation Kit) to integrate with Mossy.
+                              </p>
+                          </div>
+                      )}
+
+                      {installStep >= 2 && (
+                          <div className="grid grid-cols-2 gap-4 animate-fade-in">
+                              <div className="col-span-2 text-sm text-slate-400 mb-2 font-bold uppercase tracking-wider">Detected Tools</div>
+                              {foundTools.map((tool, i) => (
+                                  <div key={i} className="flex items-center gap-3 p-3 bg-slate-800 rounded-lg border border-slate-700 animate-slide-up" style={{animationDelay: `${i*100}ms`}}>
+                                      <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                                      <span className="font-mono text-white">{tool}</span>
+                                  </div>
+                              ))}
+                          </div>
+                      )}
+
+                      {/* Log Output */}
+                      <div className="flex-1 bg-black rounded-lg border border-slate-800 p-4 font-mono text-xs text-slate-300 overflow-y-auto" ref={installLogRef}>
+                          {installLog.map((log, i) => (
+                              <div key={i} className="mb-1">{log}</div>
+                          ))}
+                          {installStep === 2 && <div className="text-emerald-500 animate-pulse">_</div>}
+                      </div>
+                  </div>
+
+                  {/* Installer Footer */}
+                  <div className="p-6 border-t border-slate-800 bg-slate-900 flex justify-end gap-3">
+                      {installStep < 3 ? (
+                          <button disabled className="px-6 py-2 bg-slate-800 text-slate-500 font-bold rounded-lg cursor-not-allowed">
+                              Installing...
+                          </button>
+                      ) : (
+                          <button 
+                              onClick={() => setShowInstaller(false)}
+                              className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-lg shadow-emerald-900/20 transition-all flex items-center gap-2"
+                          >
+                              <Play className="w-4 h-4 fill-current" /> Launch Mossy
+                          </button>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Tab Navigation */}
       <div className="flex border-b border-slate-700 bg-forge-panel px-6 pt-4 gap-1">
           <button 
@@ -542,22 +607,21 @@ pause
                               </div>
 
                               <button 
-                                  onClick={downloadLauncher}
-                                  className="p-3 bg-purple-600 hover:bg-purple-500 rounded-lg flex items-center justify-center gap-2 text-sm font-bold text-white transition-colors shadow-lg"
+                                  onClick={startInstaller}
+                                  className="p-3 bg-purple-600 hover:bg-purple-500 rounded-lg flex items-center justify-center gap-2 text-sm font-bold text-white transition-colors shadow-lg shadow-purple-900/20"
                               >
-                                  <Command className="w-4 h-4" /> Download Portable Launcher
+                                  <HardDriveDownload className="w-4 h-4" /> Launch Connection Wizard
                               </button>
 
                               <button 
                                   onClick={downloadManual}
                                   className="p-3 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center gap-2 text-sm font-bold text-white transition-colors"
                               >
-                                  <FileText className="w-4 h-4" /> Download Tester Manual
+                                  <FileText className="w-4 h-4" /> Download Manual
                               </button>
                           </div>
                           <p className="text-[10px] text-slate-500 mt-4 italic text-center">
-                              Distribute the <strong>Launcher</strong> and <strong>Manual</strong> to your testers. 
-                              The launcher will automatically connect them to this instance securely.
+                              Use the <strong>Connection Wizard</strong> to simulate scanning this machine and establish a persistent bridge connection.
                           </p>
                       </div>
                   )}

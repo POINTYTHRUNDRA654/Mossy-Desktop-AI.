@@ -8,6 +8,7 @@ const Sidebar: React.FC = () => {
   const [moodColor, setMoodColor] = useState('text-emerald-400');
   const [glowColor, setGlowColor] = useState('border-emerald-500/30');
   const [shadowColor, setShadowColor] = useState('shadow-[0_0_15px_rgba(16,185,129,0.2)]');
+  const [coreColor, setCoreColor] = useState('bg-emerald-500');
 
   // Poll for bridge status check
   useEffect(() => {
@@ -16,8 +17,16 @@ const Sidebar: React.FC = () => {
         setBridgeConnected(isConnected);
     };
     checkBridge();
-    const interval = setInterval(checkBridge, 2000); // Check every 2s
-    return () => clearInterval(interval);
+    window.addEventListener('storage', checkBridge);
+    window.addEventListener('mossy-bridge-connected', checkBridge);
+    
+    // Fallback poll
+    const interval = setInterval(checkBridge, 2000); 
+    return () => {
+        clearInterval(interval);
+        window.removeEventListener('storage', checkBridge);
+        window.removeEventListener('mossy-bridge-connected', checkBridge);
+    };
   }, []);
 
   // Context-Aware Mood System
@@ -27,22 +36,27 @@ const Sidebar: React.FC = () => {
           setMoodColor('text-red-400');
           setGlowColor('border-red-500/50');
           setShadowColor('shadow-[0_0_15px_rgba(248,113,113,0.3)]');
+          setCoreColor('bg-red-500');
       } else if (path.includes('reverie') || path.includes('prism') || path.includes('anima')) {
           setMoodColor('text-purple-400');
           setGlowColor('border-purple-500/50');
           setShadowColor('shadow-[0_0_15px_rgba(168,85,247,0.3)]');
+          setCoreColor('bg-purple-500');
       } else if (path.includes('splicer') || path.includes('blueprint') || path.includes('fabric')) {
           setMoodColor('text-blue-400');
           setGlowColor('border-blue-500/50');
           setShadowColor('shadow-[0_0_15px_rgba(96,165,250,0.3)]');
+          setCoreColor('bg-blue-500');
       } else if (path.includes('workshop') || path.includes('assembler')) {
           setMoodColor('text-amber-400');
           setGlowColor('border-amber-500/50');
           setShadowColor('shadow-[0_0_15px_rgba(251,191,36,0.3)]');
+          setCoreColor('bg-amber-500');
       } else {
           setMoodColor('text-emerald-400');
           setGlowColor('border-emerald-500/30');
           setShadowColor('shadow-[0_0_15px_rgba(16,185,129,0.2)]');
+          setCoreColor('bg-emerald-500');
       }
   }, [location]);
 
@@ -84,23 +98,26 @@ const Sidebar: React.FC = () => {
     <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-full relative z-50 transition-colors duration-500">
       {/* Live Header */}
       <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-        <div className="relative w-12 h-12">
-            {/* Holographic Container - Dynamic */}
-            <div className={`absolute inset-0 rounded-full border-2 overflow-hidden bg-black transition-all duration-500 ${glowColor} ${shadowColor}`}>
-                <img 
-                    src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop" 
-                    className="w-full h-full object-cover opacity-80 animate-pulse-slow transition-all duration-500"
-                    style={{ filter: `contrast(1.2) hue-rotate(${moodColor.includes('red') ? '140deg' : moodColor.includes('purple') ? '240deg' : moodColor.includes('blue') ? '180deg' : '20deg'})` }}
-                    alt="Mossy AI"
-                />
+        <div className="relative w-12 h-12 flex-shrink-0">
+            {/* Holographic Living Core */}
+            <div className={`absolute inset-0 rounded-full border-2 bg-black flex items-center justify-center overflow-hidden transition-all duration-500 ${glowColor} ${shadowColor}`}>
+                {/* Core Pulse */}
+                <div className={`w-4 h-4 rounded-full ${coreColor} animate-ping absolute opacity-50`}></div>
+                <div className={`w-3 h-3 rounded-full ${coreColor} relative z-10 shadow-[0_0_10px_currentColor]`}></div>
+                
+                {/* Orbiting Rings */}
+                <div className={`absolute inset-1 rounded-full border border-dashed border-white/20 animate-spin-slow`}></div>
+                <div className={`absolute inset-2 rounded-full border border-white/10 animate-reverse-spin`}></div>
+                
                 {/* Scanline overlay */}
                 <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%] opacity-50 pointer-events-none"></div>
             </div>
-            {/* Online Dot */}
-            <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-slate-900 rounded-full animate-pulse transition-colors duration-500 ${moodColor.replace('text-', 'bg-').replace('-400', '-500')}`}></div>
+            
+            {/* Online Status Dot */}
+            <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-slate-900 rounded-full transition-colors duration-500 z-20 ${bridgeConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></div>
         </div>
         
-        <div>
+        <div className="overflow-hidden">
           <h1 className="text-xl font-bold text-white tracking-tighter leading-none">
             MOSSY<span className={`transition-colors duration-500 ${moodColor}`}>.AI</span>
           </h1>
