@@ -941,6 +941,21 @@ export const ChatInterface: React.FC = () => {
                 <Lock className="w-3 h-3 text-slate-500 ml-2" />
             </div>
 
+            {/* Blender Integration Manual Trigger */}
+            {isBridgeActive && (
+                <button 
+                    onClick={() => executeTool('execute_blender_script', { 
+                        script: "import bpy\n\n# Force Scene Update\nbpy.context.view_layer.update()\nprint('Mossy: Syncing...')", 
+                        description: "Manual Sync (Blender 4.5.5)" 
+                    })}
+                    className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all bg-orange-900/20 border-orange-500/50 text-orange-400 hover:bg-orange-900/40 mr-2"
+                    title="Execute Blender Script"
+                >
+                    <Box className="w-4 h-4" />
+                    <span>Sync</span>
+                </button>
+            )}
+
             {isLiveActive ? (
                 <div className="flex items-center gap-2">
                     <button

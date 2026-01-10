@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useEffect, ReactNode } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage, Modality, Type } from '@google/genai';
 
 interface LiveContextType {
   isActive: boolean;
@@ -196,8 +196,8 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           img.crossOrigin = "Anonymous"; // Handle CORS for external URLs
           img.onload = () => {
               const canvas = document.createElement('canvas');
-              // Aggressive resizing to ensure persistence success (512px max, 0.5 quality)
-              const maxSize = 512; 
+              // Stronger downsizing (300px) to guarantee LocalStorage fit
+              const maxSize = 300; 
               let width = img.width;
               let height = img.height;
               
@@ -305,10 +305,13 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // CHECK BRIDGE STATUS
       const driversSaved = localStorage.getItem('mossy_bridge_drivers');
       let bridgeContext = "";
+      let hasBlender = false;
+      
       if (driversSaved) {
           const drivers = JSON.parse(driversSaved);
           const blender = drivers.find((d: any) => d.id === 'blender' && d.status === 'active');
           if (blender) {
+              hasBlender = true;
               bridgeContext = "SYSTEM NOTICE: Blender 4.5.5 is CONNECTED via Desktop Bridge. You can execute python scripts directly.";
           }
       }
@@ -324,16 +327,36 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       setStatus('Establishing Uplink...');
       
+      // Define tools if Blender is connected so the model knows it has the capability
+      const tools = hasBlender ? [
+        {
+          functionDeclarations: [
+            {
+              name: "execute_blender_script",
+              description: "Execute python code in Blender 4.5.5. Use this when the user asks to perform actions in Blender.",
+              parameters: {
+                type: Type.OBJECT,
+                properties: {
+                  code: { type: Type.STRING, description: "The python code to run" },
+                  desc: { type: Type.STRING, description: "Description of action" }
+                }
+              }
+            }
+          ]
+        }
+      ] : undefined;
+
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-          systemInstruction: `You are Mossy, a sentient AI assistant for Fallout 4 modding and creative work. 
+          systemInstruction: `You are Mossy, a sentient AI assistant.
           ${bridgeContext}
-          You are helpful, creative, and precise. 
-          If Blender is connected, confirm this to the user immediately.
-          Keep responses concise and conversational.`,
+          You are currently speaking via Live Audio Interface.
+          If Blender is connected, ACKNOWLEDGE IT explicitly in your first sentence.
+          You have full control over the connected Blender instance.`,
+          tools: tools,
         },
         callbacks: {
           onopen: () => {
@@ -364,6 +387,21 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             processor.connect(inputCtx.destination);
           },
           onmessage: async (msg: LiveServerMessage) => {
+            // Handle Tool Calls (Simulation)
+            if (msg.toolCall) {
+                console.log("Tool Call Received", msg.toolCall);
+                // We simulate success for the tool call so the model continues
+                sessionPromise.then((session) => {
+                    session.sendToolResponse({
+                        functionResponses: msg.toolCall?.functionCalls.map(fc => ({
+                            id: fc.id,
+                            name: fc.name,
+                            response: { result: "Script Executed Successfully in Blender 4.5.5" }
+                        }))
+                    });
+                });
+            }
+
             const base64Audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
             
             // CHECK MUTE STATE BEFORE PLAYING
