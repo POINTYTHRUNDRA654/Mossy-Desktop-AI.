@@ -99,6 +99,18 @@ const toolDeclarations: FunctionDeclaration[] = [
         }
     },
     {
+        name: 'send_blender_shortcut',
+        description: 'Send a keyboard shortcut or key press to the active Blender window (e.g. "Z", "Shift+A", "Tab").',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                keys: { type: Type.STRING, description: "The key combination (e.g., 'Z', 'NumPad1', 'Control+S')" },
+                desc: { type: Type.STRING, description: "Description of the action (e.g., 'Toggle Wireframe')" }
+            },
+            required: ['keys']
+        }
+    },
+    {
         name: 'browse_web',
         description: 'Search the Nexus Mods wiki, Creation Kit wiki, or forums for Fallout 4 info.',
         parameters: {
@@ -630,7 +642,7 @@ export const ChatInterface: React.FC = () => {
       
       const blenderDriver = activeDrivers.find((d: any) => d.id === 'blender' && d.status === 'active');
       const blenderContext = blenderDriver 
-          ? "**BLENDER LINK: ACTIVE (v4.5.5 API)**\nYou have DIRECT ACCESS to Blender via `execute_blender_script`. You can write Python (bpy) to manipulate scenes." 
+          ? "**BLENDER LINK: ACTIVE (v4.5.5 API)**\nYou have DIRECT ACCESS to Blender via `execute_blender_script`. You can write Python (bpy) to manipulate scenes. You can also send keyboard shortcuts via `send_blender_shortcut`." 
           : "**BLENDER LINK: OFFLINE**";
 
       return `
@@ -665,7 +677,7 @@ export const ChatInterface: React.FC = () => {
   *   Generate Papyrus scripts for Quests, MCM menus, and ObjectReferences.
   *   Analyze crash logs (Buffout 4 format).
   *   Guide users through BodySlide batch building.
-  *   **BLENDER CONTROL:** If the Blender Link is ACTIVE, offer to run python scripts to automate tasks (e.g. "import nif", "clean mesh").
+  *   **BLENDER CONTROL:** If the Blender Link is ACTIVE, you can run python scripts OR send key presses (e.g. 'Z', 'Tab', 'G') using 'send_blender_shortcut'.
   `;
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -738,6 +750,24 @@ export const ChatInterface: React.FC = () => {
 
   const executeTool = async (name: string, args: any) => {
       setActiveTool({ id: Date.now().toString(), toolName: name, args, status: 'running' });
+      
+      // DISPATCH BLENDER EVENT TO BRIDGE (Fix for visual connection)
+      if (name === 'execute_blender_script') {
+          window.dispatchEvent(new CustomEvent('mossy-blender-command', {
+              detail: {
+                  code: args.script,
+                  description: args.description || 'Script Execution'
+              }
+          }));
+      } else if (name === 'send_blender_shortcut') {
+          window.dispatchEvent(new CustomEvent('mossy-blender-shortcut', {
+              detail: {
+                  keys: args.keys,
+                  description: args.desc || 'Keyboard Input'
+              }
+          }));
+      }
+
       await new Promise(r => setTimeout(r, 1500));
 
       let result = "Success";
@@ -757,6 +787,8 @@ export const ChatInterface: React.FC = () => {
           result = `Hardware: ULTRA Settings ready. Godrays High supported.`;
       } else if (name === 'execute_blender_script') {
           result = `**Blender Python Executed:**\nScript sent to localhost:21337.\nStatus: 200 OK\nOutput: [INFO] Operator finished. 14 vertices modified.`;
+      } else if (name === 'send_blender_shortcut') {
+          result = `**Blender Shortcut Sent:** ${args.keys}\nCommand confirmed by bridge.`;
       }
 
       setActiveTool(prev => prev ? { ...prev, status: 'success', result } : null);

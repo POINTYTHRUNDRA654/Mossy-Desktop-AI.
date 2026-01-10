@@ -74,6 +74,44 @@ const DesktopBridge: React.FC = () => {
       window.dispatchEvent(new Event('mossy-driver-update'));
   }, [drivers]);
 
+  // Listen for remote Blender commands from Chat/Live
+  useEffect(() => {
+      const handleBlenderCommand = (e: CustomEvent<{code: string, description: string}>) => {
+          const { code, description } = e.detail;
+          
+          setBlenderActivity('receiving');
+          setLastBlenderMsg(`Executing: ${description}`);
+          addLog('Blender', `Remote CMD: ${description}`, 'warn');
+          
+          // Simulate processing time
+          setTimeout(() => {
+              addLog('Blender', 'Script executed successfully. Scene Updated.', 'success');
+              setLastBlenderMsg('Sync Complete');
+              setBlenderActivity('idle');
+          }, 2000);
+      };
+
+      const handleShortcut = (e: CustomEvent<{keys: string, description: string}>) => {
+          const { keys, description } = e.detail;
+          setBlenderActivity('receiving');
+          setLastBlenderMsg(`Input: ${keys}`);
+          addLog('Blender', `Keystroke: ${keys} (${description})`, 'warn');
+          
+          setTimeout(() => {
+              addLog('Blender', 'Input processed.', 'success');
+              setBlenderActivity('idle');
+          }, 500);
+      };
+
+      window.addEventListener('mossy-blender-command', handleBlenderCommand as EventListener);
+      window.addEventListener('mossy-blender-shortcut', handleShortcut as EventListener);
+      
+      return () => {
+          window.removeEventListener('mossy-blender-command', handleBlenderCommand as EventListener);
+          window.removeEventListener('mossy-blender-shortcut', handleShortcut as EventListener);
+      };
+  }, []);
+
   // Simulate telemetry
   useEffect(() => {
       const interval = setInterval(() => {

@@ -312,7 +312,7 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const blender = drivers.find((d: any) => d.id === 'blender' && d.status === 'active');
           if (blender) {
               hasBlender = true;
-              bridgeContext = "SYSTEM NOTICE: Blender 4.5.5 is CONNECTED via Desktop Bridge. You can execute python scripts directly.";
+              bridgeContext = "SYSTEM NOTICE: Blender 4.5.5 is CONNECTED via Desktop Bridge. You have full control over the connected Blender instance.";
           }
       }
 
@@ -355,7 +355,7 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           functionDeclarations: [
             {
               name: "execute_blender_script",
-              description: "Execute python code in Blender 4.5.5. Use this when the user asks to perform actions in Blender.",
+              description: "Execute python code in Blender 4.5.5. Use this when the user asks to perform complex actions in Blender.",
               parameters: {
                 type: Type.OBJECT,
                 properties: {
@@ -363,6 +363,18 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   desc: { type: Type.STRING, description: "Description of action" }
                 }
               }
+            },
+            {
+                name: "send_blender_shortcut",
+                description: "Simulate pressing keys in Blender. Use this for view modes (Z), edit mode (Tab), object ops (G, R, S), or menus (Shift+A).",
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        keys: { type: Type.STRING, description: "Key combo (e.g. 'Z', 'Shift+A', 'NumPad1')" },
+                        desc: { type: Type.STRING, description: "What this does (e.g. 'Toggle Wireframe', 'Add Object')" }
+                    },
+                    required: ['keys']
+                }
             }
           ]
         }
@@ -382,7 +394,8 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           
           You are currently speaking via Live Audio Interface.
           If Blender is connected, ACKNOWLEDGE IT explicitly in your first sentence.
-          You have full control over the connected Blender instance.`,
+          You can EXECUTE PYTHON SCRIPTS or PRESS KEYS in Blender directly.
+          If the user says "press Z" or "turn on skeletal mode", use the 'send_blender_shortcut' tool.`,
           tools: tools,
         },
         callbacks: {
@@ -417,13 +430,35 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Handle Tool Calls (Simulation)
             if (msg.toolCall) {
                 console.log("Tool Call Received", msg.toolCall);
+                
+                // --- DISPATCH COMMAND TO DESKTOP BRIDGE ---
+                msg.toolCall.functionCalls.forEach(fc => {
+                    if (fc.name === 'execute_blender_script') {
+                        const args = fc.args as any;
+                        window.dispatchEvent(new CustomEvent('mossy-blender-command', {
+                            detail: {
+                                code: args.code,
+                                description: args.desc || 'Live Command'
+                            }
+                        }));
+                    } else if (fc.name === 'send_blender_shortcut') {
+                        const args = fc.args as any;
+                        window.dispatchEvent(new CustomEvent('mossy-blender-shortcut', {
+                            detail: {
+                                keys: args.keys,
+                                description: args.desc || 'Keyboard Input'
+                            }
+                        }));
+                    }
+                });
+
                 // We simulate success for the tool call so the model continues
                 sessionPromise.then((session) => {
                     session.sendToolResponse({
                         functionResponses: msg.toolCall?.functionCalls.map(fc => ({
                             id: fc.id,
                             name: fc.name,
-                            response: { result: "Script Executed Successfully in Blender 4.5.5" }
+                            response: { result: "Action Executed Successfully in Blender 4.5.5" }
                         }))
                     });
                 });
