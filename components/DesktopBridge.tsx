@@ -22,7 +22,7 @@ interface LogEntry {
 const initialDrivers: Driver[] = [
     { id: 'os_shell', name: 'Windows Shell', icon: Terminal, status: 'inactive', version: '10.0.19045', latency: 0, permissions: ['fs.read', 'fs.write', 'exec'] },
     { id: 'fs_watcher', name: 'File System Watcher', icon: Eye, status: 'inactive', version: '2.1.0', latency: 0, permissions: ['fs.watch', 'read.recursive'] },
-    { id: 'blender', name: 'Blender Link (4.0)', icon: Box, status: 'inactive', version: '2.4.1', latency: 0, permissions: ['mesh.read', 'mesh.write', 'texture.sync'] },
+    { id: 'blender', name: 'Blender Link (4.5)', icon: Box, status: 'inactive', version: '4.5.5', latency: 0, permissions: ['mesh.read', 'mesh.write', 'texture.sync'] },
     { id: 'xedit', name: 'xEdit Data Link', icon: Database, status: 'inactive', version: '4.0.4', latency: 0, permissions: ['plugin.read', 'record.edit'] },
     { id: 'ck', name: 'Creation Kit Telemetry', icon: Wrench, status: 'inactive', version: '1.10', latency: 0, permissions: ['cell.view'] },
     { id: 'vscode', name: 'VS Code Host', icon: Code, status: 'inactive', version: '1.85.1', latency: 0, permissions: ['editor.action', 'workspace'] },
@@ -37,6 +37,10 @@ const DesktopBridge: React.FC = () => {
               // Merge saved status with initial icons/definitions
               return initialDrivers.map(d => {
                   const s = parsed.find((p: any) => p.id === d.id);
+                  // Force persistence for Blender
+                  if (d.id === 'blender' && s && s.status === 'active') {
+                      return { ...d, status: 'active', latency: 12 };
+                  }
                   return s ? { ...d, status: s.status } : d;
               });
           }
@@ -66,7 +70,10 @@ const DesktopBridge: React.FC = () => {
       // Update global bridge flag if any driver active
       const anyActive = drivers.some(d => d.status === 'active');
       localStorage.setItem('mossy_bridge_active', anyActive.toString());
+      
+      // Dispatch events for other components
       window.dispatchEvent(new Event('mossy-bridge-connected'));
+      window.dispatchEvent(new Event('mossy-driver-update'));
   }, [drivers]);
 
   // Simulate telemetry
@@ -142,7 +149,7 @@ const DesktopBridge: React.FC = () => {
       setTimeout(() => {
           setBlenderActivity('receiving');
           setLastBlenderMsg('Pong received. Latency: 12ms');
-          addLog('Blender', 'Echo reply valid. Version 4.0.2', 'success');
+          addLog('Blender', 'Echo reply valid. Version 4.5.5', 'success');
           
           setTimeout(() => {
               setBlenderActivity('idle');
@@ -347,7 +354,7 @@ const DesktopBridge: React.FC = () => {
                                     <div className={`w-24 h-1 bg-orange-500 rounded-full animate-slide-ping ${blenderActivity === 'receiving' ? 'animate-reverse' : ''}`}></div>
                                 </div>
                             )}
-                            <div className="text-[10px] text-slate-500 font-bold uppercase">Blender 4.0</div>
+                            <div className="text-[10px] text-slate-500 font-bold uppercase">Blender 4.5.5</div>
                         </div>
                     </div>
                 )}

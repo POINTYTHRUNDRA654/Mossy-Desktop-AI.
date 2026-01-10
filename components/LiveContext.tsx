@@ -48,36 +48,46 @@ const openDB = (): Promise<IDBDatabase> => {
 };
 
 const saveImageToDB = async (key: string, base64: string) => {
-    const db = await openDB();
-    return new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        store.put(base64, key);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
+    try {
+        const db = await openDB();
+        return new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.put(base64, key);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (e) {
+        console.warn("DB Save failed", e);
+    }
 };
 
 const getImageFromDB = async (key: string): Promise<string | null> => {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const request = store.get(key);
-        request.onsuccess = () => resolve(request.result || null);
-        request.onerror = () => reject(request.error);
-    });
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.get(key);
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        return null;
+    }
 };
 
 const deleteImageFromDB = async (key: string) => {
-    const db = await openDB();
-    return new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        store.delete(key);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
+    try {
+        const db = await openDB();
+        return new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.delete(key);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (e) { console.warn("DB Delete failed"); }
 };
 
 // --- Audio Helpers ---
@@ -124,15 +134,30 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Avatar State (Global)
   const [customAvatar, setCustomAvatar] = useState<string | null>(null);
 
-  // Load Avatar on Mount from IndexedDB
+  // Load Avatar on Mount - Dual Strategy with Priority
   useEffect(() => {
       const loadAvatar = async () => {
+          // 1. Try LocalStorage (Fastest)
           try {
-              const saved = await getImageFromDB('mossy_avatar_custom');
-              if (saved) setCustomAvatar(saved);
-          } catch (e) {
-              console.error("Failed to load avatar from DB", e);
-          }
+              const localSaved = localStorage.getItem('mossy_avatar_custom');
+              if (localSaved) {
+                  setCustomAvatar(localSaved);
+                  // Background check DB to ensure sync
+                  const dbSaved = await getImageFromDB('mossy_avatar_custom');
+                  if (!dbSaved) await saveImageToDB('mossy_avatar_custom', localSaved);
+                  return; 
+              }
+          } catch (e) {}
+
+          // 2. Try IndexedDB (Fallback)
+          try {
+              const dbSaved = await getImageFromDB('mossy_avatar_custom');
+              if (dbSaved) {
+                  setCustomAvatar(dbSaved);
+                  // Restore to local if missing
+                  try { localStorage.setItem('mossy_avatar_custom', dbSaved); } catch (e) {}
+              }
+          } catch (e) {}
       };
       loadAvatar();
   }, []);
@@ -171,7 +196,7 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           img.crossOrigin = "Anonymous"; // Handle CORS for external URLs
           img.onload = () => {
               const canvas = document.createElement('canvas');
-              // Aggressive resizing to 512px max for balance of quality/performance
+              // Aggressive resizing to ensure persistence success (512px max, 0.5 quality)
               const maxSize = 512; 
               let width = img.width;
               let height = img.height;
@@ -192,8 +217,8 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               canvas.height = height;
               const ctx = canvas.getContext('2d');
               ctx?.drawImage(img, 0, 0, width, height);
-              // Compress to JPEG 70% quality
-              resolve(canvas.toDataURL('image/jpeg', 0.7));
+              // Compression: 0.5 Quality JPEG
+              resolve(canvas.toDataURL('image/jpeg', 0.5));
           };
           img.onerror = (e) => reject(new Error("Failed to load image"));
 
@@ -213,7 +238,15 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
           const compressed = await processImageToAvatar(file);
           setCustomAvatar(compressed);
+          
+          // Dual Save Strategy - Try Local first, then DB
+          try {
+              localStorage.setItem('mossy_avatar_custom', compressed);
+          } catch (e) {
+              console.warn("LocalStorage full, relying on DB.");
+          }
           await saveImageToDB('mossy_avatar_custom', compressed);
+          
       } catch (err) {
           console.error("Failed to process avatar:", err);
           alert("Failed to save image. Please try a different file.");
@@ -224,6 +257,9 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
           const compressed = await processImageToAvatar(url);
           setCustomAvatar(compressed);
+          try {
+              localStorage.setItem('mossy_avatar_custom', compressed);
+          } catch (e) {}
           await saveImageToDB('mossy_avatar_custom', compressed);
       } catch (err) {
           console.error("Failed to process avatar url:", err);
@@ -233,6 +269,7 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const clearAvatar = async () => {
       setCustomAvatar(null);
+      localStorage.removeItem('mossy_avatar_custom');
       await deleteImageFromDB('mossy_avatar_custom');
   };
 
@@ -265,6 +302,17 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setStatus('Initializing Neural Interface...');
       setMode('processing');
       
+      // CHECK BRIDGE STATUS
+      const driversSaved = localStorage.getItem('mossy_bridge_drivers');
+      let bridgeContext = "";
+      if (driversSaved) {
+          const drivers = JSON.parse(driversSaved);
+          const blender = drivers.find((d: any) => d.id === 'blender' && d.status === 'active');
+          if (blender) {
+              bridgeContext = "SYSTEM NOTICE: Blender 4.5.5 is CONNECTED via Desktop Bridge. You can execute python scripts directly.";
+          }
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
@@ -281,7 +329,11 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-          systemInstruction: "You are Mossy, a sentient AI assistant for Fallout 4 modding and creative work. You are helpful, creative, and precise. Keep responses concise and conversational. You are currently running on the user's desktop.",
+          systemInstruction: `You are Mossy, a sentient AI assistant for Fallout 4 modding and creative work. 
+          ${bridgeContext}
+          You are helpful, creative, and precise. 
+          If Blender is connected, confirm this to the user immediately.
+          Keep responses concise and conversational.`,
         },
         callbacks: {
           onopen: () => {

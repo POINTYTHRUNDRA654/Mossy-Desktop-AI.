@@ -18,12 +18,12 @@ const TheLens: React.FC = () => {
     const [currentImage, setCurrentImage] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-    const [selectedApp, setSelectedApp] = useState('Blender 4.0');
+    const [selectedApp, setSelectedApp] = useState('Blender 4.5.5');
     const [isVatsMode, setIsVatsMode] = useState(false);
 
     // Simulate Screen Capture options
     const captureOptions = [
-        { id: 'blender', label: 'Blender 4.0', img: 'https://placehold.co/1920x1080/1e1e1e/38bdf8?text=Blender+Shader+Graph:+Normal+Map+Disconnected' },
+        { id: 'blender', label: 'Blender 4.5.5', img: 'https://placehold.co/1920x1080/1e1e1e/38bdf8?text=Blender+Shader+Graph:+Normal+Map+Disconnected' },
         { id: 'vscode', label: 'VS Code', img: 'https://placehold.co/1920x1080/0d1117/e11d48?text=Python+Script:+Syntax+Error+Line+42' },
         { id: 'ck', label: 'Creation Kit', img: 'https://placehold.co/1920x1080/cbd5e1/475569?text=Creation+Kit:+Quest+Stage+Missing+Index' },
     ];
@@ -47,7 +47,7 @@ const TheLens: React.FC = () => {
 
                 if (selectedApp.includes('Blender')) {
                     mockResult = {
-                        summary: "I see the Blender Shader Editor. The 'Image Texture' node labeled 'Normal Map' is loaded but not connected to the BSDF.",
+                        summary: "I see the Blender 4.5.5 Shader Editor. The 'Image Texture' node labeled 'Normal Map' is loaded but not connected to the BSDF.",
                         pointsOfInterest: [
                             { x: 35, y: 45, label: "Disconnected Output", type: 'error', pct: 95 },
                             { x: 60, y: 50, label: "Connect to 'Normal' Input", type: 'action', pct: 82 }

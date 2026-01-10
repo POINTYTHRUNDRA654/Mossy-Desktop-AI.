@@ -21,7 +21,7 @@ interface SystemProfile {
     os: 'Windows' | 'Linux' | 'MacOS';
     gpu: string;
     ram: number; // GB
-    blenderVersion: '2.79b' | '3.x' | '4.x' | 'None';
+    blenderVersion: string;
     vram: number; // GB
     isLegacy: boolean;
 }
@@ -239,7 +239,7 @@ const SystemMonitor: React.FC = () => {
                 os: 'Windows',
                 gpu: isLegacy ? 'NVIDIA GTX 1060 6GB' : 'NVIDIA RTX 4090 24GB',
                 ram: isLegacy ? 16 : 64,
-                blenderVersion: isLegacy ? '2.79b' : '4.x',
+                blenderVersion: isLegacy ? '2.79b' : '4.5.5',
                 vram: isLegacy ? 6 : 24,
                 isLegacy: isLegacy
             };
@@ -319,7 +319,7 @@ const SystemMonitor: React.FC = () => {
       const scanSequence = [
           { path: 'C:/Windows/System32/nvidia-smi.exe', found: true, name: 'NVIDIA Drivers', cat: 'System' },
           { path: 'C:/Program Files/Blender Foundation/Blender 2.79/blender.exe', found: Math.random() > 0.5, name: 'Blender 2.79b', cat: 'Creative' },
-          { path: 'C:/Program Files/Blender Foundation/Blender 4.0/blender.exe', found: true, name: 'Blender 4.0', cat: 'Creative' },
+          { path: 'C:/Program Files/Blender Foundation/Blender 4.5/blender.exe', found: true, name: 'Blender 4.5.5', cat: 'Creative' },
           { path: 'tcp://localhost:11434', found: true, name: 'Ollama (Active Service)', cat: 'AI' },
       ];
 
@@ -735,7 +735,7 @@ const SystemMonitor: React.FC = () => {
                           <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 relative overflow-hidden">
                               <div className="absolute top-0 right-0 p-3 opacity-10"><Box className="w-16 h-16 text-orange-400" /></div>
                               <div className="text-xs text-slate-500 uppercase font-bold mb-2">3D Software</div>
-                              <div className="text-lg font-bold text-white">Blender {profile.blenderVersion}</div>
+                              <div className="text-lg font-bold text-white">{profile.blenderVersion}</div>
                               {profile.blenderVersion === '2.79b' && (
                                   <div className="mt-2 inline-flex items-center gap-1 text-[10px] bg-orange-900/30 text-orange-400 px-2 py-1 rounded border border-orange-500/30">
                                       <AlertTriangle className="w-3 h-3" /> Legacy Modding Mode
