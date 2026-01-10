@@ -242,7 +242,7 @@ const ProjectWizard: React.FC<{ onSubmit: (data: any) => void, onCancel: () => v
                 </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+            <div className="flex-end gap-3 pt-4 border-t border-slate-800 flex justify-end">
                 <button 
                     onClick={onCancel}
                     className="px-4 py-2 text-slate-400 hover:text-white text-sm font-bold transition-colors"
@@ -883,7 +883,7 @@ export const ChatInterface: React.FC = () => {
       
       let streamResult;
       let retryCount = 0;
-      const maxRetries = 3;
+      const maxRetries = 4;
 
       // Primary Attempt Loop with Fallback Logic
       while (true) {
@@ -892,12 +892,14 @@ export const ChatInterface: React.FC = () => {
               break;
           } catch (e: any) {
               const msg = e.message || '';
-              if ((msg.includes('503') || msg.toLowerCase().includes('unavailable') || msg.toLowerCase().includes('deadline')) && retryCount < maxRetries) {
+              const isUnavailable = msg.includes('503') || msg.toLowerCase().includes('unavailable') || msg.toLowerCase().includes('overloaded');
+              
+              if (isUnavailable && retryCount < maxRetries) {
                   retryCount++;
                   console.warn(`Service issue/timeout, retrying (attempt ${retryCount}/${maxRetries})...`);
                   await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
                   continue;
-              } else if (msg.includes('503') && retryCount >= maxRetries) {
+              } else if (isUnavailable && retryCount >= maxRetries) {
                   // Fallback to Flash model if Pro fails repeatedly
                   console.warn("Falling back to Flash model due to persistent 503s on Pro.");
                   const fallbackChat = ai.chats.create({
@@ -908,8 +910,13 @@ export const ChatInterface: React.FC = () => {
                       },
                       history: history
                   });
-                  streamResult = await fallbackChat.sendMessageStream({ message: contents[0].parts });
-                  break;
+                  
+                  try {
+                      streamResult = await fallbackChat.sendMessageStream({ message: contents[0].parts });
+                      break;
+                  } catch (fallbackError: any) {
+                      throw new Error("The service is currently unavailable. Both primary and backup models failed to respond.");
+                  }
               }
               throw e;
           }
