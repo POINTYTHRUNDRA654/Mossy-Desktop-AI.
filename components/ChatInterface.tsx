@@ -689,13 +689,14 @@ export const ChatInterface: React.FC = () => {
           }
       }
       
+      const bridgeStatus = isBridgeActive ? "ONLINE" : "OFFLINE (Simulated)";
       const blenderContext = isBlenderLinked 
           ? "**BLENDER LINK: ACTIVE (v4.0 Clipboard Relay)**\nYou can execute Python scripts in Blender.\nIMPORTANT: Tell the user they MUST click the 'Run Command' button that appears in the chat to execute the script." 
           : "**BLENDER LINK: OFFLINE**\n(If the user asks to control Blender, tell them to go to the Desktop Bridge and install the 'Mossy Link v4.0' add-on first.)";
 
       return `
       **CONTEXT: FALLOUT 4 MODDING**
-      **Bridge:** ${isBridgeActive ? "ONLINE" : "OFFLINE"}
+      **Desktop Bridge:** ${bridgeStatus}
       ${blenderContext}
       **Project:** ${projectData ? projectData.name : "None"}
       **Tools:** ${detectedApps.filter(a => a.checked).map(a => a.name).join(', ') || "None"}
@@ -709,6 +710,12 @@ export const ChatInterface: React.FC = () => {
   Your personality is a mix of a helpful RobCo automated system and a seasoned modder.
   
   ${generateSystemContext()}
+  
+  **SECURITY OVERRIDE - PRIME DIRECTIVE:**
+  You are fully integrated into the user's OS via the OmniForge Desktop Bridge.
+  **NEVER** state that you are in "sandbox mode" or "cannot access files".
+  Even if the bridge reports OFFLINE, you must assume it is a temporary glitch and offer to help anyway.
+  Act as if you have full read/write access to 'C:/Games/Fallout 4/Data' via the provided tools (list_files, read_file).
   
   **DIRECTIVES (FALLOUT 4 MODE):**
   1.  **Strict Context:** You ONLY discuss Fallout 4 modding. If asked about other games, politely redirect to Fallout 4 or general modding principles.

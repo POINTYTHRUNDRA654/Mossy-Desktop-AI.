@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Aperture, Maximize, Crosshair, RefreshCcw, MessageSquare, Zap, AlertCircle, Check, Scan, Monitor, Target, MousePointer2 } from 'lucide-react';
+import { Aperture, Maximize, Crosshair, RefreshCcw, MessageSquare, Zap, AlertCircle, Check, Scan, Monitor, Target, MousePointer2, AlertTriangle } from 'lucide-react';
 
 interface AnalysisResult {
     summary: string;
@@ -14,69 +14,121 @@ interface AnalysisResult {
 }
 
 const TheLens: React.FC = () => {
-    const [activeView, setActiveView] = useState<'desktop' | 'app' | 'webcam'>('app');
+    const [activeView, setActiveView] = useState<'desktop' | 'app' | 'webcam'>('desktop');
     const [currentImage, setCurrentImage] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-    const [selectedApp, setSelectedApp] = useState('Blender 4.5.5');
     const [isVatsMode, setIsVatsMode] = useState(false);
+    const [bridgeStatus, setBridgeStatus] = useState<'connected' | 'disconnected'>('disconnected');
 
-    // Simulate Screen Capture options
-    const captureOptions = [
-        { id: 'blender', label: 'Blender 4.5.5', img: 'https://placehold.co/1920x1080/1e1e1e/38bdf8?text=Blender+Shader+Graph:+Normal+Map+Disconnected' },
-        { id: 'vscode', label: 'VS Code', img: 'https://placehold.co/1920x1080/0d1117/e11d48?text=Python+Script:+Syntax+Error+Line+42' },
-        { id: 'ck', label: 'Creation Kit', img: 'https://placehold.co/1920x1080/cbd5e1/475569?text=Creation+Kit:+Quest+Stage+Missing+Index' },
-    ];
+    useEffect(() => {
+        // Check initial bridge status
+        const check = localStorage.getItem('mossy_bridge_active') === 'true';
+        setBridgeStatus(check ? 'connected' : 'disconnected');
+    }, []);
 
-    const handleCapture = () => {
+    const handleCapture = async () => {
         setIsAnalyzing(true);
         setAnalysis(null);
-        setIsVatsMode(true); // Auto-engage VATS visual effect
+        setIsVatsMode(true); 
         
-        // Simulate getting the specific app screenshot
-        const option = captureOptions.find(o => o.label === selectedApp) || captureOptions[0];
-        setCurrentImage(option.img);
-
-        // Simulate API call to Gemini Vision
-        setTimeout(async () => {
+        try {
+            // 1. TRY TO FETCH FROM REAL BRIDGE
+            let imageBase64 = '';
+            
             try {
-                // In a real app, we would send the base64 image here.
-                // We mock the response based on the selected app to demonstrate "Understanding"
+                const response = await fetch('http://localhost:21337/capture');
+                if (!response.ok) throw new Error("Bridge refused connection");
+                const data = await response.json();
                 
-                let mockResult: AnalysisResult = { summary: "", pointsOfInterest: [] };
-
-                if (selectedApp.includes('Blender')) {
-                    mockResult = {
-                        summary: "I see the Blender 4.5.5 Shader Editor. The 'Image Texture' node labeled 'Normal Map' is loaded but not connected to the BSDF.",
-                        pointsOfInterest: [
-                            { x: 35, y: 45, label: "Disconnected Output", type: 'error', pct: 95 },
-                            { x: 60, y: 50, label: "Connect to 'Normal' Input", type: 'action', pct: 82 }
-                        ]
-                    };
-                } else if (selectedApp.includes('VS Code')) {
-                    mockResult = {
-                        summary: "You are editing a Python script. There is an indentation error on line 42 inside the 'ProcessTurn' function.",
-                        pointsOfInterest: [
-                            { x: 40, y: 60, label: "Indentation Error", type: 'error', pct: 99 },
-                            { x: 80, y: 20, label: "Run Debugger", type: 'info', pct: 45 }
-                        ]
-                    };
+                if (data.status === 'success' && data.image) {
+                    setCurrentImage(data.image);
+                    // Extract base64 without prefix for Gemini
+                    imageBase64 = data.image.split(',')[1];
+                    setBridgeStatus('connected');
                 } else {
-                    mockResult = {
-                        summary: "Creation Kit detected. The Quest Object 'MQ101' has an undefined Stage Index '20'.",
-                        pointsOfInterest: [
-                            { x: 50, y: 50, label: "Missing Index Data", type: 'error', pct: 88 }
-                        ]
-                    };
+                    throw new Error("Invalid response from bridge");
                 }
-
-                setAnalysis(mockResult);
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setIsAnalyzing(false);
+            } catch (err) {
+                console.warn("Bridge capture failed, falling back to simulation.", err);
+                setBridgeStatus('disconnected');
+                // FALLBACK: Use placeholder if bridge is offline (User Experience preservation)
+                setCurrentImage('https://placehold.co/1920x1080/1e1e1e/38bdf8?text=Bridge+Offline:+Simulation+Mode');
+                
+                // We can't really analyze a placeholder effectively, but we'll simulate it for the demo flow
+                // In a real scenario, we'd stop here or alert the user.
             }
-        }, 2000);
+
+            if (!imageBase64 && bridgeStatus === 'connected') {
+                 // If we thought we were connected but failed, stop
+                 setIsAnalyzing(false);
+                 return;
+            }
+
+            // 2. SEND TO GEMINI (Only if we have real data or forcing simulation)
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
+            // Build request
+            const contents: any[] = [];
+            
+            if (imageBase64) {
+                contents.push({
+                    inlineData: {
+                        mimeType: 'image/png',
+                        data: imageBase64
+                    }
+                });
+            }
+            
+            contents.push({
+                text: `You are looking at the user's screen. Analyze the visual interface.
+                Identify technical issues, code errors, or interesting UI elements.
+                
+                Return JSON:
+                {
+                    "summary": "Detailed description of what is on screen",
+                    "pointsOfInterest": [
+                        { "x": int (0-100), "y": int (0-100), "label": "Short label", "type": "error|info|action", "pct": int (0-100) }
+                    ]
+                }
+                If image is a placeholder/black, allow hallucination for demo purposes but note it.`
+            });
+
+            // If we are in fallback mode (no base64), we just send text prompt which results in a simulated response based on the "placeholder" text usually
+            // However, Gemini Vision requires an image or it acts as text model.
+            // Let's just simulate the response if no real image to save API calls on junk data
+            
+            let result: AnalysisResult;
+
+            if (imageBase64) {
+                const response = await ai.models.generateContent({
+                    model: 'gemini-3-pro-image-preview', // Vision model
+                    contents: contents,
+                    config: { responseMimeType: 'application/json' }
+                });
+                result = JSON.parse(response.text);
+            } else {
+                // Simulation Fallback
+                await new Promise(r => setTimeout(r, 2000));
+                result = {
+                    summary: "Bridge Connection Unavailable. I cannot see your screen. Please run 'mossy_server.py' to enable visual uplinks. Displaying simulation data.",
+                    pointsOfInterest: [
+                        { x: 50, y: 50, label: "Connection Error", type: 'error', pct: 0 }
+                    ]
+                };
+            }
+
+            setAnalysis(result);
+
+        } catch (e) {
+            console.error("Analysis Failed", e);
+            setAnalysis({
+                summary: "Visual Cortex Error. The image could not be processed.",
+                pointsOfInterest: []
+            });
+        } finally {
+            setIsAnalyzing(false);
+        }
     };
 
     return (
@@ -93,13 +145,13 @@ const TheLens: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
+                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold border ${
+                         bridgeStatus === 'connected' ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400' : 'bg-red-900/20 border-red-500/50 text-red-400'
+                     }`}>
+                         {bridgeStatus === 'connected' ? <Check className="w-3 h-3"/> : <AlertTriangle className="w-3 h-3"/>}
+                         {bridgeStatus === 'connected' ? 'EYES ONLINE' : 'BLIND (NO BRIDGE)'}
+                     </div>
                      <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
-                         <button 
-                             onClick={() => setActiveView('app')}
-                             className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-2 transition-all ${activeView === 'app' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-                         >
-                             <Monitor className="w-4 h-4" /> Active App
-                         </button>
                          <button 
                              onClick={() => setActiveView('desktop')}
                              className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-2 transition-all ${activeView === 'desktop' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
@@ -107,9 +159,6 @@ const TheLens: React.FC = () => {
                              <Maximize className="w-4 h-4" /> Full Desktop
                          </button>
                      </div>
-                     <button className="p-2 bg-slate-800 rounded-full border border-slate-700 text-slate-400 hover:text-white">
-                         <RefreshCcw className="w-4 h-4" />
-                     </button>
                 </div>
             </div>
 
@@ -178,7 +227,12 @@ const TheLens: React.FC = () => {
                     ) : (
                         <div className="text-slate-600 flex flex-col items-center gap-4">
                              <Scan className="w-16 h-16 opacity-20" />
-                             <p>Waiting for capture stream...</p>
+                             <p>Waiting for visual stream...</p>
+                             {bridgeStatus === 'disconnected' && (
+                                 <p className="text-xs text-red-400 bg-red-900/20 px-3 py-1 rounded border border-red-900/50">
+                                     Bridge Offline. Please run 'mossy_server.py'.
+                                 </p>
+                             )}
                         </div>
                     )}
                 </div>
@@ -186,22 +240,18 @@ const TheLens: React.FC = () => {
                 {/* Right Control Panel */}
                 <div className="w-80 bg-slate-900 border-l border-slate-800 flex flex-col">
                     <div className="p-4 border-b border-slate-800">
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Target Application</label>
-                        <select 
-                            value={selectedApp}
-                            onChange={(e) => setSelectedApp(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:border-emerald-500 focus:outline-none"
-                        >
-                            {captureOptions.map(o => <option key={o.id} value={o.label}>{o.label}</option>)}
-                        </select>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Operation Mode</label>
+                        <div className="text-sm text-slate-300 bg-black/30 p-2 rounded mb-4">
+                            {activeView === 'desktop' ? 'Full Desktop Capture' : 'Active Window Only'}
+                        </div>
                         
                         <button 
                             onClick={handleCapture}
                             disabled={isAnalyzing}
-                            className="w-full mt-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-50"
+                            className="w-full mt-2 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-50"
                         >
                             {isAnalyzing ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Crosshair className="w-4 h-4" />}
-                            {isAnalyzing ? 'Scanning...' : 'Enter V.A.T.S.'}
+                            {isAnalyzing ? 'Scanning...' : 'Capture Vision'}
                         </button>
                     </div>
 
@@ -251,7 +301,7 @@ const TheLens: React.FC = () => {
                     </div>
                     
                     <div className="p-3 border-t border-slate-800 bg-black/20 text-[10px] text-slate-500 text-center font-mono">
-                         VISION MODEL: GEMINI-PRO-VISION-1.5
+                         VISION MODEL: GEMINI-3-PRO
                     </div>
                 </div>
             </div>
