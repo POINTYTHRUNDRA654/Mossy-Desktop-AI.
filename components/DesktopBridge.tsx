@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench, FolderOpen, HardDrive, ArrowRightLeft, ArrowRight, Keyboard, Download, Server, Clipboard, FileType } from 'lucide-react';
+import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench, FolderOpen, HardDrive, ArrowRightLeft, ArrowRight, Keyboard, Download, Server, Clipboard, FileType, HelpCircle, AlertTriangle } from 'lucide-react';
 
 interface Driver {
     id: string;
@@ -53,6 +53,7 @@ const DesktopBridge: React.FC = () => {
   const logEndRef = useRef<HTMLDivElement>(null);
   
   const [bridgeConnected, setBridgeConnected] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   
   useEffect(() => {
       logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -92,11 +93,20 @@ import json
 import base64
 import os
 import threading
+import sys
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import mss
-import pyautogui
-import pyperclip
+
+# Attempt imports with friendly error
+try:
+    import mss
+    import pyautogui
+    import pyperclip
+except ImportError as e:
+    print(f"\\n[ERROR] Missing dependency: {e.name}")
+    print("Please run: pip install flask flask-cors mss pyautogui pyperclip")
+    input("Press Enter to exit...")
+    sys.exit(1)
 
 # --- CONFIGURATION ---
 PORT = 21337
@@ -190,13 +200,42 @@ echo ===================================================
 echo    MOSSY NEURAL LINK - INITIALIZATION SEQUENCE
 echo ===================================================
 echo.
-echo [1/2] Checking Python dependencies...
-pip install flask flask-cors mss pyautogui pyperclip
+
+set PYTHON_CMD=python
+
+:: Check if python is in PATH
+where python >nul 2>nul
+if %errorlevel% neq 0 (
+    :: If not, try the 'py' launcher
+    where py >nul 2>nul
+    if %errorlevel% equ 0 (
+        echo [System] Python not in PATH, but 'py' launcher found. Using 'py'...
+        set PYTHON_CMD=py
+    ) else (
+        echo [ERROR] Python is not recognized!
+        echo.
+        echo To fix this:
+        echo 1. Uninstall Python.
+        echo 2. Reinstall Python from python.org.
+        echo 3. CHECK THE BOX: "Add Python to PATH" at the bottom of the installer.
+        echo.
+        pause
+        exit /b
+    )
+)
+
+echo [1/2] Installing dependencies using %PYTHON_CMD%...
+%PYTHON_CMD% -m pip install flask flask-cors mss pyautogui pyperclip
+if %errorlevel% neq 0 (
+    echo [ERROR] Dependency installation failed.
+    echo Ensure you have internet access and pip is installed.
+    pause
+    exit /b
+)
+
 echo.
 echo [2/2] Launching Bridge Core...
-python mossy_server.py
-echo.
-echo If you see an error above, ensure Python is installed and added to PATH.
+%PYTHON_CMD% mossy_server.py
 pause
 `;
       const blob = new Blob([batCode], { type: 'text/plain' });
@@ -286,13 +325,29 @@ pause
                         <div className="space-y-4">
                             {!bridgeConnected && (
                                 <div className="p-4 bg-black/40 rounded-lg border border-slate-700/50 text-sm text-slate-300">
-                                    <h4 className="font-bold text-white mb-2 flex items-center gap-2"><Clipboard className="w-4 h-4"/> Easy Installation</h4>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h4 className="font-bold text-white flex items-center gap-2"><Clipboard className="w-4 h-4"/> Easy Installation</h4>
+                                        <button onClick={() => setShowHelp(!showHelp)} className="text-xs text-blue-400 hover:text-white flex items-center gap-1">
+                                            <HelpCircle className="w-3 h-3" /> Troubleshooting
+                                        </button>
+                                    </div>
                                     <ol className="list-decimal pl-4 space-y-2 text-slate-400">
-                                        <li>Download both files below.</li>
-                                        <li>Place them in a folder (e.g. <code>C:\Mossy</code>).</li>
+                                        <li>Download both files below to a new folder.</li>
                                         <li>Double-click <strong>start_mossy.bat</strong>.</li>
                                         <li>Wait for the "BRIDGE ONLINE" status above to turn green.</li>
                                     </ol>
+                                    
+                                    {showHelp && (
+                                        <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded text-xs text-slate-300">
+                                            <strong className="text-red-400 flex items-center gap-1 mb-1"><AlertTriangle className="w-3 h-3"/> "Python is not recognized"?</strong>
+                                            <p className="mb-2">Your computer doesn't know where Python is installed.</p>
+                                            <ul className="list-disc pl-4 space-y-1">
+                                                <li>Reinstall Python from <a href="https://python.org" target="_blank" className="text-blue-400 hover:underline">python.org</a>.</li>
+                                                <li><strong>IMPORTANT:</strong> Check the box <strong>"Add Python to PATH"</strong> at the bottom of the installer.</li>
+                                                <li>Then try running the .bat file again.</li>
+                                            </ul>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             
