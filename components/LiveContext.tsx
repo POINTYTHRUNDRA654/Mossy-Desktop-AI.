@@ -131,31 +131,30 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [mode, setMode] = useState<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
   const [transcription, setTranscription] = useState('');
 
-  // Avatar State (Global)
-  const [customAvatar, setCustomAvatar] = useState<string | null>(null);
+  // Avatar State (Global) - Lazy initialization for instant persistence
+  const [customAvatar, setCustomAvatar] = useState<string | null>(() => {
+      try {
+          return localStorage.getItem('mossy_avatar_custom');
+      } catch (e) {
+          return null;
+      }
+  });
 
   // Load Avatar on Mount - Dual Strategy with Priority
   useEffect(() => {
       const loadAvatar = async () => {
-          // 1. Try LocalStorage (Fastest)
-          try {
-              const localSaved = localStorage.getItem('mossy_avatar_custom');
-              if (localSaved) {
-                  setCustomAvatar(localSaved);
-                  // Background check DB to ensure sync
-                  const dbSaved = await getImageFromDB('mossy_avatar_custom');
-                  if (!dbSaved) await saveImageToDB('mossy_avatar_custom', localSaved);
-                  return; 
-              }
-          } catch (e) {}
-
-          // 2. Try IndexedDB (Fallback)
+          // If we already loaded from localStorage via lazy init, verify against DB
+          const current = customAvatar;
+          
           try {
               const dbSaved = await getImageFromDB('mossy_avatar_custom');
-              if (dbSaved) {
+              if (dbSaved && dbSaved !== current) {
+                  // If DB has data but local didn't (or differed), update state
                   setCustomAvatar(dbSaved);
-                  // Restore to local if missing
                   try { localStorage.setItem('mossy_avatar_custom', dbSaved); } catch (e) {}
+              } else if (current && !dbSaved) {
+                  // If local has data but DB doesn't, sync back to DB
+                  await saveImageToDB('mossy_avatar_custom', current);
               }
           } catch (e) {}
       };
