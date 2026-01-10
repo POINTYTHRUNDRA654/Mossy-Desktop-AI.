@@ -834,7 +834,8 @@ export const ChatInterface: React.FC = () => {
         config: {
           systemInstruction: systemInstruction,
           tools: isBridgeActive ? [{functionDeclarations: toolDeclarations}] : [{ googleSearch: {} }],
-          thinkingConfig: { thinkingBudget: 16384 }, 
+          // REDUCED BUDGET to prevent timeouts. Default was causing deadline exceeded errors.
+          thinkingConfig: { thinkingBudget: 2048 }, 
         },
         history: history
       });
@@ -851,9 +852,9 @@ export const ChatInterface: React.FC = () => {
               break;
           } catch (e: any) {
               const msg = e.message || '';
-              if ((msg.includes('503') || msg.toLowerCase().includes('unavailable')) && retryCount < maxRetries) {
+              if ((msg.includes('503') || msg.toLowerCase().includes('unavailable') || msg.toLowerCase().includes('deadline')) && retryCount < maxRetries) {
                   retryCount++;
-                  console.warn(`Service unavailable, retrying (attempt ${retryCount}/${maxRetries})...`);
+                  console.warn(`Service issue/timeout, retrying (attempt ${retryCount}/${maxRetries})...`);
                   // Exponential backoff: 1s, 2s, 4s
                   await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
                   continue;
@@ -886,7 +887,9 @@ export const ChatInterface: React.FC = () => {
       if (errText.includes("not found") || errText.includes("404")) {
           setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**Connection Lost:** The Google AI Studio service is currently unreachable. Please check your API key or network connection." }]);
       } else if (errText.includes("503") || errText.toLowerCase().includes("unavailable")) {
-          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**Service Unavailable:** The AI model is currently overloaded or experiencing downtime. Please try again in a few moments." }]);
+          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**Service Unavailable:** The AI model is currently overloaded. Please try again in a few moments." }]);
+      } else if (errText.toLowerCase().includes("deadline") || errText.toLowerCase().includes("timeout")) {
+          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**Timeout Error:** The operation took too long. I've reduced my thinking complexity for the next request. Please try again." }]);
       } else {
           setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: `**System Error:** ${errText}` }]);
       }

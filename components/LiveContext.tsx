@@ -302,7 +302,7 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setStatus('Initializing Neural Interface...');
       setMode('processing');
       
-      // CHECK BRIDGE STATUS
+      // 1. CHECK BRIDGE STATUS
       const driversSaved = localStorage.getItem('mossy_bridge_drivers');
       let bridgeContext = "";
       let hasBlender = false;
@@ -315,6 +315,28 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               bridgeContext = "SYSTEM NOTICE: Blender 4.5.5 is CONNECTED via Desktop Bridge. You can execute python scripts directly.";
           }
       }
+
+      // 2. CHECK PROJECT CONTEXT
+      let projectContext = "";
+      try {
+          const projSaved = localStorage.getItem('mossy_project');
+          if (projSaved) {
+              const p = JSON.parse(projSaved);
+              projectContext = `CURRENT ACTIVE PROJECT: ${p.name}\nSTATUS: ${p.status}\nNOTES: ${p.notes}`;
+          }
+      } catch (e) {}
+
+      // 3. LOAD RECENT CHAT HISTORY (MEMORY)
+      let historyContext = "";
+      try {
+          const msgSaved = localStorage.getItem('mossy_messages');
+          if (msgSaved) {
+              const msgs = JSON.parse(msgSaved);
+              // Filter out system messages and get last 10 exchanges for context
+              const recent = msgs.filter((m: any) => m.role !== 'system').slice(-10);
+              historyContext = recent.map((m: any) => `[${m.role === 'user' ? 'USER' : 'MOSSY'}]: ${m.text}`).join('\n');
+          }
+      } catch (e) {}
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -353,6 +375,11 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
           systemInstruction: `You are Mossy, a sentient AI assistant.
           ${bridgeContext}
+          ${projectContext ? '\n' + projectContext : ''}
+          
+          RECENT MEMORY / CONTEXT:
+          ${historyContext}
+          
           You are currently speaking via Live Audio Interface.
           If Blender is connected, ACKNOWLEDGE IT explicitly in your first sentence.
           You have full control over the connected Blender instance.`,

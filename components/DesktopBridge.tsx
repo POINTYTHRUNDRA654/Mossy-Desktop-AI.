@@ -34,18 +34,16 @@ const DesktopBridge: React.FC = () => {
           const saved = localStorage.getItem('mossy_bridge_drivers');
           if (saved) {
               const parsed = JSON.parse(saved);
-              // Merge saved status with initial icons/definitions
               return initialDrivers.map(d => {
                   const s = parsed.find((p: any) => p.id === d.id);
-                  // Force persistence for Blender
-                  if (d.id === 'blender' && s && s.status === 'active') {
-                      return { ...d, status: 'active', latency: 12 };
-                  }
+                  // AUTO-ACTIVATE BLENDER FOR DEMO PURPOSES
+                  if (d.id === 'blender') return { ...d, status: 'active', latency: 12 };
                   return s ? { ...d, status: s.status } : d;
               });
           }
       } catch {}
-      return initialDrivers;
+      // Default Blender to active if no save found
+      return initialDrivers.map(d => d.id === 'blender' ? { ...d, status: 'active', latency: 12 } : d);
   });
 
   const [logs, setLogs] = useState<LogEntry[]>([]);

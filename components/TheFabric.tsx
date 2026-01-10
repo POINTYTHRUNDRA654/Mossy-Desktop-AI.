@@ -31,8 +31,9 @@ const TheFabric: React.FC = () => {
             User Description: "${prompt}"
             `;
 
+            // Switched to flash-preview for speed and reliability against timeouts
             const response = await ai.models.generateContent({
-                model: 'gemini-3-pro-preview',
+                model: 'gemini-3-flash-preview',
                 contents: systemPrompt,
             });
 
