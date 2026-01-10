@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench, FolderOpen, HardDrive, ArrowRightLeft, ArrowRight, Keyboard, Download, Server, Clipboard } from 'lucide-react';
+import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench, FolderOpen, HardDrive, ArrowRightLeft, ArrowRight, Keyboard, Download, Server, Clipboard, FileType } from 'lucide-react';
 
 interface Driver {
     id: string;
@@ -52,52 +52,34 @@ const DesktopBridge: React.FC = () => {
 
   const logEndRef = useRef<HTMLDivElement>(null);
   
-  const [serverActive, setServerActive] = useState(false);
   const [bridgeConnected, setBridgeConnected] = useState(false);
   
-  // Visualizer State
-  const [cubeRotationSpeed, setCubeRotationSpeed] = useState(0.02);
-  const blenderCanvasRef = useRef<HTMLCanvasElement>(null);
-
   useEffect(() => {
       logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  // Sync logs and check connection
+  // Sync logs and check connection from LocalStorage (Updated by SystemBus)
   useEffect(() => {
-      const syncLogs = () => {
+      const syncState = () => {
           try {
-              const saved = localStorage.getItem('mossy_bridge_logs');
-              if (saved) setLogs(JSON.parse(saved));
+              const savedLogs = localStorage.getItem('mossy_bridge_logs');
+              if (savedLogs) setLogs(JSON.parse(savedLogs));
+              
+              const active = localStorage.getItem('mossy_bridge_active') === 'true';
+              setBridgeConnected(active);
           } catch {}
       };
       
-      const checkConnection = async () => {
-          try {
-              const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 1000);
-              const res = await fetch('http://localhost:21337/health', { signal: controller.signal });
-              clearTimeout(timeoutId);
-              if (res.ok) {
-                  setBridgeConnected(true);
-                  localStorage.setItem('mossy_bridge_active', 'true');
-              } else {
-                  throw new Error("Bridge unresponsive");
-              }
-          } catch (e) {
-              setBridgeConnected(false);
-              localStorage.setItem('mossy_bridge_active', 'false');
-          }
-      };
-
-      window.addEventListener('storage', syncLogs);
-      const interval = setInterval(() => {
-          syncLogs();
-          checkConnection();
-      }, 2000);
+      syncState(); // Initial check
+      window.addEventListener('storage', syncState);
+      window.addEventListener('mossy-bridge-connected', syncState);
+      
+      // Fallback poll for UI responsiveness
+      const interval = setInterval(syncState, 1000);
       
       return () => {
-          window.removeEventListener('storage', syncLogs);
+          window.removeEventListener('storage', syncState);
+          window.removeEventListener('mossy-bridge-connected', syncState);
           clearInterval(interval);
       };
   }, []);
@@ -201,6 +183,33 @@ if __name__ == '__main__':
       addLog('System', 'Generated mossy_server.py', 'success');
   };
 
+  const handleDownloadBatch = () => {
+      const batCode = `@echo off
+title Mossy Bridge Server
+echo ===================================================
+echo    MOSSY NEURAL LINK - INITIALIZATION SEQUENCE
+echo ===================================================
+echo.
+echo [1/2] Checking Python dependencies...
+pip install flask flask-cors mss pyautogui pyperclip
+echo.
+echo [2/2] Launching Bridge Core...
+python mossy_server.py
+echo.
+echo If you see an error above, ensure Python is installed and added to PATH.
+pause
+`;
+      const blob = new Blob([batCode], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'start_mossy.bat';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      addLog('System', 'Generated start_mossy.bat', 'success');
+  };
+
   const addLog = (source: string, event: string, status: 'ok' | 'warn' | 'err' | 'success' = 'ok') => {
       const newLog = {
           id: Date.now().toString() + Math.random(),
@@ -277,22 +286,28 @@ if __name__ == '__main__':
                         <div className="space-y-4">
                             {!bridgeConnected && (
                                 <div className="p-4 bg-black/40 rounded-lg border border-slate-700/50 text-sm text-slate-300">
-                                    <h4 className="font-bold text-white mb-2 flex items-center gap-2"><Clipboard className="w-4 h-4"/> Installation Steps</h4>
-                                    <ol className="list-decimal pl-4 space-y-2">
-                                        <li>Install Python (3.8+).</li>
-                                        <li>Run <code className="bg-black px-1 rounded text-emerald-400">pip install flask flask-cors mss pyautogui pyperclip</code></li>
-                                        <li>Download <strong>mossy_server.py</strong> below.</li>
-                                        <li>Run it: <code className="bg-black px-1 rounded text-emerald-400">python mossy_server.py</code></li>
+                                    <h4 className="font-bold text-white mb-2 flex items-center gap-2"><Clipboard className="w-4 h-4"/> Easy Installation</h4>
+                                    <ol className="list-decimal pl-4 space-y-2 text-slate-400">
+                                        <li>Download both files below.</li>
+                                        <li>Place them in a folder (e.g. <code>C:\Mossy</code>).</li>
+                                        <li>Double-click <strong>start_mossy.bat</strong>.</li>
+                                        <li>Wait for the "BRIDGE ONLINE" status above to turn green.</li>
                                     </ol>
                                 </div>
                             )}
                             
-                            <div className="flex gap-3">
+                            <div className="flex flex-col sm:flex-row gap-3">
                                 <button 
                                     onClick={handleDownloadServer}
                                     className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg font-bold text-sm text-white flex items-center justify-center gap-2 transition-colors"
                                 >
-                                    <Download className="w-4 h-4" /> Download Bridge Server (.py)
+                                    <Download className="w-4 h-4" /> 1. Get Server (.py)
+                                </button>
+                                <button 
+                                    onClick={handleDownloadBatch}
+                                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-sm flex items-center justify-center gap-2 transition-colors shadow-lg"
+                                >
+                                    <FileType className="w-4 h-4" /> 2. Get Launcher (.bat)
                                 </button>
                             </div>
                         </div>

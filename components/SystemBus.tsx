@@ -1,6 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 const SystemBus: React.FC = () => {
+    // We use a ref to prevent overlapping polls if one takes too long
+    const isPolling = useRef(false);
+
     useEffect(() => {
         const handleLog = (source: string, event: string, status: 'ok' | 'warn' | 'err' | 'success') => {
             const newLog = {
@@ -41,7 +44,53 @@ const SystemBus: React.FC = () => {
         window.addEventListener('mossy-blender-shortcut', handleShortcut as EventListener);
         window.addEventListener('mossy-control', handleControl as EventListener);
 
+        // --- GLOBAL BRIDGE HEARTBEAT ---
+        // Polls the local python server every 2 seconds to check if it's alive.
+        // This allows Chat, Lens, and Sidebar to know the real status.
+        const heartbeat = setInterval(async () => {
+            if (isPolling.current) return;
+            isPolling.current = true;
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5s timeout
+                
+                const response = await fetch('http://localhost:21337/health', { 
+                    signal: controller.signal,
+                    method: 'GET',
+                    mode: 'cors' // Important for local dev
+                });
+                
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'online') {
+                        // Bridge is UP
+                        const wasDown = localStorage.getItem('mossy_bridge_active') !== 'true';
+                        localStorage.setItem('mossy_bridge_active', 'true');
+                        if (wasDown) {
+                            window.dispatchEvent(new Event('mossy-bridge-connected'));
+                            window.dispatchEvent(new Event('storage')); // Force UI updates
+                        }
+                    }
+                } else {
+                    throw new Error("Bridge responded with error");
+                }
+            } catch (e) {
+                // Bridge is DOWN
+                const wasUp = localStorage.getItem('mossy_bridge_active') === 'true';
+                localStorage.setItem('mossy_bridge_active', 'false');
+                if (wasUp) {
+                    window.dispatchEvent(new Event('storage')); // Force UI updates
+                }
+            } finally {
+                isPolling.current = false;
+            }
+        }, 2000);
+
         return () => {
+            clearInterval(heartbeat);
             window.removeEventListener('mossy-blender-command', handleBlenderCmd as EventListener);
             window.removeEventListener('mossy-blender-shortcut', handleShortcut as EventListener);
             window.removeEventListener('mossy-control', handleControl as EventListener);
