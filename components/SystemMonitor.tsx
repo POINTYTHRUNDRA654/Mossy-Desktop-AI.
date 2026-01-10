@@ -61,13 +61,8 @@ const modulesList: SystemModule[] = [
 const SystemMonitor: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'telemetry' | 'deploy' | 'hardware'>('telemetry');
   
-  // Telemetry State - Initialize from LocalStorage if available
-  const [integrations, setIntegrations] = useState<Integration[]>(() => {
-      try {
-          const saved = localStorage.getItem('mossy_integrations');
-          return saved ? JSON.parse(saved) : [];
-      } catch { return []; }
-  });
+  // Telemetry State - Initialize from LocalStorage or Bridge
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
 
   // System Profile State
   const [profile, setProfile] = useState<SystemProfile | null>(() => {
@@ -104,31 +99,50 @@ const SystemMonitor: React.FC = () => {
   const installLogRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Persist Integrations & Profile
-  useEffect(() => {
-      localStorage.setItem('mossy_integrations', JSON.stringify(integrations));
-  }, [integrations]);
-
   useEffect(() => {
       if (profile) localStorage.setItem('mossy_system_profile', JSON.stringify(profile));
   }, [profile]);
 
-  // Robust Fallback: If bridge is active, ensure we have integrations populated
+  // Read Drivers from Bridge for Integrations
   useEffect(() => {
-      const bridgeActive = localStorage.getItem('mossy_bridge_active') === 'true';
-      if (bridgeActive && integrations.length < 3) {
-          // If bridge is on but we lost the data (e.g. reload), restore robust defaults
-          const restoredIntegrations: Integration[] = [
-                { id: 'res-1', name: 'Blender 4.2', category: 'Creative', path: 'C:/Program Files/Blender Foundation/', status: 'linked' },
-                { id: 'res-2', name: 'Ollama', category: 'AI', path: 'localhost:11434', status: 'linked' },
-                { id: 'res-3', name: 'VS Code', category: 'Dev', path: 'C:/AppData/Code/', status: 'linked' },
-                { id: 'res-4', name: 'Mod Organizer 2', category: 'Modding', path: 'D:/MO2/', status: 'linked' },
-                { id: 'res-5', name: 'ComfyUI', category: 'AI', path: 'D:/AI/ComfyUI/', status: 'linked' },
-                { id: 'res-6', name: 'Photoshop 2024', category: 'Creative', path: 'C:/Adobe/', status: 'linked' },
-                { id: 'res-7', name: 'Git', category: 'Dev', path: '/bin/git', status: 'linked' }
-          ];
-          setIntegrations(restoredIntegrations);
-          addLog("Restored Integration Map from Persistent Bridge.", 'success');
+      const syncIntegrations = () => {
+          try {
+              const driversSaved = localStorage.getItem('mossy_bridge_drivers');
+              if (driversSaved) {
+                  const drivers = JSON.parse(driversSaved);
+                  const newIntegrations: Integration[] = drivers
+                      .filter((d: any) => d.status === 'active')
+                      .map((d: any) => ({
+                          id: d.id,
+                          name: d.name || d.id,
+                          category: d.id === 'blender' ? 'Creative' : d.id === 'vscode' ? 'Dev' : 'System',
+                          path: 'LINKED_VIA_BRIDGE',
+                          status: 'linked'
+                      }));
+                  
+                  // Add defaults if empty to look nice
+                  if (newIntegrations.length === 0) {
+                      setIntegrations([
+                          { id: 'def-1', name: 'Desktop Bridge', category: 'System', path: 'localhost:21337', status: 'linked' }
+                      ]);
+                  } else {
+                      setIntegrations(newIntegrations);
+                  }
+              } else {
+                  // Fallback
+                  const saved = localStorage.getItem('mossy_integrations');
+                  if (saved) setIntegrations(JSON.parse(saved));
+              }
+          } catch {}
+      };
+      
+      syncIntegrations();
+      window.addEventListener('storage', syncIntegrations);
+      // Poll
+      const i = setInterval(syncIntegrations, 2000);
+      return () => {
+          window.removeEventListener('storage', syncIntegrations);
+          clearInterval(i);
       }
   }, []);
 
@@ -322,6 +336,15 @@ const SystemMonitor: React.FC = () => {
                   
                   // ACTUALLY ACTIVATE BRIDGE & SAVE
                   localStorage.setItem('mossy_bridge_active', 'true');
+                  
+                  // Also activate relevant drivers
+                  const drivers = JSON.parse(localStorage.getItem('mossy_bridge_drivers') || '[]');
+                  // Force activate Blender if found
+                  const updatedDrivers = drivers.map((d: any) => 
+                      d.id === 'blender' ? { ...d, status: 'active' } : d
+                  );
+                  localStorage.setItem('mossy_bridge_drivers', JSON.stringify(updatedDrivers));
+
                   window.dispatchEvent(new Event('storage'));
                   window.dispatchEvent(new CustomEvent('mossy-bridge-connected'));
                   
@@ -344,20 +367,7 @@ const SystemMonitor: React.FC = () => {
   const handleFinishInstaller = () => {
       setShowInstaller(false);
       setActiveTab('telemetry');
-      const newIntegrations: Integration[] = foundTools.map((tool, index) => ({
-          id: `linked-${index}`,
-          name: tool.name,
-          category: tool.category as any,
-          path: 'C:/Program Files/...', 
-          status: 'linked'
-      }));
-      if (newIntegrations.length === 0) {
-          newIntegrations.push({ id: 'def-1', name: 'Blender 4.0', category: 'Creative', path: '...', status: 'linked' });
-      }
-      setIntegrations(newIntegrations);
-      const chatApps = newIntegrations.map(i => ({ id: i.id, name: i.name, category: i.category, checked: true }));
-      localStorage.setItem('mossy_apps', JSON.stringify(chatApps));
-      addLog(`Desktop Bridge linked with ${newIntegrations.length} applications.`, 'success');
+      addLog(`Desktop Bridge linked successfully.`, 'success');
   };
 
   const copyLink = () => {

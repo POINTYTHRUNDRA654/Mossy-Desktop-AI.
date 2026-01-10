@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench, FolderOpen, HardDrive } from 'lucide-react';
+import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench, FolderOpen, HardDrive, ArrowRightLeft, ArrowRight } from 'lucide-react';
 
 interface Driver {
     id: string;
@@ -22,25 +22,52 @@ interface LogEntry {
 const initialDrivers: Driver[] = [
     { id: 'os_shell', name: 'Windows Shell', icon: Terminal, status: 'inactive', version: '10.0.19045', latency: 0, permissions: ['fs.read', 'fs.write', 'exec'] },
     { id: 'fs_watcher', name: 'File System Watcher', icon: Eye, status: 'inactive', version: '2.1.0', latency: 0, permissions: ['fs.watch', 'read.recursive'] },
-    { id: 'browser', name: 'Browser Uplink', icon: Globe, status: 'inactive', version: '118.0.5', latency: 0, permissions: ['tabs.read', 'bookmarks.read'] },
-    { id: 'nifskope', name: 'NifSkope IPC', icon: Box, status: 'inactive', version: '2.0.0', latency: 0, permissions: ['mesh.read', 'mesh.write'] },
+    { id: 'blender', name: 'Blender Link (4.0)', icon: Box, status: 'inactive', version: '2.4.1', latency: 0, permissions: ['mesh.read', 'mesh.write', 'texture.sync'] },
     { id: 'xedit', name: 'xEdit Data Link', icon: Database, status: 'inactive', version: '4.0.4', latency: 0, permissions: ['plugin.read', 'record.edit'] },
     { id: 'ck', name: 'Creation Kit Telemetry', icon: Wrench, status: 'inactive', version: '1.10', latency: 0, permissions: ['cell.view'] },
     { id: 'vscode', name: 'VS Code Host', icon: Code, status: 'inactive', version: '1.85.1', latency: 0, permissions: ['editor.action', 'workspace'] },
 ];
 
 const DesktopBridge: React.FC = () => {
-  const [drivers, setDrivers] = useState<Driver[]>(initialDrivers);
+  const [drivers, setDrivers] = useState<Driver[]>(() => {
+      try {
+          const saved = localStorage.getItem('mossy_bridge_drivers');
+          if (saved) {
+              const parsed = JSON.parse(saved);
+              // Merge saved status with initial icons/definitions
+              return initialDrivers.map(d => {
+                  const s = parsed.find((p: any) => p.id === d.id);
+                  return s ? { ...d, status: s.status } : d;
+              });
+          }
+      } catch {}
+      return initialDrivers;
+  });
+
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
   const [repairing, setRepairing] = useState(false);
   const [mountedPath, setMountedPath] = useState<string | null>(null);
+  
+  // Blender specific simulation state
+  const [blenderActivity, setBlenderActivity] = useState<'idle' | 'syncing' | 'receiving'>('idle');
+  const [lastBlenderMsg, setLastBlenderMsg] = useState('Idle');
   
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
       logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
+
+  // Persist drivers
+  useEffect(() => {
+      localStorage.setItem('mossy_bridge_drivers', JSON.stringify(drivers.map(d => ({ id: d.id, status: d.status }))));
+      
+      // Update global bridge flag if any driver active
+      const anyActive = drivers.some(d => d.status === 'active');
+      localStorage.setItem('mossy_bridge_active', anyActive.toString());
+      window.dispatchEvent(new Event('mossy-bridge-connected'));
+  }, [drivers]);
 
   // Simulate telemetry
   useEffect(() => {
@@ -99,6 +126,43 @@ const DesktopBridge: React.FC = () => {
 
           return d;
       }));
+  };
+
+  // --- BLENDER SIMULATION ---
+  const pingBlender = () => {
+      const blenderDriver = drivers.find(d => d.id === 'blender');
+      if (blenderDriver?.status !== 'active') {
+          addLog('Blender', 'Cannot ping. Driver offline.', 'err');
+          return;
+      }
+      
+      setBlenderActivity('syncing');
+      setLastBlenderMsg('Ping sent...');
+      
+      setTimeout(() => {
+          setBlenderActivity('receiving');
+          setLastBlenderMsg('Pong received. Latency: 12ms');
+          addLog('Blender', 'Echo reply valid. Version 4.0.2', 'success');
+          
+          setTimeout(() => {
+              setBlenderActivity('idle');
+          }, 1000);
+      }, 800);
+  };
+
+  const syncBlenderScene = () => {
+      const blenderDriver = drivers.find(d => d.id === 'blender');
+      if (blenderDriver?.status !== 'active') return;
+
+      setBlenderActivity('receiving');
+      setLastBlenderMsg('Syncing Scene Data...');
+      addLog('Blender', 'Requesting Scene Graph...', 'warn');
+      
+      setTimeout(() => {
+          addLog('Blender', 'Received: 14 Meshes, 2 Lights, 1 Camera', 'success');
+          setLastBlenderMsg('Sync Complete');
+          setBlenderActivity('idle');
+      }, 1500);
   };
 
   // --- NATIVE FILE SYSTEM ACCESS ---
@@ -253,7 +317,42 @@ const DesktopBridge: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="flex justify-between items-center mb-2">
+                {/* Blender Special Panel */}
+                {drivers.find(d => d.id === 'blender' && d.status === 'active') && (
+                    <div className="bg-orange-900/10 border border-orange-500/30 rounded-xl p-6 relative overflow-hidden">
+                        <div className="flex justify-between items-start mb-4 relative z-10">
+                            <div>
+                                <h3 className="text-lg font-bold text-orange-400 flex items-center gap-2">
+                                    <Box className="w-5 h-5" /> Blender Bridge Active
+                                </h3>
+                                <p className="text-xs text-orange-200/60 font-mono mt-1">
+                                    {lastBlenderMsg}
+                                </p>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={pingBlender} className="px-3 py-1 bg-orange-900/30 hover:bg-orange-900/50 border border-orange-500/30 rounded text-xs text-orange-200 font-bold transition-colors">
+                                    Ping
+                                </button>
+                                <button onClick={syncBlenderScene} className="px-3 py-1 bg-orange-900/30 hover:bg-orange-900/50 border border-orange-500/30 rounded text-xs text-orange-200 font-bold transition-colors flex items-center gap-1">
+                                    <RefreshCw className={`w-3 h-3 ${blenderActivity !== 'idle' ? 'animate-spin' : ''}`} /> Sync
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {/* Data Visualization */}
+                        <div className="h-12 bg-black/40 rounded border border-orange-900/30 relative flex items-center justify-between px-4 overflow-hidden">
+                            <div className="text-[10px] text-slate-500 font-bold uppercase">Mossy AI</div>
+                            {blenderActivity !== 'idle' && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className={`w-24 h-1 bg-orange-500 rounded-full animate-slide-ping ${blenderActivity === 'receiving' ? 'animate-reverse' : ''}`}></div>
+                                </div>
+                            )}
+                            <div className="text-[10px] text-slate-500 font-bold uppercase">Blender 4.0</div>
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex justify-between items-center mb-2 mt-6">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                         <Layers className="w-4 h-4" /> Driver Matrix
                     </h3>
