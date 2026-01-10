@@ -61,7 +61,7 @@ const TheConduit: React.FC = () => {
                     payload = "Channel: #general | User: NeonSamurai: 'Can you fix the mesh?'";
                 } else if (source.id === 'spotify') {
                     eventName = "TrackChange";
-                    payload = "Now Playing: 'Cyberpunk 2077 OST - V's Theme'";
+                    payload = "Now Playing: 'Magnolia - Train Train'";
                 } else if (source.id === 'hass') {
                     eventName = "StateChange";
                     payload = "Entity: light.studio_main | State: ON | Brightness: 80%";

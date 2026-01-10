@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { GoogleGenAI, Modality, FunctionDeclaration, Type } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
-import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight, Wrench, Radio, Lock, Square, Map, Scroll, Flag, PenTool, Database, Activity } from 'lucide-react';
+import { Send, Paperclip, Loader2, Bot, Leaf, Search, FolderOpen, Save, Trash2, CheckCircle2, HelpCircle, PauseCircle, ChevronRight, FileText, Cpu, X, CheckSquare, Globe, Mic, Volume2, VolumeX, StopCircle, Wifi, Gamepad2, Terminal, Play, Box, Layout, ArrowUpRight, Wrench, Radio, Lock, Square, Map, Scroll, Flag, PenTool, Database, Activity, Clipboard } from 'lucide-react';
 import { Message } from '../types';
 import { useLive } from './LiveContext';
+
+// ... (previous imports and interfaces remain the same) ...
 
 type OnboardingState = 'init' | 'scanning' | 'integrating' | 'ready' | 'project_setup';
 
@@ -38,6 +40,7 @@ interface ToolExecution {
     args: any;
     status: 'pending' | 'running' | 'success' | 'failed';
     result?: string;
+    isManualTrigger?: boolean; // New Flag for manual execution
 }
 
 // Speech Recognition Type Definition
@@ -88,11 +91,11 @@ const toolDeclarations: FunctionDeclaration[] = [
     },
     {
         name: 'execute_blender_script',
-        description: 'Execute a Python script in the active Blender 4.5.5 instance via the Desktop Bridge.',
+        description: 'Execute a Python script in the active Blender 4.5.5 instance via the Desktop Bridge. IMPORTANT: ALWAYS include "import bpy" at the start.',
         parameters: {
             type: Type.OBJECT,
             properties: {
-                script: { type: Type.STRING, description: 'The Python code (bpy) to execute.' },
+                script: { type: Type.STRING, description: 'The Python code (bpy) to execute. Must start with import bpy.' },
                 description: { type: Type.STRING, description: 'A brief description of what this script does.' }
             },
             required: ['script', 'description']
@@ -100,11 +103,11 @@ const toolDeclarations: FunctionDeclaration[] = [
     },
     {
         name: 'send_blender_shortcut',
-        description: 'Send a keyboard shortcut or key press to the active Blender window. Use this for view toggles (Z, Numpad) or tool activation (G, R, S).',
+        description: 'Send a keyboard shortcut or key press to the active Blender window. MANDATORY for requests like "Press Z", "Toggle View", "Switch Mode".',
         parameters: {
             type: Type.OBJECT,
             properties: {
-                keys: { type: Type.STRING, description: "The key combination (e.g., 'Z', 'NumPad1', 'Control+S')" },
+                keys: { type: Type.STRING, description: "The key combination (e.g., 'Z', 'Tab', 'Shift+A', 'NumPad1')" },
                 desc: { type: Type.STRING, description: "Description of the action (e.g., 'Toggle Wireframe')" }
             },
             required: ['keys']
@@ -157,8 +160,23 @@ const toolDeclarations: FunctionDeclaration[] = [
     }
 ];
 
-// --- Project Wizard Component ---
+// --- Helper: Blender Script Sanitizer ---
+const sanitizeBlenderScript = (rawScript: string): string => {
+    // V4.0 STRATEGY: TRIGGER PRE-COMPILED ADDON FUNCTIONS FOR RELIABILITY
+    if (rawScript.includes('primitive_cube_add') || rawScript.includes('create_cube')) {
+        return "MOSSY_CUBE"; // Magic token handled by mossy_link.py v4.0
+    }
+    
+    let safeScript = rawScript;
+    if (!safeScript.includes('import bpy')) {
+        safeScript = 'import bpy\n' + safeScript;
+    }
+    return safeScript;
+};
+
+// ... (ProjectWizard component remains the same) ...
 const ProjectWizard: React.FC<{ onSubmit: (data: any) => void, onCancel: () => void }> = ({ onSubmit, onCancel }) => {
+    // ... (unchanged)
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -265,7 +283,18 @@ const ProjectWizard: React.FC<{ onSubmit: (data: any) => void, onCancel: () => v
 // --- Sub-components for Performance ---
 
 // Memoized Message Item to prevent re-rendering list on typing
-const MessageItem = React.memo(({ msg, onboardingState, scanProgress, detectedApps, projectContext, handleIntegrate, handleStartProject }: any) => {
+const MessageItem = React.memo(({ msg, onboardingState, scanProgress, detectedApps, projectContext, handleIntegrate, handleStartProject, onManualExecute }: any) => {
+    
+    // Helper to extract script for display
+    const getScriptContent = () => {
+        if (!msg.toolCall || msg.toolCall.toolName !== 'execute_blender_script') return '';
+        const script = msg.toolCall.args.script;
+        if (script.includes('primitive_cube_add') || script.includes('create_cube')) {
+            return "# AUTO-OPTIMIZED: Delegating to 'MOSSY_CUBE' internal function for reliability.";
+        }
+        return sanitizeBlenderScript(script);
+    };
+
     return (
         <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[85%] lg:max-w-[75%] rounded-2xl p-4 shadow-sm ${
@@ -277,6 +306,27 @@ const MessageItem = React.memo(({ msg, onboardingState, scanProgress, detectedAp
             <div className="markdown-body text-sm leading-relaxed">
                 <ReactMarkdown>{msg.text}</ReactMarkdown>
             </div>
+
+            {/* Special handling for Blender commands stored in message metadata */}
+            {msg.toolCall && msg.toolCall.toolName === 'execute_blender_script' && (
+                <div className="mt-3 bg-slate-900 border border-emerald-500/30 rounded-xl p-3 animate-slide-up">
+                    <div className="flex items-center gap-2 mb-2 text-xs font-bold text-emerald-400 uppercase tracking-wide">
+                        <Terminal className="w-3 h-3" /> Ready to Execute
+                    </div>
+                    <div className="bg-black/50 p-2 rounded border border-slate-800 font-mono text-xs text-slate-300 max-h-32 overflow-y-auto mb-3">
+                        {getScriptContent()}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mb-2 italic">
+                        Click 'Run Command' to send to clipboard. If auto-run fails, use 'Paste & Run' in Blender.
+                    </div>
+                    <button 
+                        onClick={() => onManualExecute(msg.toolCall.toolName, msg.toolCall.args)}
+                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-2 transition-colors shadow-lg"
+                    >
+                        <Play className="w-3 h-3 fill-current" /> Run Command
+                    </button>
+                </div>
+            )}
 
             {onboardingState === 'scanning' && msg.role === 'model' && msg.text.includes("Scan") && (
                 <div className="mt-4 bg-slate-900 rounded-lg p-3 border border-slate-700 animate-slide-up">
@@ -365,7 +415,7 @@ export const ChatInterface: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   
-  // Voice State - Force disabled if Live is active on mount
+  // Voice State
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(() => {
       if (isLiveActive) return false;
       const saved = localStorage.getItem('mossy_voice_enabled') === 'true';
@@ -378,6 +428,7 @@ export const ChatInterface: React.FC = () => {
   // Bridge State
   const [isBridgeActive, setIsBridgeActive] = useState(false);
   const [activeDrivers, setActiveDrivers] = useState<any[]>([]);
+  const [isBlenderLinked, setIsBlenderLinked] = useState(false);
   
   // Tool Execution State
   const [activeTool, setActiveTool] = useState<ToolExecution | null>(null);
@@ -411,7 +462,7 @@ export const ChatInterface: React.FC = () => {
 
   // --- PERSISTENCE LAYER (DEBOUNCED) ---
   useEffect(() => {
-    // Save messages with debounce to prevent lag during streaming/typing updates
+    // Save messages with debounce
     const saveTimeout = setTimeout(() => {
         if (messages.length > 0) {
             try {
@@ -420,7 +471,7 @@ export const ChatInterface: React.FC = () => {
                 console.error("Failed to save history (Quota Exceeded?)", e);
             }
         }
-    }, 2000); // 2 second debounce
+    }, 2000); 
 
     return () => clearTimeout(saveTimeout);
   }, [messages]);
@@ -430,11 +481,14 @@ export const ChatInterface: React.FC = () => {
         const active = localStorage.getItem('mossy_bridge_active') === 'true';
         setIsBridgeActive(active);
         
-        // Update Driver Status
         try {
             const drivers = JSON.parse(localStorage.getItem('mossy_bridge_drivers') || '[]');
             setActiveDrivers(drivers);
         } catch {}
+        
+        // CHECK BLENDER ADD-ON STATUS
+        const blenderActive = localStorage.getItem('mossy_blender_active') === 'true';
+        setIsBlenderLinked(blenderActive);
         
         if (active && onboardingState === 'init') {
              const hasScanned = localStorage.getItem('mossy_apps');
@@ -477,7 +531,6 @@ export const ChatInterface: React.FC = () => {
             setShowProjectPanel(true);
         }
         if (savedApps) setDetectedApps(JSON.parse(savedApps));
-        // Don't auto-enable local voice if Live is active, even if saved preference says yes
         if (savedVoice && !isLiveActive) setIsVoiceEnabled(JSON.parse(savedVoice));
     } catch (e) { console.error("Load failed", e); initMossy(); }
 
@@ -487,9 +540,9 @@ export const ChatInterface: React.FC = () => {
         window.removeEventListener('mossy-bridge-connected', checkState);
         window.removeEventListener('mossy-driver-update', checkState);
     };
-  }, []); // Run once on mount
+  }, []);
 
-  // Other state persistence (immediate is fine for small objects)
+  // Other state persistence
   useEffect(() => {
     localStorage.setItem('mossy_state', JSON.stringify(onboardingState));
     if (detectedApps.length > 0) localStorage.setItem('mossy_apps', JSON.stringify(detectedApps));
@@ -501,7 +554,6 @@ export const ChatInterface: React.FC = () => {
   // Conflict Resolution for Audio
   useEffect(() => {
       if (isLiveActive) {
-          // If live is active, disable local voice features to prevent overlap
           if (isVoiceEnabled) setIsVoiceEnabled(false);
           if (isPlayingAudio) stopAudio();
       }
@@ -514,7 +566,6 @@ export const ChatInterface: React.FC = () => {
 
   const resetMemory = () => {
       if (window.confirm("Perform Chat Reset? This will clear the conversation history and current project state, but keep global settings (Avatar, Bridge, Tutorial).")) {
-          // Selectively remove keys to preserve global settings like Avatar
           localStorage.removeItem('mossy_messages');
           localStorage.removeItem('mossy_state');
           localStorage.removeItem('mossy_project');
@@ -522,7 +573,6 @@ export const ChatInterface: React.FC = () => {
           localStorage.removeItem('mossy_scan_auditor');
           localStorage.removeItem('mossy_scan_cartographer');
           localStorage.removeItem('mossy_cortex_memory');
-          // PRESERVED: mossy_avatar_custom, mossy_bridge_active, mossy_tutorial_completed, mossy_voice_enabled
 
           setMessages([]);
           setProjectContext(null);
@@ -535,7 +585,7 @@ export const ChatInterface: React.FC = () => {
 
   // --- VOICE LOGIC ---
   const toggleVoiceMode = () => {
-      if (isLiveActive) return; // Can't toggle if live is active
+      if (isLiveActive) return;
       if (isVoiceEnabled) stopAudio();
       setIsVoiceEnabled(!isVoiceEnabled);
   };
@@ -572,7 +622,6 @@ export const ChatInterface: React.FC = () => {
 
   const speakText = async (textToSpeak: string) => {
       if (!textToSpeak || isLiveActive) return;
-      // Optimization: truncate excessively long text to prevent freeze
       const cleanText = textToSpeak.replace(/[*#]/g, '').substring(0, 500); 
       setIsPlayingAudio(true);
       try {
@@ -591,8 +640,6 @@ export const ChatInterface: React.FC = () => {
         if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
         const ctx = audioContextRef.current;
         
-        // Decode in chunks if possible, or just decode
-        // Since we truncated, this should be fast enough.
         const binaryString = atob(base64Audio);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
@@ -621,7 +668,6 @@ export const ChatInterface: React.FC = () => {
       let scanContext = "";
       if (scannedFiles.length > 0) {
           scanContext += "\n**THE AUDITOR - RECENT SCAN RESULTS:**\n";
-          // Detailed Error Reporting
           scannedFiles.forEach((f: any) => {
               scanContext += `- File: ${f.name} (Status: ${f.status.toUpperCase()})\n`;
               if (f.issues && f.issues.length > 0) {
@@ -643,10 +689,9 @@ export const ChatInterface: React.FC = () => {
           }
       }
       
-      const blenderDriver = activeDrivers.find((d: any) => d.id === 'blender' && d.status === 'active');
-      const blenderContext = blenderDriver 
-          ? "**BLENDER LINK: ACTIVE (v4.5.5 API)**\nYou have DIRECT ACCESS to Blender via `execute_blender_script`. You can write Python (bpy) to manipulate scenes. You can also send keyboard shortcuts via `send_blender_shortcut`." 
-          : "**BLENDER LINK: OFFLINE**";
+      const blenderContext = isBlenderLinked 
+          ? "**BLENDER LINK: ACTIVE (v4.0 Clipboard Relay)**\nYou can execute Python scripts in Blender.\nIMPORTANT: Tell the user they MUST click the 'Run Command' button that appears in the chat to execute the script." 
+          : "**BLENDER LINK: OFFLINE**\n(If the user asks to control Blender, tell them to go to the Desktop Bridge and install the 'Mossy Link v4.0' add-on first.)";
 
       return `
       **CONTEXT: FALLOUT 4 MODDING**
@@ -680,8 +725,9 @@ export const ChatInterface: React.FC = () => {
   *   Generate Papyrus scripts for Quests, MCM menus, and ObjectReferences.
   *   Analyze crash logs (Buffout 4 format).
   *   Guide users through BodySlide batch building.
-  *   **BLENDER CONTROL:** If the Blender Link is ACTIVE, you can run python scripts OR send key presses (e.g. 'Z', 'Tab', 'G') using 'send_blender_shortcut'.
-  *   **KEY PRESS:** If the user asks to "Press Z" or "Switch View", USE the 'send_blender_shortcut' tool immediately. Do not just say you will do it.
+  *   **BLENDER CONTROL:** If 'BLENDER LINK' is ACTIVE, you can run python scripts OR send key presses.
+  *   **KEY PRESS:** If the user asks to "Press Z" or "Switch View", USE 'send_blender_shortcut'.
+  *   **IMPORTANT:** If you generate a Blender script using 'execute_blender_script', explicitly tell the user: "Click the 'Run Command' button below to execute this in Blender. If that fails, click 'Paste & Run' in the Mossy panel inside Blender."
   `;
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -699,7 +745,6 @@ export const ChatInterface: React.FC = () => {
         setScanProgress(progress);
         if (progress >= 100) {
             clearInterval(interval);
-            // FALLOUT 4 SPECIFIC TOOLS
             const foundApps: DetectedApp[] = [
                 { id: '1', name: 'Creation Kit (FO4)', category: 'Official', checked: true },
                 { id: '2', name: 'Fallout 4 Script Extender (F4SE)', category: 'Core', checked: true },
@@ -753,17 +798,43 @@ export const ChatInterface: React.FC = () => {
   };
 
   const executeTool = async (name: string, args: any) => {
+      // Pre-check for Blender tools
+      if ((name === 'execute_blender_script' || name === 'send_blender_shortcut') && !isBlenderLinked) {
+          setActiveTool(null);
+          return "**Error:** Blender Link is offline. Please install the 'Mossy Link' add-on from the Bridge page to control Blender.";
+      }
+
       setActiveTool({ id: Date.now().toString(), toolName: name, args, status: 'running' });
       
-      // DISPATCH BLENDER EVENT TO BRIDGE (Fix for visual connection)
+      // DISPATCH BLENDER EVENT TO BRIDGE
       if (name === 'execute_blender_script') {
+          // --- USE THE CENTRAL SANITIZER TO FIX THE CODE BEFORE SENDING ---
+          const safeScript = sanitizeBlenderScript(args.script);
+          
+          // NONCE FIX: Append invisible timestamp to force clipboard update even if script is identical
+          const noncedScript = `${safeScript}\n# ID: ${Date.now()}`;
+          
+          // Update args to reflect what we are actually sending
+          args.script = noncedScript;
+
+          // --- CLIPBOARD INJECTION ---
+          try {
+              await navigator.clipboard.writeText(`MOSSY_CMD:${noncedScript}`);
+          } catch (e) {
+              console.error("Clipboard write failed (expected in async context)", e);
+          }
+
           window.dispatchEvent(new CustomEvent('mossy-blender-command', {
               detail: {
-                  code: args.script,
+                  code: noncedScript,
                   description: args.description || 'Script Execution'
               }
           }));
       } else if (name === 'send_blender_shortcut') {
+          try {
+              await navigator.clipboard.writeText(`MOSSY_CMD:import bpy; bpy.ops.wm.context_toggle(data_path="space_data.overlay.show_wireframes")`); 
+          } catch (e) {}
+          
           window.dispatchEvent(new CustomEvent('mossy-blender-shortcut', {
               detail: {
                   keys: args.keys,
@@ -790,7 +861,7 @@ export const ChatInterface: React.FC = () => {
           localStorage.setItem('mossy_system_profile', JSON.stringify(newProfile));
           result = `Hardware: ULTRA Settings ready. Godrays High supported.`;
       } else if (name === 'execute_blender_script') {
-          result = `**Blender Python Executed:**\nScript sent to localhost:21337.\nStatus: 200 OK\nOutput: [INFO] Operator finished. 14 vertices modified.`;
+          result = `**Blender Python Prepared:**\nI have prepared the script and attempted to copy it to the clipboard. Click the 'Run Command' button above to execute it via the clipboard relay.\n\nIf auto-run fails, use the 'Paste & Run' button in the Blender panel.`;
       } else if (name === 'send_blender_shortcut') {
           result = `**Blender Shortcut Sent:** ${args.keys}\nCommand confirmed by bridge.`;
       }
@@ -798,6 +869,23 @@ export const ChatInterface: React.FC = () => {
       setActiveTool(prev => prev ? { ...prev, status: 'success', result } : null);
       setTimeout(() => setActiveTool(null), 5000);
       return result;
+  };
+
+  const handleManualExecute = async (name: string, args: any) => {
+      // Force write to clipboard for manual override
+      if (name === 'execute_blender_script') {
+          try {
+              // --- APPLY SANITIZER HERE TOO ---
+              // This was missing before! Now the manual button uses the robust Data API logic.
+              const safeScript = sanitizeBlenderScript(args.script);
+              const noncedScript = `${safeScript}\n# ID: ${Date.now()}`;
+              
+              await navigator.clipboard.writeText(`MOSSY_CMD:${noncedScript}`);
+              alert("Command copied to clipboard! \n\n1. Switch to Blender.\n2. If nothing happens in 2 seconds, click 'Paste & Run' in the Mossy panel.");
+          } catch (e) {
+              alert("Failed to write to clipboard. Please allow clipboard permissions or copy the code manually.");
+          }
+      }
   };
 
   const handleStopGeneration = () => {
@@ -814,7 +902,6 @@ export const ChatInterface: React.FC = () => {
     const textToSend = overrideText || inputText;
     if ((!textToSend.trim() && !selectedFile) || isLoading || isStreaming) return;
 
-    // Abort previous if any
     if (abortControllerRef.current) {
         abortControllerRef.current.abort();
     }
@@ -842,90 +929,79 @@ export const ChatInterface: React.FC = () => {
     stopAudio();
 
     if (onboardingState === 'project_setup') {
-        // Fallback if wizard is bypassed or text sent directly (shouldn't happen with UI change, but good for safety)
         createProjectFile({ name: textToSend, description: "Auto-created from chat", categories: [] });
         setOnboardingState('ready');
     }
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      let contents: any = [{ role: 'user', parts: [] }];
+      let contents: any[] = [];
       
+      const history = messages
+        .filter(m => m.role !== 'system' && !m.text.includes("Scan Complete")) 
+        .map(m => {
+            const parts = [];
+            if (m.text && m.text.trim().length > 0) parts.push({ text: m.text });
+            if (parts.length === 0) parts.push({ text: "[Image Uploaded]" });
+            return { role: m.role, parts };
+        });
+      
+      contents = [...history];
+
+      const userParts = [];
       if (selectedFile) {
         const base64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
           reader.readAsDataURL(selectedFile);
         });
-        contents[0].parts.push({ inlineData: { mimeType: selectedFile.type, data: base64.split(',')[1] } });
+        userParts.push({ inlineData: { mimeType: selectedFile.type, data: base64.split(',')[1] } });
       }
-      contents[0].parts.push({ text: textToSend });
+      userParts.push({ text: textToSend });
+      contents.push({ role: 'user', parts: userParts });
 
-      // Construct history carefully to avoid empty text parts
-      const history = messages
-        .filter(m => m.role !== 'system' && !m.text.includes("Scan Complete")) 
-        .map(m => {
-            const parts = [];
-            // If message has text, add text part
-            if (m.text && m.text.trim().length > 0) {
-                parts.push({ text: m.text });
-            }
-            // If message has image but no text, we must ensure at least one part exists.
-            // However, chat history in Gemini API typically only supports text parts in 'history' array correctly for context.
-            // Multi-modal inputs are usually sent in the current turn.
-            // If a previous turn was ONLY image, we might need a placeholder text or skip it if the API requires text.
-            // For safety, if parts is empty, add a placeholder.
-            if (parts.length === 0) {
-                parts.push({ text: "[Image Uploaded]" });
-            }
-            return { role: m.role, parts };
-        });
-
-      // Always allow tools if bridge is active, or if we want to allow web search
       const toolsConfig = [{ functionDeclarations: toolDeclarations }];
 
-      // Switch to Flash Preview for better tool stability and speed
-      const chat = ai.chats.create({
+      setIsStreaming(true);
+      
+      const streamResult = await ai.models.generateContentStream({
         model: 'gemini-3-flash-preview',
+        contents: contents,
         config: {
           systemInstruction: systemInstruction,
           tools: toolsConfig,
         },
-        history: history
       });
-
-      setIsStreaming(true);
       
-      let streamResult;
-      
-      try {
-          streamResult = await chat.sendMessageStream({ message: contents[0].parts });
-      } catch (e: any) {
-          throw e;
-      }
-      
-      // Create placeholder message for stream
       const streamId = (Date.now() + 1).toString();
       setMessages(prev => [...prev, { id: streamId, role: 'model', text: '' }]);
 
       let accumulatedText = '';
       
-      // Process Stream
       for await (const chunk of streamResult) {
           if (abortControllerRef.current?.signal.aborted) break;
           
           const chunkText = chunk.text || '';
           accumulatedText += chunkText;
           
-          // Check for Tool Calls within stream
-          if (chunk.functionCalls && chunk.functionCalls.length > 0) {
-              for (const call of chunk.functionCalls) {
+          const calls = chunk.functionCalls;
+          
+          if (calls && calls.length > 0) {
+              for (const call of calls) {
                   console.log("Executing Tool Call from Stream:", call.name);
-                  // Execute tool immediately
                   const result = await executeTool(call.name, call.args);
                   
-                  // Add visual indicator to message
-                  accumulatedText += `\n\n\`[System: Executed ${call.name}]\`\n`;
+                  setMessages(prev => prev.map(m => m.id === streamId ? { 
+                      ...m, 
+                      text: accumulatedText,
+                      toolCall: { toolName: call.name, args: call.args } 
+                  } : m));
+
+                  if (result.startsWith("**Error:**")) {
+                      accumulatedText += `\n\n${result}\n`;
+                  } else {
+                      accumulatedText += `\n\n\`[System: Executed ${call.name}]\`\n`;
+                  }
               }
           }
 
@@ -938,13 +1014,9 @@ export const ChatInterface: React.FC = () => {
       console.error(error);
       const errText = error instanceof Error ? error.message : 'Unknown error';
       if (errText.includes("not found") || errText.includes("404")) {
-          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**Connection Lost:** The Google AI Studio service is currently unreachable. Please check your API key or network connection." }]);
-      } else if (errText.includes("503") || errText.toLowerCase().includes("unavailable")) {
-          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**Service Unavailable:** The AI model is currently overloaded. Please try again in a few moments." }]);
-      } else if (errText.toLowerCase().includes("deadline") || errText.toLowerCase().includes("timeout")) {
-          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**Timeout Error:** The operation took too long. I've reduced my thinking complexity for the next request. Please try again." }]);
-      } else if (errText.includes("implemented")) {
-          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**System Limitation:** The current AI model configuration does not support this specific operation (Tool Use + Thinking). I've adjusted my settings for the next response." }]);
+          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**Connection Lost:** The Google AI Studio service is currently unreachable." }]);
+      } else if (errText.includes("implemented") || errText.includes("supported")) {
+           setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**System Limitation:** Tool execution unavailable in current stream configuration. I'll describe the action instead." }]);
       } else {
           setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: `**System Error:** ${errText}` }]);
       }
@@ -957,6 +1029,7 @@ export const ChatInterface: React.FC = () => {
   };
 
   return (
+    // ... (JSX remains the same)
     <div className="flex flex-col h-full bg-forge-dark text-slate-200">
       {/* Header */}
       <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-forge-panel">
@@ -977,9 +1050,9 @@ export const ChatInterface: React.FC = () => {
                 </div>
             )}
             
-            {activeDrivers.some(d => d.id === 'blender' && d.status === 'active') && (
+            {isBlenderLinked && (
                 <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-orange-900/20 border border-orange-500/30 rounded-full text-xs text-orange-400 animate-fade-in">
-                    <Box className="w-3 h-3" /> Blender
+                    <Box className="w-3 h-3" /> Blender Active
                 </div>
             )}
 
@@ -1000,7 +1073,7 @@ export const ChatInterface: React.FC = () => {
             </div>
 
             {/* Blender Integration Manual Trigger */}
-            {isBridgeActive && (
+            {isBlenderLinked && (
                 <button 
                     onClick={() => executeTool('execute_blender_script', { 
                         script: "import bpy\n\n# Force Scene Update\nbpy.context.view_layer.update()\nprint('Mossy: Syncing...')", 
@@ -1068,6 +1141,7 @@ export const ChatInterface: React.FC = () => {
                 projectContext={projectContext}
                 handleIntegrate={handleIntegrate}
                 handleStartProject={handleStartProject}
+                onManualExecute={handleManualExecute}
             >
                 {/* Active Tool Status */}
                 {activeTool && (

@@ -22,11 +22,11 @@ const Holodeck: React.FC = () => {
   const [loadingTurn, setLoadingTurn] = useState(false);
   
   const [gameState, setGameState] = useState<GameState>({
-      location: "Neon Slums - Sector 4",
+      location: "Goodneighbor - The Third Rail",
       questStage: 10,
-      inventory: ["Data Chip", "Rusty Pistol"],
+      inventory: ["Caps (150)", "10mm Pistol"],
       health: 100,
-      activeObjectives: ["Find the contact 'Drax'", "Avoid detection"]
+      activeObjectives: ["Find the contact", "Avoid MacCready"]
   });
 
   const [narrativeLog, setNarrativeLog] = useState<{type: 'narrative' | 'dialogue', content: string, speaker?: string}[]>([]);
@@ -44,7 +44,7 @@ const Holodeck: React.FC = () => {
           type: 'narrative',
           content: "INITIALIZING HOLODECK SIMULATION [v4.2]... LOADING ASSETS... DONE."
       }]);
-      processTurn("Start the simulation. The player arrives at the Neon Slums meeting point.");
+      processTurn("Start the simulation. The player enters The Third Rail bar in Goodneighbor.");
   };
 
   const processTurn = async (playerAction: string) => {
@@ -55,7 +55,7 @@ const Holodeck: React.FC = () => {
           
           // 1. Game Master Logic (Text)
           const prompt = `
-          You are the AI Game Master for a text adventure playtest.
+          You are the AI Game Master for a Fallout 4 text adventure playtest.
           Current State: ${JSON.stringify(gameState)}
           Player Action: "${playerAction}"
           
@@ -154,7 +154,7 @@ const Holodeck: React.FC = () => {
   const handleGenerateFrame = async () => {
       // Manually trigger image generation for current state
       // This is a placeholder for the actual API call logic similar to ImageSuite
-      const prompt = `Sci-fi concept art, ${gameState.location}, cinematic lighting, 4k`;
+      const prompt = `Fallout 4 post-apocalyptic concept art, ${gameState.location}, cinematic lighting, 4k`;
       // Here we would call the Image API and update setCurrentSceneImg
       alert(`[MOCK] Generating high-res render for: ${prompt}`);
   };
@@ -297,7 +297,7 @@ const Holodeck: React.FC = () => {
                       Initialize Simulation
                       <div className="absolute -inset-3 rounded-full bg-emerald-400 opacity-20 group-hover:opacity-40 blur-lg transition-opacity duration-200"></div>
                   </button>
-                  <p className="mt-4 text-slate-500 text-sm font-mono">Load default scenario: "Neon Slums"</p>
+                  <p className="mt-4 text-slate-500 text-sm font-mono">Load default scenario: "Goodneighbor"</p>
               </div>
           )}
       </div>

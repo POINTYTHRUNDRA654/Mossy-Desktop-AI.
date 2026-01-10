@@ -33,29 +33,28 @@ const TheScribe: React.FC = () => {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
             let prompt = "";
-            let systemContext = `You are "The Scribe", a documentation assistant for game mods. Mod Name: "${modName}". Version: "${version}".`;
+            let systemContext = `You are "The Scribe", a documentation assistant for Fallout 4 mods. Mod Name: "${modName}". Version: "${version}".`;
 
             if (activeTab === 'readme') {
                 prompt = `${systemContext}
                 Generate a comprehensive README.md file.
                 Include:
                 1. Introduction (Catchy hook).
-                2. Features (Bulleted list, assume it adds weapons/quests based on the name).
-                3. Requirements (Assume F4SE and base game).
-                4. Installation (Standard Mod Manager instructions).
+                2. Features (Bulleted list, assume it adds weapons/quests/settlement objects based on the name).
+                3. Requirements (Assume F4SE and base Fallout 4).
+                4. Installation (Mod Organizer 2 / Vortex instructions).
                 5. Credits.
                 Tone: ${tone}.`;
             } else if (activeTab === 'changelog') {
                 prompt = `${systemContext}
                 Generate a changelog for version ${version}.
-                Invent 3-5 realistic bug fixes and 1 major new feature suitable for a mod named "${modName}".
+                Invent 3-5 realistic bug fixes (e.g. Navmesh, Textures, Papyrus scripts) and 1 major new feature suitable for a Fallout 4 mod named "${modName}".
                 Format as a clean list.`;
             } else if (activeTab === 'lore') {
                 prompt = `${systemContext}
                 Write an immersive, in-universe description of this mod's content.
-                If Fallout: Write it as a Terminal Entry (RobCo Termlink style).
-                If Skyrim: Write it as a worn journal entry.
-                Make it atmospheric.`;
+                Style: Terminal Entry (RobCo Termlink) or a Holotape Transcript found in the Commonwealth.
+                Make it atmospheric, mentioning specific Fallout 4 locations or factions if relevant (Institute, Brotherhood, Railroad).`;
             }
 
             const response = await ai.models.generateContent({

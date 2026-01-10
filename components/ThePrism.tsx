@@ -133,7 +133,7 @@ const ThePrism: React.FC = () => {
                     <textarea 
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Enter a complex query to be analyzed (e.g., 'Design a cyberpunk magic system for my RPG')..."
+                        placeholder="Enter a complex query to be analyzed (e.g., 'Design a dynamic settlement attack system')..."
                         className="w-full bg-slate-900/80 border border-slate-700 rounded-2xl p-6 text-lg text-white placeholder-slate-500 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/20 transition-all shadow-2xl resize-none h-32"
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {

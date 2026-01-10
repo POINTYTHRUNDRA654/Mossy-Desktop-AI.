@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import MossyObserver from './components/MossyObserver';
 import CommandPalette from './components/CommandPalette';
 import TutorialOverlay from './components/TutorialOverlay';
+import SystemBus from './components/SystemBus';
 import { Loader2, Zap } from 'lucide-react';
 import { LiveProvider } from './components/LiveContext';
 
@@ -124,6 +125,7 @@ const App: React.FC = () => {
           <NeuralController />
           <CommandPalette />
           <TutorialOverlay />
+          <SystemBus />
           <Sidebar />
           <main className="flex-1 relative overflow-hidden bg-[#050910]">
             <MossyObserver />

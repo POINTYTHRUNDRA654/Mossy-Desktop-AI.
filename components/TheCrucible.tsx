@@ -6,13 +6,13 @@ interface CrashLog {
     id: string;
     filename: string;
     date: string;
-    engine: string; // e.g., Fallout 4, Skyrim SE
+    engine: string; // e.g., Fallout 4
     preview: string; // First few lines
 }
 
 const initialLogs: CrashLog[] = [
     { id: '1', filename: 'crash-2023-11-04-14-22-01.log', date: 'Nov 04 14:22', engine: 'Fallout 4 v1.10.163', preview: 'Unhandled exception "EXCEPTION_ACCESS_VIOLATION" at 0x7FF7B492A1B0' },
-    { id: '2', filename: 'crash-2023-11-03-09-15-44.log', date: 'Nov 03 09:15', engine: 'Skyrim SE v1.6.640', preview: 'Unhandled exception "EXCEPTION_ACCESS_VIOLATION" at 0x7FF6C2894320' },
+    { id: '2', filename: 'crash-2023-11-03-09-15-44.log', date: 'Nov 03 09:15', engine: 'Fallout 4 v1.10.163', preview: 'Unhandled exception "EXCEPTION_ACCESS_VIOLATION" at 0x7FF7B4894320 (Buffout4)' },
 ];
 
 const mockRawLog = `
@@ -61,7 +61,7 @@ const TheCrucible: React.FC = () => {
             // Using mockRawLog for simulation.
             
             const prompt = `
-            Act as an expert debugger for Bethesda Games (Fallout 4 / Skyrim).
+            Act as an expert debugger for Fallout 4 (Creation Engine).
             Analyze this crash log stack trace and register dump.
             
             Log Content:

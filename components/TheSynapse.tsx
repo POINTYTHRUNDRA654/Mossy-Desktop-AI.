@@ -22,7 +22,7 @@ const initialNodes: Node[] = [
     { id: '2', type: 'action', label: 'Bridge: Run Build Script', icon: Terminal, x: 400, y: 150, config: 'npm run build' },
     { id: '3', type: 'action', label: 'TTS: Announce Status', icon: Volume2, x: 700, y: 150, config: 'Say "Build Started"' },
     { id: '4', type: 'trigger', label: 'Voice: "Computer, Protocol 7"', icon: Mic, x: 100, y: 350, config: 'Phrase Match' },
-    { id: '5', type: 'action', label: 'Launch: Cyberpunk 2077', icon: Zap, x: 400, y: 350, config: 'Steam AppID: 1091500' },
+    { id: '5', type: 'action', label: 'Launch: Fallout 4 (F4SE)', icon: Zap, x: 400, y: 350, config: 'f4se_loader.exe' },
 ];
 
 const initialConnections: Connection[] = [

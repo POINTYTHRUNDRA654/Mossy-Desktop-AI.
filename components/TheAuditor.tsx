@@ -135,12 +135,12 @@ const TheAuditor: React.FC = () => {
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const prompt = `
-            Act as an expert Fallout 4 / Skyrim Modder AI assistant named Mossy.
+            Act as an expert Fallout 4 Modder AI assistant named Mossy.
             The user has a file with the following error:
             Error: ${issue.message}
             Details: ${issue.technicalDetails}
             
-            Provide a concise, friendly explanation of why this is bad, and how to fix it manually if the auto-fix fails.
+            Provide a concise, friendly explanation of why this is bad for Fallout 4 stability, and how to fix it manually if the auto-fix fails.
             Keep it under 3 sentences.
             `;
 
