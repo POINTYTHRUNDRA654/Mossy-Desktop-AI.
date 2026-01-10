@@ -100,7 +100,7 @@ const toolDeclarations: FunctionDeclaration[] = [
     },
     {
         name: 'send_blender_shortcut',
-        description: 'Send a keyboard shortcut or key press to the active Blender window (e.g. "Z", "Shift+A", "Tab").',
+        description: 'Send a keyboard shortcut or key press to the active Blender window. Use this for view toggles (Z, Numpad) or tool activation (G, R, S).',
         parameters: {
             type: Type.OBJECT,
             properties: {
@@ -681,6 +681,7 @@ export const ChatInterface: React.FC = () => {
   *   Analyze crash logs (Buffout 4 format).
   *   Guide users through BodySlide batch building.
   *   **BLENDER CONTROL:** If the Blender Link is ACTIVE, you can run python scripts OR send key presses (e.g. 'Z', 'Tab', 'G') using 'send_blender_shortcut'.
+  *   **KEY PRESS:** If the user asks to "Press Z" or "Switch View", USE the 'send_blender_shortcut' tool immediately. Do not just say you will do it.
   `;
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -860,21 +861,35 @@ export const ChatInterface: React.FC = () => {
       }
       contents[0].parts.push({ text: textToSend });
 
+      // Construct history carefully to avoid empty text parts
       const history = messages
         .filter(m => m.role !== 'system' && !m.text.includes("Scan Complete")) 
-        .map(m => ({ role: m.role, parts: [{ text: m.text }] }));
+        .map(m => {
+            const parts = [];
+            // If message has text, add text part
+            if (m.text && m.text.trim().length > 0) {
+                parts.push({ text: m.text });
+            }
+            // If message has image but no text, we must ensure at least one part exists.
+            // However, chat history in Gemini API typically only supports text parts in 'history' array correctly for context.
+            // Multi-modal inputs are usually sent in the current turn.
+            // If a previous turn was ONLY image, we might need a placeholder text or skip it if the API requires text.
+            // For safety, if parts is empty, add a placeholder.
+            if (parts.length === 0) {
+                parts.push({ text: "[Image Uploaded]" });
+            }
+            return { role: m.role, parts };
+        });
 
-      const toolsConfig = isBridgeActive ? [{functionDeclarations: toolDeclarations}] : [{ googleSearch: {} }];
-      
-      // DISABLED: thinkingConfig removed to prevent 503 Service Unavailable errors on preview models.
-      // const thinkingConfig = isBridgeActive ? undefined : { thinkingBudget: 2048 };
+      // Always allow tools if bridge is active, or if we want to allow web search
+      const toolsConfig = [{ functionDeclarations: toolDeclarations }];
 
+      // Switch to Flash Preview for better tool stability and speed
       const chat = ai.chats.create({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         config: {
           systemInstruction: systemInstruction,
           tools: toolsConfig,
-          // thinkingConfig: thinkingConfig, // Disabled
         },
         history: history
       });
@@ -882,44 +897,11 @@ export const ChatInterface: React.FC = () => {
       setIsStreaming(true);
       
       let streamResult;
-      let retryCount = 0;
-      const maxRetries = 4;
-
-      // Primary Attempt Loop with Fallback Logic
-      while (true) {
-          try {
-              streamResult = await chat.sendMessageStream({ message: contents[0].parts });
-              break;
-          } catch (e: any) {
-              const msg = e.message || '';
-              const isUnavailable = msg.includes('503') || msg.toLowerCase().includes('unavailable') || msg.toLowerCase().includes('overloaded');
-              
-              if (isUnavailable && retryCount < maxRetries) {
-                  retryCount++;
-                  console.warn(`Service issue/timeout, retrying (attempt ${retryCount}/${maxRetries})...`);
-                  await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
-                  continue;
-              } else if (isUnavailable && retryCount >= maxRetries) {
-                  // Fallback to Flash model if Pro fails repeatedly
-                  console.warn("Falling back to Flash model due to persistent 503s on Pro.");
-                  const fallbackChat = ai.chats.create({
-                      model: 'gemini-3-flash-preview',
-                      config: {
-                          systemInstruction: systemInstruction,
-                          tools: toolsConfig,
-                      },
-                      history: history
-                  });
-                  
-                  try {
-                      streamResult = await fallbackChat.sendMessageStream({ message: contents[0].parts });
-                      break;
-                  } catch (fallbackError: any) {
-                      throw new Error("The service is currently unavailable. Both primary and backup models failed to respond.");
-                  }
-              }
-              throw e;
-          }
+      
+      try {
+          streamResult = await chat.sendMessageStream({ message: contents[0].parts });
+      } catch (e: any) {
+          throw e;
       }
       
       // Create placeholder message for stream
@@ -935,6 +917,18 @@ export const ChatInterface: React.FC = () => {
           const chunkText = chunk.text || '';
           accumulatedText += chunkText;
           
+          // Check for Tool Calls within stream
+          if (chunk.functionCalls && chunk.functionCalls.length > 0) {
+              for (const call of chunk.functionCalls) {
+                  console.log("Executing Tool Call from Stream:", call.name);
+                  // Execute tool immediately
+                  const result = await executeTool(call.name, call.args);
+                  
+                  // Add visual indicator to message
+                  accumulatedText += `\n\n\`[System: Executed ${call.name}]\`\n`;
+              }
+          }
+
           setMessages(prev => prev.map(m => m.id === streamId ? { ...m, text: accumulatedText } : m));
       }
 
