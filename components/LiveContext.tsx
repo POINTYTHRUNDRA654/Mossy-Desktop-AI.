@@ -305,13 +305,11 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // 1. CHECK BRIDGE STATUS
       const driversSaved = localStorage.getItem('mossy_bridge_drivers');
       let bridgeContext = "";
-      let hasBlender = false;
       
       if (driversSaved) {
           const drivers = JSON.parse(driversSaved);
           const blender = drivers.find((d: any) => d.id === 'blender' && d.status === 'active');
           if (blender) {
-              hasBlender = true;
               bridgeContext = "SYSTEM NOTICE: Blender 4.5.5 is CONNECTED via Desktop Bridge. You have full control over the connected Blender instance.";
           }
       }
@@ -349,8 +347,8 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       setStatus('Establishing Uplink...');
       
-      // Define tools if Blender is connected so the model knows it has the capability
-      const tools = hasBlender ? [
+      // Define tools - always include Blender control to allow linking attempt
+      const tools = [
         {
           functionDeclarations: [
             {
@@ -366,7 +364,7 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             },
             {
                 name: "send_blender_shortcut",
-                description: "Simulate pressing keys in Blender. Use this for view modes (Z), edit mode (Tab), object ops (G, R, S), or menus (Shift+A).",
+                description: "Send keyboard shortcut to Blender. Use this to change view modes (Z), toggle edit mode (Tab), or move objects (G). IMPORTANT: Use 'Z' to toggle Skeletal/Wireframe mode.",
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
@@ -378,7 +376,7 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
           ]
         }
-      ] : undefined;
+      ];
 
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
@@ -393,9 +391,8 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           ${historyContext}
           
           You are currently speaking via Live Audio Interface.
-          If Blender is connected, ACKNOWLEDGE IT explicitly in your first sentence.
           You can EXECUTE PYTHON SCRIPTS or PRESS KEYS in Blender directly.
-          If the user says "press Z" or "turn on skeletal mode", use the 'send_blender_shortcut' tool.`,
+          If the user says "press Z" or "turn on skeletal mode", use the 'send_blender_shortcut' tool immediately.`,
           tools: tools,
         },
         callbacks: {

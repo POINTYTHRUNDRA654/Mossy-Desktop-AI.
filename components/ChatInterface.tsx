@@ -137,7 +137,10 @@ const toolDeclarations: FunctionDeclaration[] = [
         description: 'Perform a deep scan of the user\'s hardware for Fallout 4 performance tuning (Shadow Distance, Godrays support).',
         parameters: {
             type: Type.OBJECT,
-            properties: {},
+            properties: {
+                target: { type: Type.STRING, description: "Target system component (e.g. 'gpu', 'cpu', 'all')" }
+            },
+            required: ['target']
         }
     },
     {
@@ -861,13 +864,17 @@ export const ChatInterface: React.FC = () => {
         .filter(m => m.role !== 'system' && !m.text.includes("Scan Complete")) 
         .map(m => ({ role: m.role, parts: [{ text: m.text }] }));
 
+      const toolsConfig = isBridgeActive ? [{functionDeclarations: toolDeclarations}] : [{ googleSearch: {} }];
+      
+      // DISABLED: thinkingConfig removed to prevent 503 Service Unavailable errors on preview models.
+      // const thinkingConfig = isBridgeActive ? undefined : { thinkingBudget: 2048 };
+
       const chat = ai.chats.create({
         model: 'gemini-3-pro-preview',
         config: {
           systemInstruction: systemInstruction,
-          tools: isBridgeActive ? [{functionDeclarations: toolDeclarations}] : [{ googleSearch: {} }],
-          // REDUCED BUDGET to prevent timeouts. Default was causing deadline exceeded errors.
-          thinkingConfig: { thinkingBudget: 2048 }, 
+          tools: toolsConfig,
+          // thinkingConfig: thinkingConfig, // Disabled
         },
         history: history
       });
@@ -878,6 +885,7 @@ export const ChatInterface: React.FC = () => {
       let retryCount = 0;
       const maxRetries = 3;
 
+      // Primary Attempt Loop with Fallback Logic
       while (true) {
           try {
               streamResult = await chat.sendMessageStream({ message: contents[0].parts });
@@ -887,9 +895,21 @@ export const ChatInterface: React.FC = () => {
               if ((msg.includes('503') || msg.toLowerCase().includes('unavailable') || msg.toLowerCase().includes('deadline')) && retryCount < maxRetries) {
                   retryCount++;
                   console.warn(`Service issue/timeout, retrying (attempt ${retryCount}/${maxRetries})...`);
-                  // Exponential backoff: 1s, 2s, 4s
                   await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
                   continue;
+              } else if (msg.includes('503') && retryCount >= maxRetries) {
+                  // Fallback to Flash model if Pro fails repeatedly
+                  console.warn("Falling back to Flash model due to persistent 503s on Pro.");
+                  const fallbackChat = ai.chats.create({
+                      model: 'gemini-3-flash-preview',
+                      config: {
+                          systemInstruction: systemInstruction,
+                          tools: toolsConfig,
+                      },
+                      history: history
+                  });
+                  streamResult = await fallbackChat.sendMessageStream({ message: contents[0].parts });
+                  break;
               }
               throw e;
           }
@@ -922,6 +942,8 @@ export const ChatInterface: React.FC = () => {
           setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**Service Unavailable:** The AI model is currently overloaded. Please try again in a few moments." }]);
       } else if (errText.toLowerCase().includes("deadline") || errText.toLowerCase().includes("timeout")) {
           setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**Timeout Error:** The operation took too long. I've reduced my thinking complexity for the next request. Please try again." }]);
+      } else if (errText.includes("implemented")) {
+          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**System Limitation:** The current AI model configuration does not support this specific operation (Tool Use + Thinking). I've adjusted my settings for the next response." }]);
       } else {
           setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: `**System Error:** ${errText}` }]);
       }

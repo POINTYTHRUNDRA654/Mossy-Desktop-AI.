@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench, FolderOpen, HardDrive, ArrowRightLeft, ArrowRight } from 'lucide-react';
+import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench, FolderOpen, HardDrive, ArrowRightLeft, ArrowRight, Keyboard } from 'lucide-react';
 
 interface Driver {
     id: string;
@@ -36,13 +36,11 @@ const DesktopBridge: React.FC = () => {
               const parsed = JSON.parse(saved);
               return initialDrivers.map(d => {
                   const s = parsed.find((p: any) => p.id === d.id);
-                  // AUTO-ACTIVATE BLENDER FOR DEMO PURPOSES
                   if (d.id === 'blender') return { ...d, status: 'active', latency: 12 };
                   return s ? { ...d, status: s.status } : d;
               });
           }
       } catch {}
-      // Default Blender to active if no save found
       return initialDrivers.map(d => d.id === 'blender' ? { ...d, status: 'active', latency: 12 } : d);
   });
 
@@ -54,6 +52,8 @@ const DesktopBridge: React.FC = () => {
   // Blender specific simulation state
   const [blenderActivity, setBlenderActivity] = useState<'idle' | 'syncing' | 'receiving'>('idle');
   const [lastBlenderMsg, setLastBlenderMsg] = useState('Idle');
+  const [blenderViewMode, setBlenderViewMode] = useState<'SOLID' | 'WIREFRAME'>('SOLID');
+  const blenderCanvasRef = useRef<HTMLCanvasElement>(null);
   
   const folderInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,12 +64,8 @@ const DesktopBridge: React.FC = () => {
   // Persist drivers
   useEffect(() => {
       localStorage.setItem('mossy_bridge_drivers', JSON.stringify(drivers.map(d => ({ id: d.id, status: d.status }))));
-      
-      // Update global bridge flag if any driver active
       const anyActive = drivers.some(d => d.status === 'active');
       localStorage.setItem('mossy_bridge_active', anyActive.toString());
-      
-      // Dispatch events for other components
       window.dispatchEvent(new Event('mossy-bridge-connected'));
       window.dispatchEvent(new Event('mossy-driver-update'));
   }, [drivers]);
@@ -83,7 +79,6 @@ const DesktopBridge: React.FC = () => {
           setLastBlenderMsg(`Executing: ${description}`);
           addLog('Blender', `Remote CMD: ${description}`, 'warn');
           
-          // Simulate processing time
           setTimeout(() => {
               addLog('Blender', 'Script executed successfully. Scene Updated.', 'success');
               setLastBlenderMsg('Sync Complete');
@@ -95,12 +90,20 @@ const DesktopBridge: React.FC = () => {
           const { keys, description } = e.detail;
           setBlenderActivity('receiving');
           setLastBlenderMsg(`Input: ${keys}`);
-          addLog('Blender', `Keystroke: ${keys} (${description})`, 'warn');
+          addLog('Blender', `Keystroke: [ ${keys} ] - ${description}`, 'warn');
+          
+          // SIMULATE KEY PRESS EFFECT
+          if (keys.toLowerCase() === 'z' || description.toLowerCase().includes('skeletal') || description.toLowerCase().includes('wireframe')) {
+              setBlenderViewMode(prev => {
+                  const next = prev === 'SOLID' ? 'WIREFRAME' : 'SOLID';
+                  addLog('Blender', `Viewport Mode Toggled: ${next}`, 'success');
+                  return next;
+              });
+          }
           
           setTimeout(() => {
-              addLog('Blender', 'Input processed.', 'success');
               setBlenderActivity('idle');
-          }, 500);
+          }, 800);
       };
 
       window.addEventListener('mossy-blender-command', handleBlenderCommand as EventListener);
@@ -124,6 +127,86 @@ const DesktopBridge: React.FC = () => {
       }, 1000);
       return () => clearInterval(interval);
   }, []);
+
+  // --- BLENDER 3D CUBE VISUALIZER ---
+  useEffect(() => {
+      const canvas = blenderCanvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (!canvas || !ctx) return;
+
+      let frameId: number;
+      let rotation = 0;
+
+      const render = () => {
+          rotation += 0.02;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Center
+          const cx = canvas.width / 2;
+          const cy = canvas.height / 2;
+          const size = 30;
+
+          // Vertices of a cube
+          const vertices = [
+              {x: -1, y: -1, z: -1}, {x: 1, y: -1, z: -1}, {x: 1, y: 1, z: -1}, {x: -1, y: 1, z: -1},
+              {x: -1, y: -1, z: 1}, {x: 1, y: -1, z: 1}, {x: 1, y: 1, z: 1}, {x: -1, y: 1, z: 1}
+          ];
+
+          // Rotate & Project
+          const projected = vertices.map(v => {
+              // Rotate Y
+              let x = v.x * Math.cos(rotation) - v.z * Math.sin(rotation);
+              let z = v.x * Math.sin(rotation) + v.z * Math.cos(rotation);
+              // Rotate X
+              let y = v.y * Math.cos(rotation * 0.5) - z * Math.sin(rotation * 0.5);
+              z = v.y * Math.sin(rotation * 0.5) + z * Math.cos(rotation * 0.5);
+              
+              // Project
+              const scale = 100 / (100 + z * 30);
+              return { x: cx + x * size * scale, y: cy + y * size * scale };
+          });
+
+          // Draw Edges
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = blenderViewMode === 'WIREFRAME' ? '#fff' : '#orange'; 
+          
+          const edges = [
+              [0,1], [1,2], [2,3], [3,0], // back
+              [4,5], [5,6], [6,7], [7,4], // front
+              [0,4], [1,5], [2,6], [3,7]  // connecting
+          ];
+
+          // Fill Faces if Solid
+          if (blenderViewMode === 'SOLID') {
+              ctx.fillStyle = 'rgba(249, 115, 22, 0.2)'; // Orange tint
+              // Simple fill logic (front face only for speed/style)
+              ctx.beginPath();
+              ctx.moveTo(projected[4].x, projected[4].y);
+              ctx.lineTo(projected[5].x, projected[5].y);
+              ctx.lineTo(projected[6].x, projected[6].y);
+              ctx.lineTo(projected[7].x, projected[7].y);
+              ctx.closePath();
+              ctx.fill();
+              
+              ctx.fillStyle = 'rgba(249, 115, 22, 0.4)';
+              ctx.strokeStyle = '#f97316';
+          } else {
+              ctx.strokeStyle = '#38bdf8'; // Cyan wireframe
+          }
+
+          ctx.beginPath();
+          edges.forEach(([i, j]) => {
+              ctx.moveTo(projected[i].x, projected[i].y);
+              ctx.lineTo(projected[j].x, projected[j].y);
+          });
+          ctx.stroke();
+
+          frameId = requestAnimationFrame(render);
+      };
+      
+      render();
+      return () => cancelAnimationFrame(frameId);
+  }, [blenderViewMode]);
 
   const addLog = (source: string, event: string, status: 'ok' | 'warn' | 'err' | 'success' = 'ok') => {
       setLogs(prev => [...prev.slice(-19), {
@@ -210,18 +293,14 @@ const DesktopBridge: React.FC = () => {
 
   // --- NATIVE FILE SYSTEM ACCESS ---
   const handleMountFileSystem = async () => {
-      // 1. Attempt Modern API
       try {
           // @ts-ignore
           if (window.showDirectoryPicker) {
               // @ts-ignore
               const handle = await window.showDirectoryPicker();
               setMountedPath(handle.name);
-              
               addLog('FileSystem', `Access granted to: ${handle.name}`, 'success');
               addLog('Indexer', 'Indexing files...', 'warn');
-
-              // Deep Scan Simulation
               let count = 0;
               // @ts-ignore
               for await (const entry of handle.values()) {
@@ -235,22 +314,16 @@ const DesktopBridge: React.FC = () => {
       } catch (err) {
           console.log('FileSystem API failed, falling back to input');
       }
-
-      // 2. Fallback to standard input
       folderInputRef.current?.click();
   };
 
   const handleFolderFallback = (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-
       const path = files[0].webkitRelativePath.split('/')[0] || "Local Folder";
       setMountedPath(path);
-      
       addLog('FileSystem', `Mounted via fallback: ${path}`, 'success');
       addLog('Indexer', `Indexing ${files.length} files...`, 'warn');
-      
-      // Simulate listing first few
       for(let i=0; i<Math.min(5, files.length); i++) {
           addLog('Indexer', `Found: ${files[i].name}`, 'ok');
       }
@@ -287,21 +360,12 @@ const DesktopBridge: React.FC = () => {
 
   return (
     <div className="h-full bg-[#050910] p-8 overflow-y-auto font-sans text-slate-200">
-      
-      {/* Hidden Fallback Input */}
-      <input 
-          type="file" 
-          ref={folderInputRef}
-          className="hidden"
+      <input type="file" ref={folderInputRef} className="hidden" 
           // @ts-ignore
-          webkitdirectory="" 
-          directory="" 
-          multiple
-          onChange={handleFolderFallback}
+          webkitdirectory="" directory="" multiple onChange={handleFolderFallback}
       />
 
       <div className="max-w-6xl mx-auto flex flex-col h-full">
-        
         {/* Header */}
         <div className="flex items-center justify-between mb-8 border-b border-slate-800 pb-6">
             <div>
@@ -362,14 +426,14 @@ const DesktopBridge: React.FC = () => {
 
                 {/* Blender Special Panel */}
                 {drivers.find(d => d.id === 'blender' && d.status === 'active') && (
-                    <div className="bg-orange-900/10 border border-orange-500/30 rounded-xl p-6 relative overflow-hidden">
+                    <div className="bg-orange-900/10 border border-orange-500/30 rounded-xl p-6 relative overflow-hidden transition-all">
                         <div className="flex justify-between items-start mb-4 relative z-10">
                             <div>
                                 <h3 className="text-lg font-bold text-orange-400 flex items-center gap-2">
                                     <Box className="w-5 h-5" /> Blender Bridge Active
                                 </h3>
-                                <p className="text-xs text-orange-200/60 font-mono mt-1">
-                                    {lastBlenderMsg}
+                                <p className="text-xs text-orange-200/60 font-mono mt-1 flex items-center gap-2">
+                                    <Keyboard className="w-3 h-3" /> Input Stream: {lastBlenderMsg}
                                 </p>
                             </div>
                             <div className="flex gap-2">
@@ -382,15 +446,26 @@ const DesktopBridge: React.FC = () => {
                             </div>
                         </div>
                         
-                        {/* Data Visualization */}
-                        <div className="h-12 bg-black/40 rounded border border-orange-900/30 relative flex items-center justify-between px-4 overflow-hidden">
-                            <div className="text-[10px] text-slate-500 font-bold uppercase">Mossy AI</div>
-                            {blenderActivity !== 'idle' && (
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <div className={`w-24 h-1 bg-orange-500 rounded-full animate-slide-ping ${blenderActivity === 'receiving' ? 'animate-reverse' : ''}`}></div>
+                        {/* Interactive Visualizer */}
+                        <div className="flex gap-4">
+                            <div className="h-24 flex-1 bg-black/40 rounded border border-orange-900/30 relative flex items-center justify-between px-4 overflow-hidden">
+                                <div className="text-[10px] text-slate-500 font-bold uppercase">Mossy AI</div>
+                                {blenderActivity !== 'idle' && (
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className={`w-full h-1 bg-orange-500 rounded-full animate-slide-ping ${blenderActivity === 'receiving' ? 'animate-reverse' : ''}`}></div>
+                                    </div>
+                                )}
+                                <div className="text-[10px] text-slate-500 font-bold uppercase">Blender 4.5.5</div>
+                            </div>
+                            
+                            {/* Live Viewport Feedback */}
+                            <div className="w-24 h-24 bg-black rounded border border-slate-700 relative flex items-center justify-center overflow-hidden">
+                                <div className="absolute top-1 left-1 text-[8px] font-mono text-slate-500">VIEWPORT</div>
+                                <canvas ref={blenderCanvasRef} width={100} height={100} className="w-full h-full" />
+                                <div className="absolute bottom-1 right-1 text-[8px] font-bold text-white bg-black/50 px-1 rounded">
+                                    {blenderViewMode}
                                 </div>
-                            )}
-                            <div className="text-[10px] text-slate-500 font-bold uppercase">Blender 4.5.5</div>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -400,9 +475,7 @@ const DesktopBridge: React.FC = () => {
                         <Layers className="w-4 h-4" /> Driver Matrix
                     </h3>
                     <button 
-                        onClick={() => {
-                            drivers.forEach(d => toggleDriver(d.id, true));
-                        }}
+                        onClick={() => drivers.forEach(d => toggleDriver(d.id, true))}
                         className="text-xs text-emerald-500 hover:text-emerald-400 font-bold flex items-center gap-1"
                     >
                         <Link className="w-3 h-3" /> Connect All
