@@ -72,7 +72,8 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Avatar State (Global)
   const [customAvatar, setCustomAvatar] = useState<string | null>(() => {
       try {
-          return localStorage.getItem('mossy_avatar_custom');
+          const avatar = localStorage.getItem('mossy_avatar_custom');
+          return avatar;
       } catch { return null; }
   });
 
@@ -107,9 +108,11 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const processImageToAvatar = async (imgSource: string | File): Promise<string> => {
       return new Promise((resolve, reject) => {
           const img = new Image();
+          img.crossOrigin = "Anonymous"; // Handle CORS for external URLs
           img.onload = () => {
               const canvas = document.createElement('canvas');
-              const maxSize = 300; // Smaller size for better performance/storage
+              // Aggressive resizing to save LocalStorage space
+              const maxSize = 256; 
               let width = img.width;
               let height = img.height;
               
@@ -129,10 +132,10 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               canvas.height = height;
               const ctx = canvas.getContext('2d');
               ctx?.drawImage(img, 0, 0, width, height);
-              // Compress to JPEG 60% quality
-              resolve(canvas.toDataURL('image/jpeg', 0.6));
+              // Compress to JPEG 50% quality for maximum savings
+              resolve(canvas.toDataURL('image/jpeg', 0.5));
           };
-          img.onerror = reject;
+          img.onerror = (e) => reject(new Error("Failed to load image"));
 
           if (typeof imgSource === 'string') {
               img.src = imgSource;
@@ -154,7 +157,8 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               localStorage.setItem('mossy_avatar_custom', compressed);
           } catch (e) {
               console.error("Storage quota exceeded", e);
-              alert("Image saved for this session only (Browser Storage Full).");
+              // Fallback: Try clearing old chats if possible, or just alert
+              alert("Storage Full! Avatar saved for this session only.");
           }
       } catch (err) {
           console.error("Failed to process avatar:", err);
@@ -169,10 +173,11 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               localStorage.setItem('mossy_avatar_custom', compressed);
           } catch (e) {
               console.error("Storage quota exceeded", e);
-              alert("Image saved for this session only (Browser Storage Full).");
+              alert("Storage Full! Avatar saved for this session only.");
           }
       } catch (err) {
           console.error("Failed to process avatar url:", err);
+          alert("Could not load image. It might be protected by CORS.");
       }
   };
 

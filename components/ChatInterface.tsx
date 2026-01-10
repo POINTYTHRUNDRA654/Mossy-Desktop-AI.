@@ -477,8 +477,17 @@ export const ChatInterface: React.FC = () => {
   };
 
   const resetMemory = () => {
-      if (window.confirm("Perform Factory Reset? This will wipe project memory.")) {
-          localStorage.clear();
+      if (window.confirm("Perform Chat Reset? This will clear the conversation history and current project state, but keep global settings (Avatar, Bridge, Tutorial).")) {
+          // Selectively remove keys to preserve global settings like Avatar
+          localStorage.removeItem('mossy_messages');
+          localStorage.removeItem('mossy_state');
+          localStorage.removeItem('mossy_project');
+          localStorage.removeItem('mossy_apps');
+          localStorage.removeItem('mossy_scan_auditor');
+          localStorage.removeItem('mossy_scan_cartographer');
+          localStorage.removeItem('mossy_cortex_memory');
+          // PRESERVED: mossy_avatar_custom, mossy_bridge_active, mossy_tutorial_completed, mossy_voice_enabled
+
           setMessages([]);
           setProjectContext(null);
           setProjectData(null);
@@ -929,7 +938,7 @@ export const ChatInterface: React.FC = () => {
                 </button>
             )}
             
-            <button onClick={resetMemory} className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition-colors">
+            <button onClick={resetMemory} className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition-colors" title="Clear Chat History">
                 <Trash2 className="w-4 h-4" />
             </button>
             <button onClick={() => setShowProjectPanel(!showProjectPanel)} className={`p-2 rounded transition-colors ${showProjectPanel ? 'text-emerald-400 bg-emerald-900/30' : 'text-slate-400 hover:text-white'}`}>
