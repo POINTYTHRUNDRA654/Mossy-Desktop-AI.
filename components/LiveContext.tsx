@@ -3,6 +3,8 @@ import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 
 interface LiveContextType {
   isActive: boolean;
+  isMuted: boolean;
+  toggleMute: () => void;
   status: string;
   volume: number;
   mode: 'idle' | 'listening' | 'processing' | 'speaking';
@@ -61,6 +63,7 @@ const decodeAudioData = async (base64String: string, ctx: AudioContext): Promise
 export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Live State
   const [isActive, setIsActive] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const [status, setStatus] = useState('Standby');
   const [volume, setVolume] = useState(0);
   const [mode, setMode] = useState<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
@@ -81,6 +84,24 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const sessionRef = useRef<Promise<any> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
+  
+  // Ref for Mute state to be accessible in callbacks
+  const isMutedRef = useRef(false);
+
+  const toggleMute = () => {
+      setIsMuted(prev => {
+          const newState = !prev;
+          isMutedRef.current = newState;
+          // If muting, stop current audio immediately
+          if (newState && audioContextRef.current) {
+              sourcesRef.current.forEach(s => s.stop());
+              sourcesRef.current.clear();
+              nextStartTimeRef.current = 0;
+              setMode('idle');
+          }
+          return newState;
+      });
+  };
 
   // --- Avatar Logic ---
   const processImageToAvatar = async (imgSource: string | File): Promise<string> => {
@@ -201,7 +222,7 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setStatus('Establishing Uplink...');
       
       const sessionPromise = ai.live.connect({
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
@@ -237,7 +258,9 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           },
           onmessage: async (msg: LiveServerMessage) => {
             const base64Audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-            if (base64Audio && audioContextRef.current) {
+            
+            // CHECK MUTE STATE BEFORE PLAYING
+            if (base64Audio && audioContextRef.current && !isMutedRef.current) {
                setMode('speaking');
                setTranscription(">> Receiving audio stream...");
                const ctx = audioContextRef.current;
@@ -270,15 +293,19 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       });
       sessionRef.current = sessionPromise;
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setStatus('Init Failed');
+      if (e.message && (e.message.includes('503') || e.message.toLowerCase().includes('unavailable'))) {
+          setStatus('Service Busy');
+      } else {
+          setStatus('Init Failed');
+      }
       disconnect();
     }
   };
 
   return (
-    <LiveContext.Provider value={{ isActive, status, volume, mode, transcription, connect, disconnect, customAvatar, updateAvatar, setAvatarFromUrl, clearAvatar }}>
+    <LiveContext.Provider value={{ isActive, isMuted, toggleMute, status, volume, mode, transcription, connect, disconnect, customAvatar, updateAvatar, setAvatarFromUrl, clearAvatar }}>
       {children}
     </LiveContext.Provider>
   );

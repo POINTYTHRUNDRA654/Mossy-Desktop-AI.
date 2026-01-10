@@ -327,6 +327,9 @@ const MessageList = React.memo(({ messages, ...props }: any) => {
 });
 
 export const ChatInterface: React.FC = () => {
+  // Global Live State
+  const { isActive: isLiveActive, isMuted: isLiveMuted, toggleMute: toggleLiveMute, disconnect: disconnectLive } = useLive();
+
   // State
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -335,16 +338,18 @@ export const ChatInterface: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   
-  // Voice State
-  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
+  // Voice State - Force disabled if Live is active on mount
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(() => {
+      if (isLiveActive) return false;
+      const saved = localStorage.getItem('mossy_voice_enabled') === 'true';
+      return saved;
+  });
+  
   const [isListening, setIsListening] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   
   // Bridge State
   const [isBridgeActive, setIsBridgeActive] = useState(false);
-  
-  // Global Live State
-  const { isActive: isLiveActive, disconnect: disconnectLive } = useLive();
   
   // Tool Execution State
   const [activeTool, setActiveTool] = useState<ToolExecution | null>(null);
@@ -437,7 +442,8 @@ export const ChatInterface: React.FC = () => {
             setShowProjectPanel(true);
         }
         if (savedApps) setDetectedApps(JSON.parse(savedApps));
-        if (savedVoice) setIsVoiceEnabled(JSON.parse(savedVoice));
+        // Don't auto-enable local voice if Live is active, even if saved preference says yes
+        if (savedVoice && !isLiveActive) setIsVoiceEnabled(JSON.parse(savedVoice));
     } catch (e) { console.error("Load failed", e); initMossy(); }
 
     return () => {
@@ -795,7 +801,27 @@ export const ChatInterface: React.FC = () => {
       });
 
       setIsStreaming(true);
-      const streamResult = await chat.sendMessageStream({ message: contents[0].parts });
+      
+      let streamResult;
+      let retryCount = 0;
+      const maxRetries = 3;
+
+      while (true) {
+          try {
+              streamResult = await chat.sendMessageStream({ message: contents[0].parts });
+              break;
+          } catch (e: any) {
+              const msg = e.message || '';
+              if ((msg.includes('503') || msg.toLowerCase().includes('unavailable')) && retryCount < maxRetries) {
+                  retryCount++;
+                  console.warn(`Service unavailable, retrying (attempt ${retryCount}/${maxRetries})...`);
+                  // Exponential backoff: 1s, 2s, 4s
+                  await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
+                  continue;
+              }
+              throw e;
+          }
+      }
       
       // Create placeholder message for stream
       const streamId = (Date.now() + 1).toString();
@@ -820,6 +846,8 @@ export const ChatInterface: React.FC = () => {
       const errText = error instanceof Error ? error.message : 'Unknown error';
       if (errText.includes("not found") || errText.includes("404")) {
           setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**Connection Lost:** The Google AI Studio service is currently unreachable. Please check your API key or network connection." }]);
+      } else if (errText.includes("503") || errText.toLowerCase().includes("unavailable")) {
+          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "**Service Unavailable:** The AI model is currently overloaded or experiencing downtime. Please try again in a few moments." }]);
       } else {
           setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: `**System Error:** ${errText}` }]);
       }
@@ -868,13 +896,27 @@ export const ChatInterface: React.FC = () => {
             </div>
 
             {isLiveActive ? (
-                <button
-                    onClick={disconnectLive}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-red-500/50 bg-red-900/20 text-red-400 animate-pulse hover:bg-red-900/40 text-xs font-bold transition-all"
-                    title="Live Voice is handling audio. Click to disconnect."
-                >
-                    <Activity className="w-4 h-4" /> Live Active (Stop)
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={toggleLiveMute}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                            isLiveMuted 
+                            ? 'bg-slate-800 border-slate-700 text-slate-400' 
+                            : 'bg-red-900/20 border-red-500/50 text-red-400'
+                        }`}
+                        title="Toggle Global Live Voice"
+                    >
+                        {isLiveMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                        {isLiveMuted ? 'Live Muted' : 'Live Active'}
+                    </button>
+                    <button
+                        onClick={disconnectLive}
+                        className="p-1.5 rounded-lg border border-red-500/30 hover:bg-red-900/30 text-red-400 transition-colors"
+                        title="Stop Live Session"
+                    >
+                        <StopCircle className="w-4 h-4" />
+                    </button>
+                </div>
             ) : (
                 <button
                     onClick={toggleVoiceMode}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical, Map, FileDigit, Library, Bug, Package, Watch, ShieldCheck, Feather, Power } from 'lucide-react';
+import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical, Map, FileDigit, Library, Bug, Package, Watch, ShieldCheck, Feather, Power, Volume2, VolumeX } from 'lucide-react';
 import { useLive } from './LiveContext';
 import AvatarCore from './AvatarCore';
 
@@ -11,7 +11,7 @@ const Sidebar: React.FC = () => {
   const [moodColor, setMoodColor] = useState('text-emerald-400');
   
   // Consume Global Live Context
-  const { isActive, status, disconnect } = useLive();
+  const { isActive, isMuted, toggleMute, disconnect } = useLive();
 
   // Toggle Pip-Boy Theme
   const togglePipBoy = () => {
@@ -143,15 +143,26 @@ const Sidebar: React.FC = () => {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
                   </span>
-                  <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Live Voice Active</span>
+                  <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">
+                      {isMuted ? 'Live Muted' : 'Live Voice Active'}
+                  </span>
               </div>
-              <button 
-                  onClick={disconnect}
-                  className="p-1 hover:bg-red-500/20 rounded-full text-red-400 transition-colors"
-                  title="Disconnect Voice"
-              >
-                  <Power className="w-3 h-3" />
-              </button>
+              <div className="flex gap-1">
+                  <button 
+                      onClick={toggleMute}
+                      className={`p-1 rounded-full transition-colors ${isMuted ? 'text-slate-400 hover:text-white' : 'text-red-400 hover:bg-red-500/20'}`}
+                      title={isMuted ? "Unmute Live Voice" : "Mute Live Voice"}
+                  >
+                      {isMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                  </button>
+                  <button 
+                      onClick={disconnect}
+                      className="p-1 hover:bg-red-500/20 rounded-full text-red-400 transition-colors"
+                      title="Disconnect Voice"
+                  >
+                      <Power className="w-3 h-3" />
+                  </button>
+              </div>
           </div>
       )}
 
