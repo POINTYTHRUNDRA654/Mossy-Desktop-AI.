@@ -86,12 +86,21 @@ const SystemBus: React.FC = () => {
                 } else {
                     throw new Error("Bridge responded with error");
                 }
-            } catch (e) {
-                // Bridge is DOWN
+            } catch (e: any) {
+                // IMPORTANT: If we fail to fetch, it might be PNA/CORS block even if server is running.
+                // If it was previously active, we give it a grace period or assume it's just blocked by browser
+                // UNLESS the user explicitly disconnected or we want to be strict.
+                
+                // Current strict mode:
                 const wasUp = localStorage.getItem('mossy_bridge_active') === 'true';
-                localStorage.setItem('mossy_bridge_active', 'false');
-                if (wasUp) {
-                    window.dispatchEvent(new Event('storage')); // Force UI updates
+                
+                // Only mark as down if we are certain it's not just a transient network hiccup
+                // But for now, we must be honest with the UI state.
+                if (e.name !== 'AbortError') {
+                     localStorage.setItem('mossy_bridge_active', 'false');
+                     if (wasUp) {
+                        window.dispatchEvent(new Event('storage')); // Force UI updates
+                     }
                 }
             } finally {
                 isPolling.current = false;

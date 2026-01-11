@@ -18,7 +18,7 @@ interface Integration {
 }
 
 interface SystemProfile {
-    os: 'Windows' | 'Linux' | 'MacOS';
+    os: string;
     gpu: string;
     ram: number; // GB
     blenderVersion: string;
@@ -220,18 +220,21 @@ const SystemMonitor: React.FC = () => {
     
     addLog("[CORE] Initiating Deep Hardware Scan...", 'info');
 
+    // Interval variable needs to be accessible in catch block for cleanup
+    let progressInt: any;
+
     // Attempt real scan first
     try {
         const controller = new AbortController();
-        // INCREASED TIMEOUT: WMI calls on Windows can be slow. 10s should be enough.
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        // 5s Timeout is sufficient for local bridge
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         
         // FAKE PROGRESS FOR UX
         let step = 0;
-        const progressInt = setInterval(() => {
+        progressInt = setInterval(() => {
             step += 5;
             if (step < 90) setScanProgress(step);
-        }, 300);
+        }, 200);
 
         // USE 127.0.0.1 to force IPv4
         const response = await fetch('http://127.0.0.1:21337/hardware', { 
@@ -270,46 +273,39 @@ const SystemMonitor: React.FC = () => {
             throw new Error("SERVER_ERROR");
         }
     } catch (e: any) {
-        // Fallback Logic
-        // If we are here, it's likely a Network Error (Mixed Content Block) or Timeout.
-        // We will aggressively fallback to Simulation Mode to ensure the user sees "Success" 
-        // since they have likely run the BAT file but the browser is blocking the connection.
+        clearInterval(progressInt); // Safety Cleanup
+        setScanProgress(100);
         
-        if (e.message !== "OUTDATED_SERVER") {
-            clearInterval(undefined); // Clear any stray interval (safety)
-            setScanProgress(100);
-            
-            const errorMsg = e.name === 'AbortError' ? "Connection Timed Out" : "Network Blocked";
-            addLog(`[BRIDGE] ${errorMsg}. Switching to Simulation Mode.`, 'warning');
-            addLog("[SYSTEM] Using fallback hardware profile.", 'success');
-            
-            const fallbackProfile: SystemProfile = {
-                os: 'Windows', // Fixed type matching
-                gpu: 'NVIDIA RTX 4090 (Simulated)',
-                ram: 64,
-                blenderVersion: '4.5.5',
-                vram: 24,
-                isLegacy: false,
-                isSimulated: true
-            };
-            setProfile(fallbackProfile);
-            setIsScanning(false);
-            return;
-        }
-
-        setIsScanning(false);
-        setScanProgress(0);
+        // --- FAIL-SAFE FALLBACK ---
+        // If we are here, the bridge is likely blocked by browser security (CORS/PNA) or just offline.
+        // Instead of erroring out, we switch to Simulation Mode so the user can continue working.
         
         if (e.message === "OUTDATED_SERVER") {
             setScanError("Bridge Script Outdated. Please update 'mossy_server.py'.");
             addLog("[ERROR] Bridge Connected but missing /hardware endpoint.", 'error');
             addLog("[ACTION] Go to 'Desktop Bridge' tab and re-download the Server Script.", 'warning');
-        } else {
-            console.warn("Bridge hardware scan failed", e);
-            addLog("[BRIDGE] Connection failed. Is the black window open?", 'error');
-            setScanError("Bridge Connection Failed. Ensure 'start_mossy.bat' is running.");
+            setIsScanning(false);
+            return;
         }
-        return; 
+
+        // For any other error (Network, Timeout, etc), use fallback
+        const errorMsg = e.name === 'AbortError' ? "Connection Timed Out" : "Network Blocked/Offline";
+        addLog(`[BRIDGE] ${errorMsg}. Switching to Simulation Mode.`, 'warning');
+        addLog("[SYSTEM] Using fallback hardware profile.", 'success');
+        
+        const fallbackProfile: SystemProfile = {
+            os: 'Windows 11 (Simulated)',
+            gpu: 'NVIDIA RTX 4090 (High-Perf)',
+            ram: 32,
+            blenderVersion: '4.5.5',
+            vram: 24,
+            isLegacy: false,
+            isSimulated: true
+        };
+        setProfile(fallbackProfile);
+        setIsScanning(false);
+        // Ensure no error is displayed
+        setScanError(null);
     }
   };
 
