@@ -55,7 +55,8 @@ const SystemBus: React.FC = () => {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5s timeout
                 
-                const response = await fetch('http://localhost:21337/health', { 
+                // USE 127.0.0.1 to avoid localhost IPv6 issues
+                const response = await fetch('http://127.0.0.1:21337/health', { 
                     signal: controller.signal,
                     method: 'GET',
                     mode: 'cors' // Important for local dev
@@ -69,6 +70,14 @@ const SystemBus: React.FC = () => {
                         // Bridge is UP
                         const wasDown = localStorage.getItem('mossy_bridge_active') !== 'true';
                         localStorage.setItem('mossy_bridge_active', 'true');
+                        
+                        // VERSION CHECK
+                        if (data.version) {
+                            localStorage.setItem('mossy_bridge_version', data.version);
+                        } else {
+                            localStorage.setItem('mossy_bridge_version', '1.0'); // Fallback for ancient versions
+                        }
+
                         if (wasDown) {
                             window.dispatchEvent(new Event('mossy-bridge-connected'));
                             window.dispatchEvent(new Event('storage')); // Force UI updates

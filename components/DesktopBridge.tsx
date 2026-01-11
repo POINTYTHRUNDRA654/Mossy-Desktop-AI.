@@ -53,6 +53,7 @@ const DesktopBridge: React.FC = () => {
   const logEndRef = useRef<HTMLDivElement>(null);
   
   const [bridgeConnected, setBridgeConnected] = useState(false);
+  const [bridgeVersion, setBridgeVersion] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   
   useEffect(() => {
@@ -68,6 +69,9 @@ const DesktopBridge: React.FC = () => {
               
               const active = localStorage.getItem('mossy_bridge_active') === 'true';
               setBridgeConnected(active);
+
+              const ver = localStorage.getItem('mossy_bridge_version');
+              setBridgeVersion(ver);
           } catch {}
       };
       
@@ -94,7 +98,9 @@ import base64
 import os
 import threading
 import sys
-from flask import Flask, jsonify, request
+import platform
+import subprocess
+from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
 
 # Attempt imports with friendly error
@@ -102,23 +108,64 @@ try:
     import mss
     import pyautogui
     import pyperclip
+    import psutil
 except ImportError as e:
     print(f"\\n[ERROR] Missing dependency: {e.name}")
-    print("Please run: pip install flask flask-cors mss pyautogui pyperclip")
+    print("Please run: pip install flask flask-cors mss pyautogui pyperclip psutil")
     input("Press Enter to exit...")
     sys.exit(1)
 
 # --- CONFIGURATION ---
 PORT = 21337
 app = Flask(__name__)
-CORS(app) # Allow web app to communicate
+# Allow CORS for ALL origins to prevent local network issues
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+@app.after_request
+def add_cors_headers(response):
+    # Enable Private Network Access for modern browsers (Chrome/Edge)
+    response.headers["Access-Control-Allow-Private-Network"] = "true"
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
 
 print(f"\\n[MOSSY BRIDGE] Initializing Neural Link on port {PORT}...")
-print("[MOSSY BRIDGE] Capabilities: Screen Capture (Eyes), Clipboard (Hands), File System (Memory)")
+print("[MOSSY BRIDGE] Capabilities: Screen (Eyes), Clipboard (Hands), Hardware (Senses)")
+print("[MOSSY BRIDGE] Hardware Endpoint: Ready (v5.0)")
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({"status": "online", "version": "4.2.0"})
+    return jsonify({"status": "online", "version": "5.0.0"})
+
+@app.route('/hardware', methods=['GET'])
+def get_hardware():
+    """Returns real system specifications"""
+    try:
+        # Memory
+        mem = psutil.virtual_memory()
+        total_ram_gb = round(mem.total / (1024**3))
+        
+        # GPU (Windows specific approach)
+        gpu_name = "Generic / Integrated"
+        try:
+            if platform.system() == "Windows":
+                cmd = "wmic path win32_VideoController get name"
+                proc = subprocess.check_output(cmd, shell=True).decode()
+                lines = [line.strip() for line in proc.split('\\n') if line.strip() and "Name" not in line]
+                if lines:
+                    gpu_name = lines[0]
+        except:
+            pass
+
+        return jsonify({
+            "status": "success",
+            "os": f"{platform.system()} {platform.release()}",
+            "cpu": platform.processor(),
+            "ram": total_ram_gb,
+            "gpu": gpu_name,
+            "python": platform.python_version()
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/capture', methods=['GET'])
 def capture_screen():
@@ -176,6 +223,7 @@ def list_files():
 
 if __name__ == '__main__':
     try:
+        # Run on 0.0.0.0 to ensure loopback works from any local address
         app.run(host='0.0.0.0', port=PORT)
     except Exception as e:
         print(f"Failed to start server: {e}")
@@ -190,7 +238,7 @@ if __name__ == '__main__':
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      addLog('System', 'Generated mossy_server.py', 'success');
+      addLog('System', 'Generated NEW mossy_server.py (v5.0)', 'success');
   };
 
   const handleDownloadBatch = () => {
@@ -201,36 +249,63 @@ echo    MOSSY NEURAL LINK - INITIALIZATION SEQUENCE
 echo ===================================================
 echo.
 
-set PYTHON_CMD=python
+set PYTHON_CMD=
 
-:: Check if python is in PATH
+echo [System] Searching for Python...
+
+:: 1. Check Standard PATH
 where python >nul 2>nul
-if %errorlevel% neq 0 (
-    :: If not, try the 'py' launcher
-    where py >nul 2>nul
-    if %errorlevel% equ 0 (
-        echo [System] Python not in PATH, but 'py' launcher found. Using 'py'...
-        set PYTHON_CMD=py
-    ) else (
-        echo [ERROR] Python is not recognized!
-        echo.
-        echo To fix this:
-        echo 1. Uninstall Python.
-        echo 2. Reinstall Python from python.org.
-        echo 3. CHECK THE BOX: "Add Python to PATH" at the bottom of the installer.
-        echo.
-        pause
-        exit /b
-    )
+if %errorlevel% equ 0 (
+    echo [System] Found 'python' in PATH.
+    set PYTHON_CMD=python
+    goto :FOUND
 )
 
-echo [1/2] Installing dependencies using %PYTHON_CMD%...
-%PYTHON_CMD% -m pip install flask flask-cors mss pyautogui pyperclip
+:: 2. Check Python Launcher
+where py >nul 2>nul
+if %errorlevel% equ 0 (
+    echo [System] Found 'py' launcher.
+    set PYTHON_CMD=py
+    goto :FOUND
+)
+
+:: 3. Check Common Installation Directories (Deep Search)
+if exist "%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe" set PYTHON_CMD="%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe"
+if exist "%LOCALAPPDATA%\\Programs\\Python\\Python311\\python.exe" set PYTHON_CMD="%LOCALAPPDATA%\\Programs\\Python\\Python311\\python.exe"
+if exist "%LOCALAPPDATA%\\Programs\\Python\\Python310\\python.exe" set PYTHON_CMD="%LOCALAPPDATA%\\Programs\\Python\\Python310\\python.exe"
+if exist "C:\\Python312\\python.exe" set PYTHON_CMD="C:\\Python312\\python.exe"
+if exist "C:\\Python311\\python.exe" set PYTHON_CMD="C:\\Python311\\python.exe"
+
+if defined PYTHON_CMD (
+    echo [System] Found Python at: %PYTHON_CMD%
+    goto :FOUND
+)
+
+:ERROR
+echo.
+echo [ERROR] Python was NOT found on this system.
+echo.
+echo =======================================================
+echo                 CRITICAL ERROR
+echo =======================================================
+echo 1. You likely do NOT have Python installed.
+echo 2. Go to https://www.python.org/downloads/
+echo 3. Download and Install Python 3.10 or newer.
+echo 4. IMPORTANT: Check "Add Python to PATH" in the installer.
+echo =======================================================
+echo.
+pause
+exit /b
+
+:FOUND
+echo.
+echo [1/2] Installing dependencies (flask, mss, pyautogui, psutil)...
+%PYTHON_CMD% -m pip install flask flask-cors mss pyautogui pyperclip psutil
 if %errorlevel% neq 0 (
-    echo [ERROR] Dependency installation failed.
-    echo Ensure you have internet access and pip is installed.
-    pause
-    exit /b
+    echo.
+    echo [WARNING] Dependency install failed.
+    echo If this is a network error, check your internet.
+    echo Attempting to launch anyway...
 )
 
 echo.
@@ -246,7 +321,7 @@ pause
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      addLog('System', 'Generated start_mossy.bat', 'success');
+      addLog('System', 'Generated improved start_mossy.bat', 'success');
   };
 
   const addLog = (source: string, event: string, status: 'ok' | 'warn' | 'err' | 'success' = 'ok') => {
@@ -272,6 +347,8 @@ pause
       }));
   };
 
+  const isOutdated = bridgeConnected && (!bridgeVersion || !bridgeVersion.startsWith('5.'));
+
   return (
     <div className="h-full bg-[#050910] p-8 overflow-y-auto font-sans text-slate-200">
       <div className="max-w-6xl mx-auto flex flex-col h-full">
@@ -292,9 +369,27 @@ pause
                             {bridgeConnected ? 'BRIDGE ONLINE' : 'BRIDGE OFFLINE'}
                         </span>
                     </div>
+                    {bridgeConnected && bridgeVersion && (
+                        <div className="text-[10px] font-mono text-slate-500">v{bridgeVersion}</div>
+                    )}
                 </div>
             </div>
         </div>
+
+        {isOutdated && (
+            <div className="mb-6 bg-red-900/20 border border-red-500/50 rounded-xl p-4 flex items-center gap-4 animate-bounce">
+                <AlertTriangle className="w-8 h-8 text-red-500" />
+                <div>
+                    <h3 className="font-bold text-white">UPDATE REQUIRED</h3>
+                    <p className="text-sm text-red-200">
+                        You are connected to an old version of <code>mossy_server.py</code> (v{bridgeVersion || '?'}). 
+                        Hardware scanning and new features will not work.
+                        <br/>
+                        <strong>Action:</strong> Click "Get Server (.py)" below and overwrite your existing file.
+                    </p>
+                </div>
+            </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1 min-h-0">
             {/* Left Column: Driver Grid */}
@@ -323,7 +418,17 @@ pause
                         </div>
 
                         <div className="space-y-4">
-                            {!bridgeConnected && (
+                            {bridgeConnected ? (
+                                <div className="p-4 bg-emerald-900/10 border border-emerald-500/20 rounded text-sm text-emerald-300">
+                                    <div className="flex items-center gap-2 mb-2 font-bold"><CheckCircle2 className="w-4 h-4"/> System Active</div>
+                                    <p className="text-xs opacity-80">Python bridge is responding. Telemetry streaming.</p>
+                                    <div className="mt-2 pt-2 border-t border-emerald-500/20 text-xs">
+                                        <button onClick={handleDownloadServer} className="underline hover:text-white flex items-center gap-1">
+                                            <RefreshCw className="w-3 h-3"/> Re-download Server Script (v5.0)
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
                                 <div className="p-4 bg-black/40 rounded-lg border border-slate-700/50 text-sm text-slate-300">
                                     <div className="flex justify-between items-center mb-2">
                                         <h4 className="font-bold text-white flex items-center gap-2"><Clipboard className="w-4 h-4"/> Easy Installation</h4>

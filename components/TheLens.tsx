@@ -37,7 +37,8 @@ const TheLens: React.FC = () => {
             let imageBase64 = '';
             
             try {
-                const response = await fetch('http://localhost:21337/capture');
+                // Use 127.0.0.1 to avoid IPv6 issues
+                const response = await fetch('http://127.0.0.1:21337/capture');
                 if (!response.ok) throw new Error("Bridge refused connection");
                 const data = await response.json();
                 
