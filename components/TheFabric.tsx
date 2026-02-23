@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { PenTool, Smartphone, Monitor, Code, Eye, RefreshCw, Zap, Copy, Check } from 'lucide-react';
@@ -16,7 +17,7 @@ const TheFabric: React.FC = () => {
         setCode(''); // Clear previous
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             
             const systemPrompt = `
             You are an expert UI Engineer and Tailwind CSS architect.

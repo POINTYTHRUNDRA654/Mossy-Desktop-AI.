@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Image as ImageIcon, Wand2, ScanSearch, Download, Trash2, Layers, Zap, Eye, Upload, UserCheck } from 'lucide-react';
@@ -43,11 +44,7 @@ const ImageSuite: React.FC = () => {
     setIsLoading(true);
     try {
       if (activeTab === 'generate') {
-         if (window.aistudio && !window.aistudio.hasSelectedApiKey()) {
-             await window.aistudio.openSelectKey();
-         }
-         
-         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+         const ai = getAiClient();
          
          const response = await ai.models.generateContent({
              model: 'gemini-3-pro-image-preview',
@@ -68,7 +65,7 @@ const ImageSuite: React.FC = () => {
          }
 
       } else if (activeTab === 'edit' && sourceImage) {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = getAiClient();
         
         const base64 = await new Promise<string>((resolve) => {
             const reader = new FileReader();

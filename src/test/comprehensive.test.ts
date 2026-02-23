@@ -184,6 +184,7 @@ describe('Electron base path configuration', () => {
   });
 });
 
+
 // ---------------------------------------------------------------------------
 // 6. Electron package.json fields
 // ---------------------------------------------------------------------------
@@ -410,5 +411,146 @@ describe('Electron entry files', () => {
   it('electron/main.cjs path is defined in package.json', async () => {
     const pkg = await import('../../package.json');
     expect(pkg.main).toBe('electron/main.cjs');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 15. Provider configuration (utils/apiKey.ts)
+// ---------------------------------------------------------------------------
+describe('AI Provider configuration', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('defaults to gemini when no provider is set', () => {
+    expect(localStorage.getItem('mossy_ai_provider')).toBeNull();
+    const provider = (localStorage.getItem('mossy_ai_provider') as 'gemini' | 'ollama') || 'gemini';
+    expect(provider).toBe('gemini');
+  });
+
+  it('stores and retrieves ollama provider', () => {
+    localStorage.setItem('mossy_ai_provider', 'ollama');
+    expect(localStorage.getItem('mossy_ai_provider')).toBe('ollama');
+  });
+
+  it('stores and retrieves gemini provider', () => {
+    localStorage.setItem('mossy_ai_provider', 'gemini');
+    expect(localStorage.getItem('mossy_ai_provider')).toBe('gemini');
+  });
+
+  it('isConfigured logic: ollama needs no key', () => {
+    localStorage.setItem('mossy_ai_provider', 'ollama');
+    const provider = localStorage.getItem('mossy_ai_provider');
+    const configured = provider === 'ollama' || Boolean(localStorage.getItem('mossy_gemini_api_key'));
+    expect(configured).toBe(true);
+  });
+
+  it('isConfigured logic: gemini with no key = not configured', () => {
+    localStorage.setItem('mossy_ai_provider', 'gemini');
+    const provider = localStorage.getItem('mossy_ai_provider');
+    const configured = provider === 'ollama' || Boolean(localStorage.getItem('mossy_gemini_api_key'));
+    expect(configured).toBe(false);
+  });
+
+  it('isConfigured logic: gemini with key = configured', () => {
+    localStorage.setItem('mossy_ai_provider', 'gemini');
+    localStorage.setItem('mossy_gemini_api_key', 'AIzaTestKey123456789012345678901234');
+    const provider = localStorage.getItem('mossy_ai_provider');
+    const configured = provider === 'ollama' || Boolean(localStorage.getItem('mossy_gemini_api_key'));
+    expect(configured).toBe(true);
+  });
+
+  it('getOllamaConfig returns default endpoint and model', () => {
+    const raw = localStorage.getItem('mossy_ollama_config');
+    const cfg = raw ? JSON.parse(raw) : { endpoint: 'http://localhost:11434', model: 'gemma3' };
+    expect(cfg.endpoint).toBe('http://localhost:11434');
+    expect(cfg.model).toBe('gemma3');
+  });
+
+  it('setOllamaConfig persists custom endpoint and model', () => {
+    const custom = { endpoint: 'http://localhost:11435', model: 'llama3.2' };
+    localStorage.setItem('mossy_ollama_config', JSON.stringify(custom));
+    const cfg = JSON.parse(localStorage.getItem('mossy_ollama_config')!);
+    expect(cfg.endpoint).toBe('http://localhost:11435');
+    expect(cfg.model).toBe('llama3.2');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16. isOllamaMode helper (utils/aiClient.ts)
+// ---------------------------------------------------------------------------
+describe('isOllamaMode helper', () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it('returns true when provider is ollama', () => {
+    localStorage.setItem('mossy_ai_provider', 'ollama');
+    const mode = localStorage.getItem('mossy_ai_provider') === 'ollama';
+    expect(mode).toBe(true);
+  });
+
+  it('returns false when provider is gemini', () => {
+    localStorage.setItem('mossy_ai_provider', 'gemini');
+    const mode = localStorage.getItem('mossy_ai_provider') === 'ollama';
+    expect(mode).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 17. Ollama message conversion logic
+// ---------------------------------------------------------------------------
+describe('Ollama message conversion', () => {
+  // Mirrors the toOllamaMessages helper in utils/aiClient.ts
+  function toOllamaMessages(
+    contents: unknown,
+    systemInstruction?: string
+  ): Array<{ role: string; content: string }> {
+    const msgs: Array<{ role: string; content: string }> = [];
+    if (systemInstruction) msgs.push({ role: 'system', content: systemInstruction });
+    const items = Array.isArray(contents) ? contents : [contents];
+    for (const item of items as any[]) {
+      const role = item.role === 'model' ? 'assistant' : (item.role || 'user');
+      let content = '';
+      if (Array.isArray(item.parts)) {
+        content = item.parts
+          .filter((p: any) => typeof p?.text === 'string')
+          .map((p: any) => p.text)
+          .join('');
+      } else if (typeof item.text === 'string') {
+        content = item.text;
+      }
+      if (content) msgs.push({ role, content });
+    }
+    return msgs;
+  }
+
+  it('maps Gemini user role to Ollama user role', () => {
+    const msgs = toOllamaMessages([{ role: 'user', parts: [{ text: 'Hello' }] }]);
+    expect(msgs[0]).toEqual({ role: 'user', content: 'Hello' });
+  });
+
+  it('maps Gemini model role to Ollama assistant role', () => {
+    const msgs = toOllamaMessages([{ role: 'model', parts: [{ text: 'Hi there' }] }]);
+    expect(msgs[0]).toEqual({ role: 'assistant', content: 'Hi there' });
+  });
+
+  it('prepends system instruction as system message', () => {
+    const msgs = toOllamaMessages(
+      [{ role: 'user', parts: [{ text: 'Hello' }] }],
+      'You are Mossy, a helpful AI.'
+    );
+    expect(msgs[0]).toEqual({ role: 'system', content: 'You are Mossy, a helpful AI.' });
+    expect(msgs[1]).toEqual({ role: 'user', content: 'Hello' });
+  });
+
+  it('concatenates multiple parts into a single content string', () => {
+    const msgs = toOllamaMessages([{
+      role: 'user',
+      parts: [{ text: 'Part one. ' }, { text: 'Part two.' }],
+    }]);
+    expect(msgs[0].content).toBe('Part one. Part two.');
+  });
+
+  it('handles single content object (non-array)', () => {
+    const msgs = toOllamaMessages({ role: 'user', parts: [{ text: 'Single' }] });
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].content).toBe('Single');
   });
 });

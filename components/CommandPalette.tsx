@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleGenAI } from "@google/genai";
@@ -147,7 +148,7 @@ const CommandPalette: React.FC = () => {
         setIsThinking(true);
         setAiResult(null);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: `User Quick Query from Command Palette: "${prompt}". Provide a concise, helpful answer (max 3 sentences).`,

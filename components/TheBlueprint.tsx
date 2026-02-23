@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useRef } from 'react';
 import { DraftingCompass, Database, Globe, Server, Cloud, Layers, FileCode, Hammer, Save, Download, Cpu, Box, Smartphone, Shield, Zap, RefreshCw, CheckCircle2, ChevronRight } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
@@ -67,7 +68,7 @@ const TheBlueprint: React.FC = () => {
         setScaffoldResult(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             
             const architectureJson = JSON.stringify({ nodes, edges });
             

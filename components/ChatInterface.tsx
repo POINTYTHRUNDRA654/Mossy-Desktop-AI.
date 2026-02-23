@@ -1,3 +1,4 @@
+import { getAiClient, isOllamaMode } from '../utils/aiClient';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { GoogleGenAI, Modality, FunctionDeclaration, Type } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
@@ -622,10 +623,32 @@ export const ChatInterface: React.FC = () => {
 
   const speakText = async (textToSpeak: string) => {
       if (!textToSpeak || isLiveActive) return;
-      const cleanText = textToSpeak.replace(/[*#]/g, '').substring(0, 500); 
+      const cleanText = textToSpeak.replace(/[*#]/g, '').substring(0, 500);
       setIsPlayingAudio(true);
+
+      // Ollama mode → Web Speech API (free, built into Electron/Chromium)
+      if (isOllamaMode()) {
+        try {
+          window.speechSynthesis.cancel();
+          const utt = new SpeechSynthesisUtterance(cleanText);
+          utt.rate = 0.95; utt.pitch = 1.0; utt.volume = 1.0;
+          const voices = window.speechSynthesis.getVoices();
+          const preferred = voices.find(v =>
+            v.name.toLowerCase().includes('natural') ||
+            v.name.toLowerCase().includes('neural') ||
+            v.name.toLowerCase().includes('google')
+          ) || voices[0];
+          if (preferred) utt.voice = preferred;
+          utt.onend = () => setIsPlayingAudio(false);
+          utt.onerror = () => setIsPlayingAudio(false);
+          window.speechSynthesis.speak(utt);
+        } catch { setIsPlayingAudio(false); }
+        return;
+      }
+
+      // Gemini mode → Gemini TTS (cloud, premium voices)
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = getAiClient();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-preview-tts',
             contents: [{ parts: [{ text: cleanText }] }],
@@ -639,7 +662,6 @@ export const ChatInterface: React.FC = () => {
 
         if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
         const ctx = audioContextRef.current;
-        
         const binaryString = atob(base64Audio);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
@@ -941,7 +963,7 @@ export const ChatInterface: React.FC = () => {
     }
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = getAiClient();
       let contents: any[] = [];
       
       const history = messages

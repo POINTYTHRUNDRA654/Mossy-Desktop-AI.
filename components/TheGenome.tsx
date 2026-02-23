@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Dna, Zap, Plus, Code, CheckCircle2, AlertTriangle, Fingerprint, Microscope, Activity, ArrowRight, Loader2, Play, Cpu, Globe, Download, Upload, Share2, Users } from 'lucide-react';
@@ -47,7 +48,7 @@ const TheGenome: React.FC = () => {
         setNewGeneName('');
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             
             // Stage 1: Sequencing (Analysis)
             await new Promise(r => setTimeout(r, 1500));

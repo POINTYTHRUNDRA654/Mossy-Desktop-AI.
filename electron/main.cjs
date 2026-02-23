@@ -1,8 +1,7 @@
 'use strict';
 
-const { app, BrowserWindow, shell, ipcMain, protocol } = require('electron');
+const { app, BrowserWindow, shell, session } = require('electron');
 const path = require('path');
-const fs = require('fs');
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const DEV_SERVER_URL = 'http://localhost:3000';
@@ -27,12 +26,38 @@ function createWindow() {
     show: false,
   });
 
-  // Show window once fully loaded to prevent blank flash
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+  // ── Content Security Policy ─────────────────────────────────────────────
+  // Allow:
+  //   - The app's own bundled assets (self)
+  //   - Google Gemini API (generativelanguage.googleapis.com)
+  //   - Ollama local REST API (localhost:11434)
+  //   - Google Fonts (for UI)
+  //   - Tailwind CDN (used by index.html)
+  //   - WebSockets to Gemini Live API
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+            "font-src 'self' https://fonts.gstatic.com",
+            "img-src 'self' data: blob: https:",
+            "media-src 'self' blob:",
+            // Gemini REST API + Ollama local + Google Fonts + Tailwind CDN
+            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 wss://generativelanguage.googleapis.com",
+            "worker-src 'self' blob:",
+          ].join('; '),
+        ],
+      },
+    });
   });
 
-  // Open external links in the system browser, not in the app
+  mainWindow.once('ready-to-show', () => mainWindow.show());
+
+  // Open external links in the system browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       shell.openExternal(url);
@@ -47,9 +72,7 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+  mainWindow.on('closed', () => { mainWindow = null; });
 }
 
 // Enforce single application instance
@@ -66,17 +89,12 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     createWindow();
-
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-      }
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
   });
 }
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  if (process.platform !== 'darwin') app.quit();
 });

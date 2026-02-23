@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Scan, FileWarning, CheckCircle2, AlertTriangle, FileImage, Box, FileCode, Search, Wrench, ArrowRight, ShieldCheck, RefreshCw, XCircle, File, MessageSquare } from 'lucide-react';
@@ -133,7 +134,7 @@ const TheAuditor: React.FC = () => {
     const getMossyAdvice = async (issue: AuditIssue) => {
         setMossyAdvice("Analyzing issue...");
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             const prompt = `
             Act as an expert Fallout 4 Modder AI assistant named Mossy.
             The user has a file with the following error:

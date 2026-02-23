@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Container, Search, Filter, FolderPlus, Tag, HardDrive, FileImage, FileAudio, FileCode, BrainCircuit, RefreshCw, Eye, Grid, List, Scan, Check, Box, Lock, Globe, ShieldCheck, FileKey } from 'lucide-react';
@@ -62,7 +63,7 @@ const TheVault: React.FC = () => {
       setAnalyzingIds(prev => new Set(prev).add(asset.id));
       
       try {
-          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const ai = getAiClient();
           
           let generatedTags: string[] = [];
           

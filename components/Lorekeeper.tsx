@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Network, Search, Plus, Save, Share2, AlertTriangle, Wand2, RefreshCw, ZoomIn, ZoomOut, User, MapPin, Box, Shield, Scroll, Activity } from 'lucide-react';
@@ -166,7 +167,7 @@ const Lorekeeper: React.FC = () => {
       const context = savedProject ? JSON.parse(savedProject).notes : "A generic fantasy RPG setting.";
 
       try {
-          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const ai = getAiClient();
           const response = await ai.models.generateContent({
               model: 'gemini-3-flash-preview',
               contents: `Analyze this project context: "${context}". 
@@ -206,7 +207,7 @@ const Lorekeeper: React.FC = () => {
           // Serialize graph for AI
           const graphStr = JSON.stringify(graph);
           
-          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const ai = getAiClient();
           const response = await ai.models.generateContent({
               model: 'gemini-3-flash-preview',
               contents: `Analyze this knowledge graph for logical contradictions or missing connections: ${graphStr}.
@@ -231,7 +232,7 @@ const Lorekeeper: React.FC = () => {
   const generateWiki = async (node: Node) => {
       setWikiContent("Generating...");
       try {
-           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+           const ai = getAiClient();
            const response = await ai.models.generateContent({
               model: 'gemini-3-flash-preview',
               contents: `Write a detailed RPG Wiki entry for the entity: "${node.label}" (${node.type}).

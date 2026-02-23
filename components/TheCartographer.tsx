@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Map, Layout, Box, Target, Shield, Skull, Zap, Download, RefreshCw, ZoomIn, ZoomOut, Maximize, Navigation, Layers, Wind, Sun, Volume2, Thermometer, Radio } from 'lucide-react';
@@ -208,7 +209,7 @@ const TheCartographer: React.FC = () => {
         setSelectedRoom(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             
             const systemPrompt = `
             You are a Level Design Architect AI. 

@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Binary, Search, Eye, Cpu, Zap, FileCode, AlertTriangle, CheckCircle2, RefreshCw, Upload, Download, Scan, Boxes, Settings2, Activity, Network, Box, Cuboid } from 'lucide-react';
@@ -158,7 +159,7 @@ const TheSplicer: React.FC = () => {
     const handleOptimizeHavok = async () => {
         setIsAnalyzing(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             const prompt = `
                 Act as Havok Physics Engine Expert.
                 Analyze this physics setup:

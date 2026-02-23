@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { createContext, useContext, useState, useRef, useEffect, ReactNode } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality, Type } from '@google/genai';
 
@@ -343,7 +344,7 @@ export const LiveProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       audioContextRef.current = outputCtx;
 
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = getAiClient();
       setStatus('Establishing Uplink...');
       
       // Define tools - always include Blender control to allow linking attempt

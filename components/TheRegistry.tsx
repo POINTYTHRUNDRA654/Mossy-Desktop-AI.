@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { FileDigit, AlertTriangle, GitMerge, Microscope, Check, ShieldAlert, ArrowRight, Save, Database, Layers } from 'lucide-react';
@@ -76,7 +77,7 @@ const TheRegistry: React.FC = () => {
         setIsAnalyzing(true);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             
             // Build a prompt that describes the conflict
             const conflictDesc = recordData.filter(f => f.isConflict).map(f => `${f.key}: Master="${f.masterValue}" vs Plugin="${f.overrideValue}"`).join('\n');
