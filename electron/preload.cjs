@@ -3,10 +3,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose a minimal, safe API to the renderer process.
-// This follows Electron's security best practices:
-// - contextIsolation: true
-// - nodeIntegration: false
-// - sandbox: true
+// Follows Electron's security best practices:
+//   contextIsolation: true, nodeIntegration: false, sandbox: true
 contextBridge.exposeInMainWorld('electronBridge', {
   platform: process.platform,
   isElectron: true,
@@ -15,4 +13,10 @@ contextBridge.exposeInMainWorld('electronBridge', {
     chrome: process.versions.chrome,
     node: process.versions.node,
   },
+  // Auto-launch at OS startup
+  getAutoLaunch: ()         => ipcRenderer.invoke('get-auto-launch'),
+  setAutoLaunch: (enable)   => ipcRenderer.invoke('set-auto-launch', enable),
+  // Window controls
+  minimizeWindow: ()        => ipcRenderer.invoke('window-minimize'),
+  hideToTray:     ()        => ipcRenderer.invoke('window-hide'),
 });

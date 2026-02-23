@@ -554,3 +554,226 @@ describe('Ollama message conversion', () => {
     expect(msgs[0].content).toBe('Single');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 18. New general-purpose tool declarations
+// ---------------------------------------------------------------------------
+describe('General-purpose tool declarations', () => {
+  const EXPECTED_TOOLS = [
+    'list_files',
+    'read_file',
+    'generate_papyrus_script',
+    'execute_blender_script',
+    'send_blender_shortcut',
+    'browse_web',
+    'check_previs_status',
+    'scan_hardware',
+    'control_interface',
+    'write_file',
+    'run_application',
+    'run_shell_command',
+    'take_screenshot',
+    'get_system_info',
+  ];
+
+  it('includes all expected tool names (verified against source)', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '../../components/ChatInterface.tsx'),
+      'utf-8'
+    );
+    for (const tool of EXPECTED_TOOLS) {
+      expect(src).toContain(`name: '${tool}'`);
+    }
+  });
+
+  it('write_file tool is described as writing to filesystem', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '../../components/ChatInterface.tsx'),
+      'utf-8'
+    );
+    expect(src).toContain("name: 'write_file'");
+    expect(src).toContain('write_file');
+  });
+
+  it('run_shell_command tool is present', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      require('path').join(__dirname, '../../components/ChatInterface.tsx'),
+      'utf-8'
+    );
+    expect(src).toContain("name: 'run_shell_command'");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 19. System prompt is general-purpose (not locked to Fallout 4)
+// ---------------------------------------------------------------------------
+describe('System prompt is general-purpose AI assistant', () => {
+  const getPrompt = () => {
+    const fs = require('fs');
+    return fs.readFileSync(
+      require('path').join(__dirname, '../../components/ChatInterface.tsx'),
+      'utf-8'
+    );
+  };
+
+  it('does NOT contain "You ONLY discuss Fallout 4 modding"', () => {
+    const src = getPrompt();
+    expect(src).not.toContain('You ONLY discuss Fallout 4 modding');
+  });
+
+  it('describes Mossy as a desktop assistant', () => {
+    const src = getPrompt();
+    expect(src).toContain('desktop assistant');
+  });
+
+  it('mentions file read/write capabilities', () => {
+    const src = getPrompt();
+    expect(src).toContain('READ and WRITE files');
+  });
+
+  it('mentions ability to run shell commands', () => {
+    const src = getPrompt();
+    expect(src).toContain('RUN shell commands');
+  });
+
+  it('mentions ability to launch applications', () => {
+    const src = getPrompt();
+    expect(src).toContain('LAUNCH applications');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 20. Desktop Bridge Python server has new endpoints
+// ---------------------------------------------------------------------------
+describe('Desktop Bridge Python server endpoints', () => {
+  const getBridgeSource = () => {
+    const fs = require('fs');
+    return fs.readFileSync(
+      require('path').join(__dirname, '../../components/DesktopBridge.tsx'),
+      'utf-8'
+    );
+  };
+
+  it('has /read_file endpoint', () => {
+    expect(getBridgeSource()).toContain("app.route('/read_file'");
+  });
+
+  it('has /write_file endpoint', () => {
+    expect(getBridgeSource()).toContain("app.route('/write_file'");
+  });
+
+  it('has /run_app endpoint', () => {
+    expect(getBridgeSource()).toContain("app.route('/run_app'");
+  });
+
+  it('has /exec endpoint', () => {
+    expect(getBridgeSource()).toContain("app.route('/exec'");
+  });
+
+  it('/exec blocks destructive commands', () => {
+    expect(getBridgeSource()).toContain('BLOCKED_PATTERNS');
+    expect(getBridgeSource()).toContain('rm -rf /');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 21. Electron main process has system tray and auto-launch
+// ---------------------------------------------------------------------------
+describe('Electron main process capabilities', () => {
+  const getMainSource = () => {
+    const fs = require('fs');
+    return fs.readFileSync(
+      require('path').join(__dirname, '../../electron/main.cjs'),
+      'utf-8'
+    );
+  };
+
+  it('imports Tray and Menu from electron', () => {
+    expect(getMainSource()).toContain('Tray');
+    expect(getMainSource()).toContain('Menu');
+  });
+
+  it('creates a system tray', () => {
+    expect(getMainSource()).toContain('createTray');
+    expect(getMainSource()).toContain('new Tray');
+  });
+
+  it('hides to tray on close instead of quitting', () => {
+    expect(getMainSource()).toContain('mainWindow.hide()');
+    expect(getMainSource()).toContain("app.isQuitting");
+  });
+
+  it('has auto-launch at startup support', () => {
+    expect(getMainSource()).toContain('setLoginItemSettings');
+    expect(getMainSource()).toContain('openAtLogin');
+  });
+
+  it('has IPC handler for get-auto-launch', () => {
+    expect(getMainSource()).toContain("'get-auto-launch'");
+  });
+
+  it('has IPC handler for set-auto-launch', () => {
+    expect(getMainSource()).toContain("'set-auto-launch'");
+  });
+
+  it('does NOT quit on window-all-closed (stays in tray)', () => {
+    const src = getMainSource();
+    // The window-all-closed handler should be empty (no app.quit call inside it)
+    const wcIdx = src.indexOf("'window-all-closed'");
+    const handler = src.slice(wcIdx, wcIdx + 200);
+    expect(handler).not.toContain('app.quit()');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 22. Electron preload exposes auto-launch and window IPC
+// ---------------------------------------------------------------------------
+describe('Electron preload IPC surface', () => {
+  const getPreloadSource = () => {
+    const fs = require('fs');
+    return fs.readFileSync(
+      require('path').join(__dirname, '../../electron/preload.cjs'),
+      'utf-8'
+    );
+  };
+
+  it('exposes getAutoLaunch', () => {
+    expect(getPreloadSource()).toContain('getAutoLaunch');
+  });
+
+  it('exposes setAutoLaunch', () => {
+    expect(getPreloadSource()).toContain('setAutoLaunch');
+  });
+
+  it('exposes minimizeWindow', () => {
+    expect(getPreloadSource()).toContain('minimizeWindow');
+  });
+
+  it('exposes hideToTray', () => {
+    expect(getPreloadSource()).toContain('hideToTray');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 23. TheNexus dashboard greeting is general-purpose
+// ---------------------------------------------------------------------------
+describe('TheNexus dashboard is general-purpose', () => {
+  const getNexusSource = () => {
+    const fs = require('fs');
+    return fs.readFileSync(
+      require('path').join(__dirname, '../../components/TheNexus.tsx'),
+      'utf-8'
+    );
+  };
+
+  it('does NOT use "Vault Dweller" in the greeting', () => {
+    expect(getNexusSource()).not.toContain('Vault Dweller');
+  });
+
+  it('includes a general morning greeting', () => {
+    expect(getNexusSource()).toContain("Good Morning");
+  });
+});

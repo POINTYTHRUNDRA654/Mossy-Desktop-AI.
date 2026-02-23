@@ -20,11 +20,11 @@ const TheNexus: React.FC = () => {
   const [tutorialState, setTutorialState] = useState<'start' | 'resume' | 'replay'>('start');
 
   useEffect(() => {
-    // 1. Time-based Greeting (Fallout Style)
+    // 1. Time-based Greeting
     const hour = new Date().getHours();
-    if (hour < 12) setGreeting("Good Morning, Vault Dweller.");
-    else if (hour < 18) setGreeting("Good Afternoon, Vault Dweller.");
-    else setGreeting("Good Evening, Vault Dweller.");
+    if (hour < 12) setGreeting("Good Morning. I'm ready.");
+    else if (hour < 18) setGreeting("Good Afternoon. What are we building?");
+    else setGreeting("Good Evening. Let's get to work.");
 
     // 2. Load Local State
     const savedProject = localStorage.getItem('mossy_project');
@@ -46,17 +46,19 @@ const TheNexus: React.FC = () => {
     }
 
     // 4. Generate Daily Briefing
-    const mockInsights: Insight[] = [
-          { id: '1', type: 'info', message: 'F4SE (Script Extender) requires an update check.', action: 'Verify Version', actionLink: '/organizer' },
-          { id: '2', type: 'suggestion', message: '3 Papyrus scripts pending compilation in The Workshop.', action: 'Compile', actionLink: '/workshop' },
+    const insights: Insight[] = [
+          { id: '1', type: 'suggestion', message: 'Ask Mossy to read or write any file on your machine.', action: 'Open Chat', actionLink: '/chat' },
+          { id: '2', type: 'info', message: 'Use The Workshop to create new programs and scripts.', action: 'Open Workshop', actionLink: '/workshop' },
     ];
 
     if (!bridge) {
-          mockInsights.push({ id: '3', type: 'warning', message: 'Pip-Boy Uplink (Bridge) disconnected. Local file access restricted.', action: 'Connect', actionLink: '/bridge' });
+          insights.push({ id: '3', type: 'warning', message: 'Desktop Bridge offline — file access and app control limited.', action: 'Connect', actionLink: '/bridge' });
+    } else {
+          insights.push({ id: '4', type: 'info', message: 'Desktop Bridge online — Mossy can read/write files and launch apps.', action: 'View Bridge', actionLink: '/bridge' });
     }
-    setInsights(mockInsights);
+    setInsights(insights);
     
-    // 5. Fake live load
+    // 5. Live system load simulation
     const interval = setInterval(() => {
         setSystemLoad(prev => Math.min(100, Math.max(10, prev + (Math.random() * 10 - 5))));
     }, 2000);

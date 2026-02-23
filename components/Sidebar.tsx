@@ -10,11 +10,28 @@ const Sidebar: React.FC = () => {
   const [bridgeConnected, setBridgeConnected] = useState(false);
   const [isPipBoy, setIsPipBoy] = useState(false);
   const [showKeySetup, setShowKeySetup] = useState(false);
+  const [autoLaunch, setAutoLaunchState] = useState(false);
   const location = useLocation();
   const [moodColor, setMoodColor] = useState('text-emerald-400');
   
   // Consume Global Live Context
   const { isActive, isMuted, toggleMute, disconnect } = useLive();
+
+  // Read auto-launch setting from Electron (if running as a desktop app)
+  useEffect(() => {
+    const eb = (window as any).electronBridge;
+    if (eb?.getAutoLaunch) {
+      eb.getAutoLaunch().then((val: boolean) => setAutoLaunchState(val)).catch(() => {});
+    }
+  }, []);
+
+  const toggleAutoLaunch = () => {
+    const eb = (window as any).electronBridge;
+    if (!eb?.setAutoLaunch) return;
+    const next = !autoLaunch;
+    setAutoLaunchState(next);
+    eb.setAutoLaunch(next).catch(() => setAutoLaunchState(!next));
+  };
 
   // Toggle Pip-Boy Theme
   const togglePipBoy = () => {
@@ -214,6 +231,24 @@ const Sidebar: React.FC = () => {
           </span>
           <KeyRound className="w-3 h-3 text-slate-600 ml-auto group-hover:text-slate-400 shrink-0" />
         </button>
+
+        {/* Auto-launch toggle — only shown when running in Electron */}
+        {(window as any).electronBridge?.isElectron && (
+          <button
+            onClick={toggleAutoLaunch}
+            className={`mt-1.5 w-full flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-colors group ${
+              autoLaunch
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                : 'bg-slate-800/60 border-slate-700/50 text-slate-500 hover:border-slate-500 hover:text-slate-300'
+            }`}
+            title="Toggle run at system startup"
+          >
+            <Power className="w-3 h-3 shrink-0" />
+            <span className="text-[10px] truncate">
+              {autoLaunch ? 'Starts at login ✓' : 'Run at startup'}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Provider setup overlay (triggered from footer) */}
