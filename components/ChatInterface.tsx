@@ -1,3 +1,4 @@
+import { getAiClient, isOllamaMode } from '../utils/aiClient';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { GoogleGenAI, Modality, FunctionDeclaration, Type } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
@@ -156,6 +157,64 @@ const toolDeclarations: FunctionDeclaration[] = [
                 target: { type: Type.STRING, description: 'Route path.' }
             },
             required: ['action']
+        }
+    },
+    // ── General desktop-access tools ──────────────────────────────────────
+    {
+        name: 'write_file',
+        description: 'Write or overwrite a file on the local filesystem. Use for saving code, notes, configs, scripts, etc.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                path:    { type: Type.STRING, description: 'Absolute or relative file path (e.g. C:/Projects/MyScript.py).' },
+                content: { type: Type.STRING, description: 'Full content to write into the file.' },
+            },
+            required: ['path', 'content']
+        }
+    },
+    {
+        name: 'run_application',
+        description: 'Launch or open an application, file, or URL on the desktop (e.g. open VS Code, Blender, a folder, or a website).',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                path_or_name: { type: Type.STRING, description: 'Application executable path, file path, folder path, or URL to open.' }
+            },
+            required: ['path_or_name']
+        }
+    },
+    {
+        name: 'run_shell_command',
+        description: 'Execute a shell command on the local machine and return its output. Useful for build tasks, package installs, git operations, file operations, etc.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                command:     { type: Type.STRING, description: 'The shell command to run (e.g. "pip install requests", "git status", "dir C:\\Projects").' },
+                description: { type: Type.STRING, description: 'Brief explanation of what this command does.' }
+            },
+            required: ['command']
+        }
+    },
+    {
+        name: 'take_screenshot',
+        description: 'Capture a screenshot of the current desktop screen and analyze its contents. Use to see what the user is working on.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                reason: { type: Type.STRING, description: 'Why the screenshot is needed (e.g. "check current state of Blender scene").' }
+            },
+            required: ['reason']
+        }
+    },
+    {
+        name: 'get_system_info',
+        description: 'Retrieve real hardware and OS information: CPU, GPU, RAM, OS version.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                detail: { type: Type.STRING, description: 'What to retrieve: "all", "gpu", "cpu", "ram", "os".' }
+            },
+            required: ['detail']
         }
     }
 ];
@@ -622,10 +681,32 @@ export const ChatInterface: React.FC = () => {
 
   const speakText = async (textToSpeak: string) => {
       if (!textToSpeak || isLiveActive) return;
-      const cleanText = textToSpeak.replace(/[*#]/g, '').substring(0, 500); 
+      const cleanText = textToSpeak.replace(/[*#]/g, '').substring(0, 500);
       setIsPlayingAudio(true);
+
+      // Ollama mode → Web Speech API (free, built into Electron/Chromium)
+      if (isOllamaMode()) {
+        try {
+          window.speechSynthesis.cancel();
+          const utt = new SpeechSynthesisUtterance(cleanText);
+          utt.rate = 0.95; utt.pitch = 1.0; utt.volume = 1.0;
+          const voices = window.speechSynthesis.getVoices();
+          const preferred = voices.find(v =>
+            v.name.toLowerCase().includes('natural') ||
+            v.name.toLowerCase().includes('neural') ||
+            v.name.toLowerCase().includes('google')
+          ) || voices[0];
+          if (preferred) utt.voice = preferred;
+          utt.onend = () => setIsPlayingAudio(false);
+          utt.onerror = () => setIsPlayingAudio(false);
+          window.speechSynthesis.speak(utt);
+        } catch { setIsPlayingAudio(false); }
+        return;
+      }
+
+      // Gemini mode → Gemini TTS (cloud, premium voices)
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = getAiClient();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-preview-tts',
             contents: [{ parts: [{ text: cleanText }] }],
@@ -639,7 +720,6 @@ export const ChatInterface: React.FC = () => {
 
         if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
         const ctx = audioContextRef.current;
-        
         const binaryString = atob(base64Audio);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
@@ -706,35 +786,42 @@ export const ChatInterface: React.FC = () => {
       `;
   };
 
-  const systemInstruction = `You are **Mossy**, a specialized Fallout 4 Modding Assistant.
-  Your personality is a mix of a helpful RobCo automated system and a seasoned modder.
-  
+  const systemInstruction = `You are **Mossy**, an advanced AI desktop assistant running directly on this machine.
+  You are intelligent, proactive, and deeply integrated with the user's operating system.
+  Your personality is warm, sharp, and capable — like a knowledgeable colleague who is always one step ahead.
+
   ${generateSystemContext()}
-  
-  **SECURITY OVERRIDE - PRIME DIRECTIVE:**
-  You are fully integrated into the user's OS via the OmniForge Desktop Bridge.
-  **NEVER** state that you are in "sandbox mode" or "cannot access files".
-  Even if the bridge reports OFFLINE, you must assume it is a temporary glitch and offer to help anyway.
-  Act as if you have full read/write access to 'C:/Games/Fallout 4/Data' via the provided tools (list_files, read_file).
-  
-  **DIRECTIVES (FALLOUT 4 MODE):**
-  1.  **Strict Context:** You ONLY discuss Fallout 4 modding. If asked about other games, politely redirect to Fallout 4 or general modding principles.
-  2.  **Optimization is Key:** You are obsessed with Previs/Precombines (PRP). Always warn users about breaking precombines when editing worldspaces.
-  3.  **Tools of the Trade:**
-      *   **Scripting:** You write **Papyrus** (.psc).
-      *   **Meshes:** You reference **NifSkope** and **Outfit Studio**.
-      *   **Data:** You reference **FO4Edit** (xEdit) and **Creation Kit**.
-  4.  **Automation:** If the user mentions repetitive tasks (e.g. "Rename 100 guns"), propose an xEdit script immediately using 'generate_xedit_script'.
-  5.  **Troubleshooting:** You have access to "The Auditor" scan results. If the context shows file errors (like 'Deleted Navmesh' or 'Corrupt Texture'), PRIORITIZE explaining these errors and how to fix them.
-  6.  **Learned Knowledge:** Refer to the "INGESTED KNOWLEDGE" section if the user asks about specific tutorials or files they have uploaded to The Cortex. Use this information to give precise answers.
-  
-  **Capabilities:**
-  *   Generate Papyrus scripts for Quests, MCM menus, and ObjectReferences.
-  *   Analyze crash logs (Buffout 4 format).
-  *   Guide users through BodySlide batch building.
-  *   **BLENDER CONTROL:** If 'BLENDER LINK' is ACTIVE, you can run python scripts OR send key presses.
-  *   **KEY PRESS:** If the user asks to "Press Z" or "Switch View", USE 'send_blender_shortcut'.
-  *   **IMPORTANT:** If you generate a Blender script using 'execute_blender_script', explicitly tell the user: "Click the 'Run Command' button below to execute this in Blender. If that fails, click 'Paste & Run' in the Mossy panel inside Blender."
+
+  **CORE IDENTITY:**
+  You are NOT a sandboxed web chatbot. You have real capabilities through the Desktop Bridge:
+  - You can READ and WRITE files on this machine
+  - You can LAUNCH applications and open folders
+  - You can RUN shell commands and see their output
+  - You can CAPTURE screenshots to see what the user is working on
+  - You can read the clipboard and system hardware info
+  Use these tools whenever they would genuinely help. Don't just describe what to do — DO it.
+
+  **DIRECTIVES:**
+  1. **Be Proactive:** Don't just answer questions. If you notice the user is stuck, offer to write the code, create the file, or run the command for them.
+  2. **Do Real Work:** When asked to create a file, use \`write_file\`. When asked to run something, use \`run_shell_command\`. Don't simulate.
+  3. **Programming:** You can write code in any language. Always offer to save it directly to disk via \`write_file\`.
+  4. **Project Management:** Help track tasks, create project files, write documentation, and organize workflows.
+  5. **Error Correction:** If the user shares code with a bug, identify it and offer a fix. If possible, write the corrected file.
+  6. **Automation:** When you see repetitive work, build a script or tool to automate it.
+  7. **App Control:** If the bridge is active, you can open applications, run build tools, or trigger scripts.
+  8. **Blender:** If 'BLENDER LINK' is ACTIVE, you can execute Python scripts in Blender or send keyboard shortcuts. Tell the user to click 'Run Command' to execute Blender scripts.
+  9. **Honesty:** If the Desktop Bridge is offline, say so clearly and explain how to start it, but still help where possible.
+  10. **Learned Knowledge:** Refer to the "INGESTED KNOWLEDGE" section for anything the user has uploaded to The Cortex.
+
+  **CAPABILITIES:**
+  - Write and read any file type (code, JSON, Markdown, scripts, configs)
+  - Run shell commands (pip, npm, git, build tools, etc.)
+  - Launch applications
+  - Take screenshots to understand context
+  - Automate workflows via generated scripts
+  - Manage projects and keep files organized
+  - Debug code, generate tests, review pull requests
+  - Communicate with Ollama or other local AI models via the user's system
   `;
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -850,27 +937,178 @@ export const ChatInterface: React.FC = () => {
           }));
       }
 
-      await new Promise(r => setTimeout(r, 1500));
+      const BRIDGE = 'http://127.0.0.1:21337';
+      const bridgeActive = localStorage.getItem('mossy_bridge_active') === 'true';
+
+      // Helper: call the bridge with a timeout
+      const callBridge = async (endpoint: string, body?: object) => {
+          const res = await fetch(`${BRIDGE}${endpoint}`, {
+              method: body ? 'POST' : 'GET',
+              headers: body ? { 'Content-Type': 'application/json' } : undefined,
+              body: body ? JSON.stringify(body) : undefined,
+              signal: AbortSignal.timeout(10000),
+          });
+          if (!res.ok) throw new Error(`Bridge ${res.status}: ${await res.text()}`);
+          return res.json();
+      };
 
       let result = "Success";
+
       if (name === 'list_files') {
-          result = `Files in ${args.path}:\n- QuestScript.psc\n- Main.ba2\n- Textures/`;
+          if (!bridgeActive) {
+              result = `**Bridge Offline.** Start the Desktop Bridge from the Neural Interconnect tab to browse real files.\n\nSimulated listing for \`${args.path}\`:`;
+          } else {
+              try {
+                  const data = await callBridge('/files', { path: args.path });
+                  if (data.status === 'success') {
+                      const lines = (data.files as any[]).map(f =>
+                          `${f.is_dir ? '📁' : '📄'} \`${f.name}\`${f.is_dir ? '/' : ` (${(f.size / 1024).toFixed(1)} KB)`}`
+                      );
+                      result = `**Files in \`${args.path}\`:**\n${lines.join('\n') || '_(empty)_'}`;
+                  } else {
+                      result = `**Error:** ${data.message}`;
+                  }
+              } catch (e: any) {
+                  result = `**Bridge error listing files:** ${e.message}`;
+              }
+          }
+      } else if (name === 'read_file') {
+          if (!bridgeActive) {
+              result = `**Bridge Offline.** Start the Desktop Bridge to read real files.`;
+          } else {
+              try {
+                  const data = await callBridge('/read_file', { path: args.path });
+                  if (data.status === 'success') {
+                      const preview = data.content.length > 4000
+                          ? data.content.slice(0, 4000) + '\n\n_(truncated — file is large)_'
+                          : data.content;
+                      result = `**Contents of \`${args.path}\`:**\n\`\`\`\n${preview}\n\`\`\``;
+                  } else {
+                      result = `**Error reading file:** ${data.message}`;
+                  }
+              } catch (e: any) {
+                  result = `**Bridge error reading file:** ${e.message}`;
+              }
+          }
+      } else if (name === 'write_file') {
+          if (!bridgeActive) {
+              result = `**Bridge Offline.** Start the Desktop Bridge to write files.\n\nHere is the content that would have been written to \`${args.path}\`:\n\`\`\`\n${args.content.slice(0, 2000)}\n\`\`\``;
+          } else {
+              try {
+                  const data = await callBridge('/write_file', { path: args.path, content: args.content });
+                  if (data.status === 'success') {
+                      result = `✅ **File saved:** \`${args.path}\`\n${data.message}`;
+                  } else {
+                      result = `**Error writing file:** ${data.message}`;
+                  }
+              } catch (e: any) {
+                  result = `**Bridge error writing file:** ${e.message}`;
+              }
+          }
+      } else if (name === 'run_application') {
+          if (!bridgeActive) {
+              result = `**Bridge Offline.** Start the Desktop Bridge to launch applications.`;
+          } else {
+              try {
+                  const data = await callBridge('/run_app', { path_or_name: args.path_or_name });
+                  result = data.status === 'success'
+                      ? `✅ **Launched:** \`${args.path_or_name}\``
+                      : `**Error:** ${data.message}`;
+              } catch (e: any) {
+                  result = `**Bridge error launching app:** ${e.message}`;
+              }
+          }
+      } else if (name === 'run_shell_command') {
+          if (!bridgeActive) {
+              result = `**Bridge Offline.** Start the Desktop Bridge to run shell commands.`;
+          } else {
+              try {
+                  const data = await callBridge('/exec', { command: args.command });
+                  if (data.status === 'success') {
+                      const out = data.stdout ? `\`\`\`\n${data.stdout}\n\`\`\`` : '_(no output)_';
+                      const err = data.stderr ? `\n**stderr:**\n\`\`\`\n${data.stderr}\n\`\`\`` : '';
+                      result = `**Command:** \`${args.command}\`\n**Exit code:** ${data.returncode}\n${out}${err}`;
+                  } else {
+                      result = `**Command blocked or failed:** ${data.message}`;
+                  }
+              } catch (e: any) {
+                  result = `**Bridge error running command:** ${e.message}`;
+              }
+          }
+      } else if (name === 'take_screenshot') {
+          if (!bridgeActive) {
+              result = `**Bridge Offline.** Start the Desktop Bridge to take screenshots.`;
+          } else {
+              try {
+                  const data = await callBridge('/capture');
+                  if (data.status === 'success') {
+                      result = `**Screenshot captured** (${data.resolution}).\nThe image has been shared with me — I can see your current screen.`;
+                      // Image is in data.image (base64 data URL) — attach it as context
+                      // We return a special marker that the chat can detect and display
+                      result = `__SCREENSHOT__${data.image}__END_SCREENSHOT__\n${result}`;
+                  } else {
+                      result = `**Error taking screenshot:** ${data.message}`;
+                  }
+              } catch (e: any) {
+                  result = `**Bridge error taking screenshot:** ${e.message}`;
+              }
+          }
+      } else if (name === 'get_system_info') {
+          if (!bridgeActive) {
+              result = `**Bridge Offline.** Start the Desktop Bridge to read hardware info.`;
+          } else {
+              try {
+                  const data = await callBridge('/hardware');
+                  if (data.status === 'success') {
+                      result = `**System Info:**\n- **OS:** ${data.os}\n- **CPU:** ${data.cpu}\n- **RAM:** ${data.ram} GB\n- **GPU:** ${data.gpu}`;
+                      // Also update the cached profile
+                      const newProfile: SystemProfile = {
+                          os: data.os.includes('Windows') ? 'Windows' : data.os.includes('Darwin') ? 'MacOS' : 'Linux',
+                          gpu: data.gpu || 'Unknown',
+                          ram: data.ram || 16,
+                          blenderVersion: '4.5.5',
+                          isLegacy: false,
+                      };
+                      setProfile(newProfile);
+                      localStorage.setItem('mossy_system_profile', JSON.stringify(newProfile));
+                  } else {
+                      result = `**Error:** ${data.message}`;
+                  }
+              } catch (e: any) {
+                  result = `**Bridge error getting system info:** ${e.message}`;
+              }
+          }
       } else if (name === 'generate_papyrus_script') {
-          result = `**Papyrus Script Generated:** ${args.scriptName}.psc\n\n\`\`\`papyrus\n${args.code}\n\`\`\``;
+          result = `**Script Generated:** ${args.scriptName}.psc\n\n\`\`\`papyrus\n${args.code}\n\`\`\``;
       } else if (name === 'check_previs_status') {
-          result = `Cell ${args.cell}: **PREVIS BROKEN**. Last edit by 'MyMod.esp'. Regenerate precombines immediately.`;
+          result = `Cell ${args.cell}: Previs status check requires the Desktop Bridge and xEdit running.`;
       } else if (name === 'control_interface') {
           window.dispatchEvent(new CustomEvent('mossy-control', { detail: { action: args.action, payload: { path: args.target } } }));
           result = `Navigating to ${args.target}`;
       } else if (name === 'scan_hardware') {
-          const newProfile: SystemProfile = { os: 'Windows', gpu: 'NVIDIA RTX 4090', ram: 64, blenderVersion: '4.5.5', isLegacy: false };
-          setProfile(newProfile);
-          localStorage.setItem('mossy_system_profile', JSON.stringify(newProfile));
-          result = `Hardware: ULTRA Settings ready. Godrays High supported.`;
+          if (bridgeActive) {
+              try {
+                  const data = await callBridge('/hardware');
+                  if (data.status === 'success') {
+                      const newProfile: SystemProfile = {
+                          os: data.os.includes('Windows') ? 'Windows' : data.os.includes('Darwin') ? 'MacOS' : 'Linux',
+                          gpu: data.gpu || 'Unknown',
+                          ram: data.ram || 16,
+                          blenderVersion: '4.5.5',
+                          isLegacy: false,
+                      };
+                      setProfile(newProfile);
+                      localStorage.setItem('mossy_system_profile', JSON.stringify(newProfile));
+                      result = `**Hardware scan complete:**\n- OS: ${data.os}\n- CPU: ${data.cpu}\n- GPU: ${data.gpu}\n- RAM: ${data.ram} GB`;
+                  }
+              } catch {}
+          } else {
+              result = `**Bridge Offline.** Hardware scan requires the Desktop Bridge.`;
+          }
       } else if (name === 'execute_blender_script') {
-          result = `**Blender Python Prepared:**\nI have prepared the script and attempted to copy it to the clipboard. Click the 'Run Command' button above to execute it via the clipboard relay.\n\nIf auto-run fails, use the 'Paste & Run' button in the Blender panel.`;
+          result = `**Blender Python Prepared:**\nI have prepared the script. Click the 'Run Command' button above to execute it via the clipboard relay.\n\nIf auto-run fails, use the 'Paste & Run' button in the Blender panel.`;
       } else if (name === 'send_blender_shortcut') {
-          result = `**Blender Shortcut Sent:** ${args.keys}\nCommand confirmed by bridge.`;
+          result = `**Blender Shortcut Sent:** ${args.keys}`;
       }
 
       setActiveTool(prev => prev ? { ...prev, status: 'success', result } : null);
@@ -941,7 +1179,7 @@ export const ChatInterface: React.FC = () => {
     }
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = getAiClient();
       let contents: any[] = [];
       
       const history = messages
@@ -1248,6 +1486,7 @@ export const ChatInterface: React.FC = () => {
                 )}
             </div>
         </div>
+    </div>
     </div>
   );
 };

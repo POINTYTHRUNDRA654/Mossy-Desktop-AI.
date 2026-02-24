@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
@@ -43,7 +44,7 @@ const ThePrism: React.FC = () => {
         // Reset Shards
         setShards(prev => prev.map(s => ({ ...s, content: '', status: 'thinking' })));
 
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = getAiClient();
 
         // 1. Parallel Generation for Shards
         const shardPrompts = {

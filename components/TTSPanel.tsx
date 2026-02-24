@@ -1,3 +1,4 @@
+import { getAiClient, isOllamaMode } from '../utils/aiClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
 import { Play, FileAudio, Sliders, Radio, Mic2, Cpu, Music, Download, Volume2, Activity, Wifi, RefreshCw } from 'lucide-react';
@@ -157,11 +158,36 @@ const AudioStudio: React.FC = () => {
   const handleGenerate = async () => {
     if (!text) return;
     setLoading(true);
-    // Stop previous
     if (sourceRef.current) sourceRef.current.stop();
 
+    // ── Ollama mode: use the browser's built-in Web Speech API (free, local) ──
+    if (isOllamaMode()) {
+      try {
+        window.speechSynthesis.cancel();
+        const utt = new SpeechSynthesisUtterance(text);
+        utt.rate  = 0.95;
+        utt.pitch = 1.0;
+        utt.volume = 1.0;
+        const voices = window.speechSynthesis.getVoices();
+        // Prefer a natural/neural voice if available
+        const preferred = voices.find(v =>
+          v.name.toLowerCase().includes('natural') ||
+          v.name.toLowerCase().includes('neural') ||
+          v.name.toLowerCase().includes('google')
+        ) || voices[0];
+        if (preferred) utt.voice = preferred;
+        utt.onend = () => setLoading(false);
+        utt.onerror = () => setLoading(false);
+        window.speechSynthesis.speak(utt);
+      } catch {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ── Gemini mode: use Gemini TTS (cloud, premium voices) ──
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = getAiClient();
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text }] }],
@@ -179,19 +205,16 @@ const AudioStudio: React.FC = () => {
       if (base64Audio) {
          if (!audioContextRef.current) audioContextRef.current = new window.AudioContext();
          const ctx = audioContextRef.current;
-         
          const binaryString = atob(base64Audio);
          const len = binaryString.length;
          const bytes = new Uint8Array(len);
          for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-         
          const dataInt16 = new Int16Array(bytes.buffer);
          const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
          const channelData = buffer.getChannelData(0);
          for(let i=0; i<dataInt16.length; i++) {
              channelData[i] = dataInt16[i] / 32768.0;
          }
-         
          setAudioBuffer(buffer);
          playSound(buffer);
       }

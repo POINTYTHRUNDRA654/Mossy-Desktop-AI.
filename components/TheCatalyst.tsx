@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { FlaskConical, Play, Plus, Trash2, Wand2, RefreshCw, Beaker, Check, AlertTriangle, Settings, ArrowRight } from 'lucide-react';
@@ -71,7 +72,7 @@ const TheCatalyst: React.FC = () => {
     };
 
     const runTests = async () => {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = getAiClient();
 
         // Run sequential for simplicity in demo (parallel in prod)
         for (const test of testCases) {
@@ -111,7 +112,7 @@ const TheCatalyst: React.FC = () => {
         if (!masterPrompt) return;
         setIsOptimizing(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: `Act as a Prompt Engineer. Rewrite the following prompt to be more clear, concise, and effective for an LLM. 

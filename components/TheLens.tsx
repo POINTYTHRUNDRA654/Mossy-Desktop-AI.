@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Aperture, Maximize, Crosshair, RefreshCcw, MessageSquare, Zap, AlertCircle, Check, Scan, Monitor, Target, MousePointer2, AlertTriangle } from 'lucide-react';
@@ -67,7 +68,7 @@ const TheLens: React.FC = () => {
             }
 
             // 2. SEND TO GEMINI (Only if we have real data or forcing simulation)
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             
             // Build request
             const contents: any[] = [];

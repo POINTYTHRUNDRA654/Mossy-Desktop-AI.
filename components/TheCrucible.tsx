@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Bug, AlertTriangle, Activity, Search, FileText, Cpu, ShieldCheck, RefreshCw, CheckCircle2, XCircle, ArrowRight, Code } from 'lucide-react';
@@ -55,7 +56,7 @@ const TheCrucible: React.FC = () => {
         setIsAnalyzing(true);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             
             // In a real app, we would pass the actual file content here.
             // Using mockRawLog for simulation.

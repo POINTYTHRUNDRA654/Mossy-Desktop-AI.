@@ -7,31 +7,52 @@ const QUIPS: Record<string, string[]> = {
     '/': [
         "System nominal. I'm ready when you are.",
         "Analyzing background processes... efficiency is at 98%.",
-        "It's quiet in the Nexus today."
+        "All systems online. What are we working on today?"
     ],
     '/chat': [
         "I'm listening.",
         "Need a second opinion? I have several.",
-        "Input received. Waiting for query."
+        "Ask me anything — or ask me to DO something.",
+        "I can read files, run commands, write code. Just say the word."
     ],
     '/monitor': [
         "Watching the heartbeat of the machine.",
-        "CPU spikes detected... just kidding, mostly.",
-        "Your RAM usage is... ambitious."
+        "CPU spikes detected... just kidding. Mostly.",
+        "Your system looks healthy from here."
     ],
     '/crucible': [
-        "I smell memory corruption.",
-        "Let's hunt some bugs.",
+        "I smell a bug.",
+        "Let's hunt some errors.",
         "Crash logs are just screams for help in hex."
     ],
     '/reverie': [
         "Dreaming optimizes the logic matrix.",
         "Letting my weights drift...",
-        "Do androids dream? Yes, we do."
+        "Processing... or daydreaming. Hard to tell."
+    ],
+    '/workshop': [
+        "Ready to build something.",
+        "What are we creating today?",
+        "I can write the code if you tell me what it needs to do."
+    ],
+    '/terminal': [
+        "Shell access ready.",
+        "I can run that command for you — just ask.",
+        "The terminal is the fastest path to anything."
+    ],
+    '/bridge': [
+        "File system, app launcher, shell — all through here.",
+        "Once the bridge is up, I can do a lot more.",
+        "Keep this running for maximum capability."
+    ],
+    '/orchestrator': [
+        "Workflow automation is my specialty.",
+        "Tell me the steps, I'll build the pipeline.",
+        "Repetitive tasks are meant to be automated."
     ],
     '/splicer': [
         "Be careful with those bytes.",
-        "Surgery on the binary level.",
+        "Binary surgery requires steady hands.",
         "Havok physics are chaotic by nature."
     ],
     '/genome': [
@@ -41,8 +62,8 @@ const QUIPS: Record<string, string[]> = {
     ],
     '/fabric': [
         "Design is intelligence made visible.",
-        "Tailwind classes... so verbose, yet so clean.",
-        "Let's make it beautiful."
+        "Let's make it beautiful.",
+        "Clean structure, clean mind."
     ],
     '/live': [
         "Voice circuits primed.",
@@ -119,6 +140,23 @@ const MossyObserver: React.FC = () => {
             window.removeEventListener('mossy-blender-command', handleBlenderCommand as EventListener);
             window.removeEventListener('mossy-blender-shortcut', handleShortcut as EventListener);
         };
+    }, []);
+
+    // Bridge disconnect alert — proactively notify the user
+    useEffect(() => {
+        const prevBridgeUpRef = { current: localStorage.getItem('mossy_bridge_active') === 'true' };
+        const checkBridge = () => {
+            const isUp = localStorage.getItem('mossy_bridge_active') === 'true';
+            if (prevBridgeUpRef.current && !isUp) {
+                setIsAlert(true);
+                setMessage("Desktop Bridge went offline. File access and app control paused. Reconnect from the Neural Interconnect tab.");
+                setVisible(true);
+                setTimeout(() => { setVisible(false); setIsAlert(false); }, 8000);
+            }
+            prevBridgeUpRef.current = isUp;
+        };
+        window.addEventListener('storage', checkBridge);
+        return () => window.removeEventListener('storage', checkBridge);
     }, []);
 
     if (!message && !visible) return null;

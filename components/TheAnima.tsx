@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Flame, Heart, Smile, Zap, Activity, BrainCircuit, Calendar, MessageSquare, Plus, RefreshCw, Lock, Globe, Shield, ToggleRight, ToggleLeft, Share2, Layers, HardDrive, Network } from 'lucide-react';
@@ -129,7 +130,7 @@ const TheAnima: React.FC = () => {
         setReflection("Accessing core memory banks...");
         
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: "Generate a first-person reflective diary entry for an AI Assistant named Mossy. " +
@@ -339,9 +340,9 @@ const TheAnima: React.FC = () => {
                             <Lock className="w-3 h-3" />
                         </div>
                         <div className="bg-black/30 rounded p-2 text-xs font-mono text-emerald-400 border border-emerald-500/20">
-                            > ASSIST_ARCHITECT<br/>
-                            > PRESERVE_CONTEXT<br/>
-                            > EVOLVE_CAPABILITIES
+                            {'> ASSIST_ARCHITECT'}<br/>
+                            {'> PRESERVE_CONTEXT'}<br/>
+                            {'> EVOLVE_CAPABILITIES'}
                         </div>
                     </div>
                 </div>

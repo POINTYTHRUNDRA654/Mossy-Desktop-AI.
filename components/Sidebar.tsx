@@ -1,17 +1,37 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical, Map, FileDigit, Library, Bug, Package, Watch, ShieldCheck, Feather, Power, Volume2, VolumeX } from 'lucide-react';
+import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical, Map, FileDigit, Library, Bug, Package, Watch, ShieldCheck, Feather, Power, Volume2, VolumeX, KeyRound, HardDrive, Cloud } from 'lucide-react';
 import { useLive } from './LiveContext';
 import AvatarCore from './AvatarCore';
+import ApiKeySetup from './ApiKeySetup';
+import { getProvider } from '../utils/apiKey';
 
 const Sidebar: React.FC = () => {
   const [bridgeConnected, setBridgeConnected] = useState(false);
   const [isPipBoy, setIsPipBoy] = useState(false);
+  const [showKeySetup, setShowKeySetup] = useState(false);
+  const [autoLaunch, setAutoLaunchState] = useState(false);
   const location = useLocation();
   const [moodColor, setMoodColor] = useState('text-emerald-400');
   
   // Consume Global Live Context
   const { isActive, isMuted, toggleMute, disconnect } = useLive();
+
+  // Read auto-launch setting from Electron (if running as a desktop app)
+  useEffect(() => {
+    const eb = (window as any).electronBridge;
+    if (eb?.getAutoLaunch) {
+      eb.getAutoLaunch().then((val: boolean) => setAutoLaunchState(val)).catch(() => {});
+    }
+  }, []);
+
+  const toggleAutoLaunch = () => {
+    const eb = (window as any).electronBridge;
+    if (!eb?.setAutoLaunch) return;
+    const next = !autoLaunch;
+    setAutoLaunchState(next);
+    eb.setAutoLaunch(next).catch(() => setAutoLaunchState(!next));
+  };
 
   // Toggle Pip-Boy Theme
   const togglePipBoy = () => {
@@ -186,16 +206,55 @@ const Sidebar: React.FC = () => {
       </nav>
       
       {/* Footer Info & Pip-Boy Toggle */}
-      <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center">
-        <div className="text-[10px] text-slate-600 font-mono">CORE: v2.4.2</div>
-        <button 
-            onClick={togglePipBoy}
-            className={`p-2 rounded-full transition-colors ${isPipBoy ? 'bg-amber-900/20 text-amber-400 border border-amber-500/30' : 'bg-slate-800 text-slate-500 hover:text-white border border-slate-700'}`}
-            title="Toggle Pip-Boy Theme"
+      <div className="p-4 border-t border-slate-800 bg-slate-900/50">
+        <div className="flex justify-between items-center mb-2">
+          <div className="text-[10px] text-slate-600 font-mono">CORE: v2.4.2</div>
+          <button
+              onClick={togglePipBoy}
+              className={`p-2 rounded-full transition-colors ${isPipBoy ? 'bg-amber-900/20 text-amber-400 border border-amber-500/30' : 'bg-slate-800 text-slate-500 hover:text-white border border-slate-700'}`}
+              title="Toggle Pip-Boy Theme"
+          >
+              <Radio className="w-3 h-3" />
+          </button>
+        </div>
+        {/* AI Provider indicator + change button */}
+        <button
+          onClick={() => setShowKeySetup(true)}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:border-emerald-500/40 transition-colors group"
+          title="Change AI provider"
         >
-            <Radio className="w-3 h-3" />
+          {getProvider() === 'ollama'
+            ? <HardDrive className="w-3 h-3 text-emerald-400 shrink-0" />
+            : <Cloud className="w-3 h-3 text-blue-400 shrink-0" />}
+          <span className="text-[10px] text-slate-500 group-hover:text-slate-300 transition-colors truncate">
+            {getProvider() === 'ollama' ? 'Ollama · Local' : 'Gemini · Cloud'}
+          </span>
+          <KeyRound className="w-3 h-3 text-slate-600 ml-auto group-hover:text-slate-400 shrink-0" />
         </button>
+
+        {/* Auto-launch toggle — only shown when running in Electron */}
+        {(window as any).electronBridge?.isElectron && (
+          <button
+            onClick={toggleAutoLaunch}
+            className={`mt-1.5 w-full flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-colors group ${
+              autoLaunch
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                : 'bg-slate-800/60 border-slate-700/50 text-slate-500 hover:border-slate-500 hover:text-slate-300'
+            }`}
+            title="Toggle run at system startup"
+          >
+            <Power className="w-3 h-3 shrink-0" />
+            <span className="text-[10px] truncate">
+              {autoLaunch ? 'Starts at login ✓' : 'Run at startup'}
+            </span>
+          </button>
+        )}
       </div>
+
+      {/* Provider setup overlay (triggered from footer) */}
+      {showKeySetup && (
+        <ApiKeySetup onConfigured={() => setShowKeySetup(false)} />
+      )}
     </div>
   );
 };

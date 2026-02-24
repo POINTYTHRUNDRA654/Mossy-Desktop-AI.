@@ -221,6 +221,85 @@ def list_files():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route('/read_file', methods=['POST'])
+def read_file():
+    """Read the contents of a text file (max 1 MB)"""
+    try:
+        data = request.json
+        fpath = data.get('path', '')
+        if not os.path.exists(fpath):
+            return jsonify({"status": "error", "message": "File not found"}), 404
+        size = os.path.getsize(fpath)
+        if size > 1024 * 1024:
+            return jsonify({"status": "error", "message": f"File too large ({size} bytes). Max 1 MB for read."}), 400
+        with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+        return jsonify({"status": "success", "content": content, "size": size})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/write_file', methods=['POST'])
+def write_file():
+    """Write content to a file, creating parent directories if needed"""
+    try:
+        data = request.json
+        fpath = data.get('path', '')
+        content = data.get('content', '')
+        parent = os.path.dirname(fpath)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(fpath, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return jsonify({"status": "success", "message": f"Wrote {len(content)} chars to {fpath}"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/run_app', methods=['POST'])
+def run_app():
+    """Launch an application, file, or URL using the OS default handler"""
+    try:
+        data = request.json
+        target = data.get('path_or_name', '')
+        if platform.system() == 'Windows':
+            os.startfile(target)
+        elif platform.system() == 'Darwin':
+            subprocess.Popen(['open', target])
+        else:
+            subprocess.Popen(['xdg-open', target])
+        return jsonify({"status": "success", "message": f"Launched: {target}"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/exec', methods=['POST'])
+def exec_command():
+    """Run a shell command and return stdout/stderr (30 s timeout).
+    Uses shlex.split + shell=False to prevent shell injection.
+    Blocks a set of known-destructive patterns before execution."""
+    BLOCKED_PATTERNS = [
+        'rm -rf /', 'del /f /s /q c:', 'format c:', 'mkfs', 'dd if=',
+        ':(){:|:&};:', 'shutdown /s', 'reboot', 'rd /s /q c:',
+    ]
+    data = request.json
+    command = data.get('command', '').strip()
+    lower_cmd = command.lower()
+    for bad in BLOCKED_PATTERNS:
+        if bad.lower() in lower_cmd:
+            return jsonify({"status": "error", "message": "Blocked: potentially destructive command"}), 403
+    try:
+        import shlex
+        args = shlex.split(command, posix=(platform.system() != 'Windows'))
+        result = subprocess.run(args, shell=False, capture_output=True, text=True, timeout=30)
+        return jsonify({
+            "status": "success",
+            "stdout": result.stdout[:8000],
+            "stderr": result.stderr[:2000],
+            "returncode": result.returncode
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({"status": "error", "message": "Command timed out after 30 s"}), 408
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 if __name__ == '__main__':
     try:
         # Run on 0.0.0.0 to ensure loopback works from any local address

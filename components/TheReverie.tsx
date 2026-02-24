@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Sparkles, BrainCircuit, Play, Pause, Save, ThumbsUp, ThumbsDown, ArrowRight, Lightbulb, Code, Palette, Zap, Layers } from 'lucide-react';
@@ -29,7 +30,7 @@ const TheReverie: React.FC = () => {
         if (!isDreaming) return;
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             
             const context = lucidTopic 
                 ? `Focus strictly on this topic: "${lucidTopic}".` 

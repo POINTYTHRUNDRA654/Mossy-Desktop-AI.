@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Library, Folder, File, AlertTriangle, Play, Settings, RefreshCw, Zap, ArrowDown, ArrowUp, Minus, Plus, Search, Layers, Database, Check, Wrench, Download, Box, Link, MapPin, BookOpen, Scroll, Flag, Lock } from 'lucide-react';
@@ -157,7 +158,7 @@ const TheOrganizer: React.FC = () => {
         setAnalysisResult(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             
             const modList = mods.map(m => `${m.name} [Category: ${m.category}]`).join('\n');
             

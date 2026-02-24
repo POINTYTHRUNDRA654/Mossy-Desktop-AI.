@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { GitBranch, User, Scroll, Sword, Play, CheckCircle2, Circle, Loader2, FileJson, Copy, Database, Wand2, Mic, Pause, Save, ArrowRight } from 'lucide-react';
@@ -85,7 +86,7 @@ const WorkflowOrchestrator: React.FC = () => {
     log(`Starting pipeline: ${pipelines.find(p => p.id === activePipeline)?.name}`);
     log(`Context: "${prompt}"`);
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = getAiClient();
     const steps = [...currentSteps];
     const data: Record<string, any> = {};
 

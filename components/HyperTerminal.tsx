@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Terminal, Play, AlertTriangle, ShieldCheck, Save, Trash2, Command, ChevronRight, Activity, Cpu, Wifi } from 'lucide-react';
@@ -43,7 +44,7 @@ const HyperTerminal: React.FC = () => {
       setHistory(prev => [...prev, { id: Date.now().toString(), type: 'input', content: input }]);
 
       try {
-          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const ai = getAiClient();
           const response = await ai.models.generateContent({
               model: 'gemini-3-flash-preview',
               contents: `Translate this natural language request into a Windows PowerShell command: "${input}".

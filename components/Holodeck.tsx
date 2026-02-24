@@ -1,3 +1,4 @@
+import { getAiClient, isOllamaMode } from '../utils/aiClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
 import { Gamepad2, Play, SkipForward, RefreshCw, MessageSquare, Image as ImageIcon, Volume2, Mic2, Terminal, User, ArrowRight, Skull, MapPin, Box } from 'lucide-react';
@@ -51,7 +52,7 @@ const Holodeck: React.FC = () => {
       setLoadingTurn(true);
       
       try {
-          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const ai = getAiClient();
           
           // 1. Game Master Logic (Text)
           const prompt = `
@@ -117,8 +118,24 @@ const Holodeck: React.FC = () => {
   };
 
   const speakText = async (text: string) => {
+      // Ollama mode → Web Speech API (free, local)
+      if (isOllamaMode()) {
+        window.speechSynthesis.cancel();
+        const utt = new SpeechSynthesisUtterance(text);
+        utt.rate = 0.95; utt.pitch = 1.0;
+        const voices = window.speechSynthesis.getVoices();
+        const preferred = voices.find(v =>
+          v.name.toLowerCase().includes('natural') ||
+          v.name.toLowerCase().includes('neural') ||
+          v.name.toLowerCase().includes('google')
+        ) || voices[0];
+        if (preferred) utt.voice = preferred;
+        window.speechSynthesis.speak(utt);
+        return;
+      }
+      // Gemini mode → Gemini TTS
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = getAiClient();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-preview-tts',
             contents: [{ parts: [{ text }] }],
@@ -129,7 +146,6 @@ const Holodeck: React.FC = () => {
                 },
             },
         });
-        
         const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
         if (base64Audio) {
             if (!audioContextRef.current) audioContextRef.current = new window.AudioContext();
@@ -142,7 +158,6 @@ const Holodeck: React.FC = () => {
             const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
             const channelData = buffer.getChannelData(0);
             for(let i=0; i<dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
-            
             const source = ctx.createBufferSource();
             source.buffer = buffer;
             source.connect(ctx.destination);

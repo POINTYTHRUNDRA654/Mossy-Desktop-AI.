@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Package, Plus, Trash2, Eye, Code, Wand2, RefreshCw, FileText, Layers, CheckSquare, Image as ImageIcon, ChevronRight, ChevronDown, Download } from 'lucide-react';
@@ -123,7 +124,7 @@ const TheAssembler: React.FC = () => {
     const handleAutoGenerate = async () => {
         setIsGenerating(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             
             const prompt = `
             Act as a FOMOD installer architect.

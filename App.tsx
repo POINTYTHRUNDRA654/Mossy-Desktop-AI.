@@ -1,12 +1,14 @@
-import React, { useEffect, Suspense } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import MossyObserver from './components/MossyObserver';
 import CommandPalette from './components/CommandPalette';
 import TutorialOverlay from './components/TutorialOverlay';
 import SystemBus from './components/SystemBus';
+import ApiKeySetup from './components/ApiKeySetup';
 import { Loader2, Zap } from 'lucide-react';
 import { LiveProvider } from './components/LiveContext';
+import { hasApiKey, isConfigured } from './utils/apiKey';
 
 // --- LAZY LOAD MODULES ---
 // This prevents the app from loading ALL code at startup.
@@ -101,22 +103,11 @@ const ModuleLoader = () => (
 );
 
 const App: React.FC = () => {
-  // Ensure API Key selection for paid features (Veo/Pro Image) if applicable
-  useEffect(() => {
-    const checkKey = async () => {
-      if (window.aistudio) {
-        const hasKey = await window.aistudio.hasSelectedApiKey();
-        if (!hasKey) {
-          try {
-             await window.aistudio.openSelectKey();
-          } catch (e) {
-             console.log("User dismissed key selection");
-          }
-        }
-      }
-    };
-    checkKey();
-  }, []);
+  const [keyReady, setKeyReady] = useState(isConfigured());
+
+  if (!keyReady) {
+    return <ApiKeySetup onConfigured={() => setKeyReady(true)} />;
+  }
 
   return (
     <LiveProvider>

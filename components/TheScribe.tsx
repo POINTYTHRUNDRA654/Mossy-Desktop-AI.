@@ -1,3 +1,4 @@
+import { getAiClient } from '../utils/aiClient';
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { FileText, PenTool, RefreshCw, Copy, Check, Upload, Feather, BookOpen, List, Code, Sparkles, Wand2, Globe } from 'lucide-react';
@@ -30,7 +31,7 @@ const TheScribe: React.FC = () => {
     const handleGenerate = async () => {
         setIsGenerating(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = getAiClient();
             
             let prompt = "";
             let systemContext = `You are "The Scribe", a documentation assistant for Fallout 4 mods. Mod Name: "${modName}". Version: "${version}".`;
