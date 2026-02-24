@@ -23,14 +23,3 @@ export enum AppMode {
   TTS = 'tts',
   SYSTEM = 'system'
 }
-
-export interface Blob {
-  data: string;
-  mimeType: string;
-}
-
-export interface LiveState {
-  isConnected: boolean;
-  isMuted: boolean;
-  volume: number;
-}
