@@ -2,6 +2,7 @@
 
 const { app, BrowserWindow, shell, session, Tray, Menu, nativeImage, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const DEV_SERVER_URL = 'http://localhost:3000';
@@ -32,6 +33,37 @@ ipcMain.handle('get-auto-launch', () => getAutoLaunch());
 ipcMain.handle('set-auto-launch', (_, enable) => { setAutoLaunch(enable); return enable; });
 ipcMain.handle('window-minimize', () => { mainWindow?.minimize(); });
 ipcMain.handle('window-hide', () => { mainWindow?.hide(); });
+ipcMain.handle('bridge-scan', async (_, { base = 'D:\\', depth = 3, maxEntries = 4000, includeExe = true } = {}) => {
+  const normalizedBase = path.resolve(base);
+  if (!normalizedBase.toLowerCase().startsWith('d:')) {
+    return { status: 'error', message: 'Scanning is limited to D: drive for safety.' };
+  }
+
+  const results = [];
+  const errors = [];
+
+  const walk = async (dir, currentDepth) => {
+    if (results.length >= maxEntries) return;
+    try {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (results.length >= maxEntries) break;
+        const full = path.join(dir, entry.name);
+        const isDir = entry.isDirectory();
+        const isExe = !isDir && includeExe && entry.name.toLowerCase().endsWith('.exe');
+        results.push({ path: full, isDir, isExe });
+        if (isDir && currentDepth < depth) {
+          await walk(full, currentDepth + 1);
+        }
+      }
+    } catch (err) {
+      errors.push({ path: dir, message: String(err) });
+    }
+  };
+
+  await walk(normalizedBase, 0);
+  return { status: 'ok', results, errors, truncated: results.length >= maxEntries };
+});
 
 // ── System Tray ───────────────────────────────────────────────────────────
 function createTray() {

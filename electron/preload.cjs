@@ -19,4 +19,6 @@ contextBridge.exposeInMainWorld('electronBridge', {
   // Window controls
   minimizeWindow: ()        => ipcRenderer.invoke('window-minimize'),
   hideToTray:     ()        => ipcRenderer.invoke('window-hide'),
+  // Desktop Bridge scanning (restricted to D:)
+  scanDirectory:  (base, options) => ipcRenderer.invoke('bridge-scan', { base, ...options }),
 });

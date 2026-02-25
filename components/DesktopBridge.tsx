@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench, FolderOpen, HardDrive, ArrowRightLeft, ArrowRight, Keyboard, Download, Server, Clipboard, FileType, HelpCircle, AlertTriangle } from 'lucide-react';
+import { Monitor, CheckCircle2, Wifi, Shield, Cpu, Terminal, Power, Layers, Box, Code, Image as ImageIcon, MessageSquare, Activity, RefreshCw, Lock, AlertOctagon, Link, Zap, Eye, Globe, Database, Wrench, FolderOpen, HardDrive, ArrowRightLeft, ArrowRight, Keyboard, Download, Server, Clipboard, FileType, HelpCircle, AlertTriangle, List } from 'lucide-react';
 
 interface Driver {
     id: string;
@@ -55,6 +55,10 @@ const DesktopBridge: React.FC = () => {
   const [bridgeConnected, setBridgeConnected] = useState(false);
   const [bridgeVersion, setBridgeVersion] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
+    const [scanning, setScanning] = useState(false);
+    const [scanResults, setScanResults] = useState<Array<{ path: string; isDir: boolean; isExe: boolean }>>([]);
+    const [scanErrors, setScanErrors] = useState<Array<{ path: string; message: string }>>([]);
+    const [scanTruncated, setScanTruncated] = useState(false);
   
   useEffect(() => {
       logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -88,6 +92,32 @@ const DesktopBridge: React.FC = () => {
           clearInterval(interval);
       };
   }, []);
+
+    // ---- D: drive scanner (Electron IPC) ----
+    const runScan = async () => {
+        if (scanning) return;
+        setScanning(true);
+        setScanErrors([]);
+        try {
+            const bridge = (window as any).electronBridge;
+            if (!bridge?.scanDirectory) {
+                setScanErrors([{ path: 'preload', message: 'scanDirectory not available' }]);
+                return;
+            }
+            const res = await bridge.scanDirectory('D:\\', { depth: 3, maxEntries: 4000, includeExe: true });
+            if (res?.status === 'ok') {
+                setScanResults(res.results || []);
+                setScanErrors(res.errors || []);
+                setScanTruncated(Boolean(res.truncated));
+            } else {
+                setScanErrors([{ path: 'scan', message: res?.message || 'Unknown error' }]);
+            }
+        } catch (err) {
+            setScanErrors([{ path: 'scan', message: String(err) }]);
+        } finally {
+            setScanning(false);
+        }
+    };
 
   // --- PYTHON SERVER GENERATOR ---
   const handleDownloadServer = () => {
@@ -453,6 +483,23 @@ pause
                     )}
                 </div>
             </div>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={runScan}
+                    disabled={scanning}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 hover:border-emerald-500/60 disabled:opacity-50"
+                >
+                    <List className="w-4 h-4" />
+                    {scanning ? 'Scanning D:\\' : 'Scan D:\\'}
+                </button>
+                <button
+                    onClick={() => setShowHelp(s => !s)}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 hover:border-emerald-500/60"
+                >
+                    <HelpCircle className="w-4 h-4" />
+                    Guide
+                </button>
+            </div>
         </div>
 
         {isOutdated && (
@@ -643,6 +690,42 @@ pause
                         <div ref={logEndRef} />
                     </div>
                 </div>
+            </div>
+        </div>
+
+        {/* D: drive inventory */}
+        <div className="mt-8 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                    <FolderOpen className="w-4 h-4 text-emerald-400" />
+                    <h3 className="text-lg font-bold text-white">D:\ inventory (depth 3, max 4000 entries)</h3>
+                </div>
+                {scanTruncated && (
+                    <span className="text-xs text-amber-400">Truncated at 4000 entries</span>
+                )}
+            </div>
+
+            {scanErrors.length > 0 && (
+                <div className="mb-4 text-sm text-red-300">
+                    {scanErrors.map((e, i) => (
+                        <div key={i}>[{e.path}] {e.message}</div>
+                    ))}
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-h-96 overflow-y-auto">
+                {scanResults.slice(0, 200).map((item, i) => (
+                    <div key={i} className="px-3 py-2 rounded-lg border border-slate-800 bg-slate-800/40 flex items-center gap-3 text-sm">
+                        {item.isDir ? <FolderOpen className="w-4 h-4 text-emerald-400" /> : <FileType className={`w-4 h-4 ${item.isExe ? 'text-amber-400' : 'text-slate-400'}`} />}
+                        <span className="truncate" title={item.path}>{item.path}</span>
+                    </div>
+                ))}
+                {scanResults.length === 0 && !scanning && (
+                    <div className="text-slate-500 text-sm">No results yet. Click "Scan D:\" above to populate.</div>
+                )}
+                {scanning && (
+                    <div className="text-slate-400 text-sm">Scanning D:\... this may take a few seconds.</div>
+                )}
             </div>
         </div>
       </div>
