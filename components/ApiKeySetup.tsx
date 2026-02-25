@@ -377,7 +377,7 @@ const ApiKeySetup: React.FC<Props> = ({ onConfigured }) => {
 const Bg: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#050910]">
     <div
-      className="absolute inset-0 opacity-[0.03]"
+      className="absolute inset-0 opacity-[0.03] pointer-events-none"
       style={{
         backgroundImage:
           'linear-gradient(rgba(16,185,129,1) 1px,transparent 1px),linear-gradient(90deg,rgba(16,185,129,1) 1px,transparent 1px)',

@@ -7,6 +7,7 @@ _Last updated: 2026-02-24_
 - Added `build:electron` script and updated `electron:build`/`electron:pack` to set `ELECTRON=true` so packaged app uses relative base paths.
 - Rebuilt tests and bundles: `npm test`, `npm run build`, `npm run electron:build` (installer output in `release/`).
 - Added installer folder `Mossy AI Assistant/` to `.gitignore` to keep artifacts out of git.
+- Fixed welcome screen clicks in `ApiKeySetup` by making the background grid non-interactive (`pointer-events-none`).
 
 ## Known warnings / follow-ups
 - Vite chunk-size warnings (>500 kB) are informational only; consider manual chunking later.
