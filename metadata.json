@@ -1,6 +1,6 @@
 {
-  "name": "Mossy AI Assistant",
-  "description": "Mossy: Your step-by-step desktop companion for creative workflows, modding, and system integration.",
+  "name": "Mossy's. Desktop AIS, New Brain",
+  "description": "Mossy's. Desktop AIS, New Brain: Your step-by-step desktop companion for creative workflows, modding, and system integration.",
   "requestFramePermissions": [
     "microphone"
   ]

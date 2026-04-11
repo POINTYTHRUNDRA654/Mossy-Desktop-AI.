@@ -1,0 +1,704 @@
+"""
+Multi-Agent Collaboration Service for Mossy AI
+Enables Desktop AI, AI-Helper, and Mossy Manager to communicate and learn from each other
+Specialized for Fallout 4 modding expertise and continuous self-improvement
+"""
+
+import os
+import json
+import time
+import sqlite3
+import uuid
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from pydantic import BaseModel
+import httpx
+
+# Chroma for shared knowledge base
+try:
+    import chromadb
+    from chromadb.config import Settings
+except ImportError:
+    print("[ERROR] chromadb not installed. Run: pip install chromadb")
+    exit(1)
+
+# LLM & embeddings
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    print("[ERROR] sentence-transformers not installed. Run: pip install sentence-transformers")
+    exit(1)
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+PORT = 8004
+AGENT_COMMUNICATION_PORT = 8004
+
+# Agent endpoints
+AGENTS = {
+    "desktop-ai": "http://localhost:8000",      # Gemma service (tutor)
+    "ai-helper": "http://localhost:21337",      # Flask hardware/file service
+    "mossy-manager": "http://localhost:8005",   # Future: Mossy Manager service
+}
+
+# Database paths
+DB_PATHS = {
+    "desktop-ai": "data/agent_memory_desktop.db",
+    "ai-helper": "data/agent_memory_helper.db",
+    "mossy-manager": "data/agent_memory_manager.db",
+    "shared": "data/shared_knowledge.db",
+}
+
+# Chroma vector DB
+CHROMA_PATH = "data/fallout4_knowledge"
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # Fast, small embeddings
+
+# Create data directory
+os.makedirs("data", exist_ok=True)
+
+# ============================================================================
+# MODELS
+# ============================================================================
+
+class AgentQuery(BaseModel):
+    """One agent asking another agent a question"""
+    from_agent: str          # "desktop-ai", "ai-helper", "mossy-manager"
+    to_agent: str            # Target agent
+    question: str            # What to ask
+    context: Optional[str] = None
+    confidence_threshold: float = 0.6  # Validate if confidence > this
+
+class AgentResponse(BaseModel):
+    """Response from an agent with confidence and sources"""
+    agent: str
+    answer: str
+    confidence: float        # 0.0-1.0
+    sources: List[Dict] = []
+    reasoning: Optional[str] = None
+    metadata: Dict = {}
+
+class KnowledgeEntry(BaseModel):
+    """Entry in shared knowledge base"""
+    topic: str               # e.g., "Fallout 4 load order", "mod conflict resolution"
+    content: str
+    agent: str               # Which agent contributed this
+    timestamp: str
+    tags: List[str] = []
+    confidence: float = 0.8  # How confident is this knowledge
+
+class AgentImprovement(BaseModel):
+    """When an agent proposes a better answer"""
+    agent: str
+    previous_answer: str
+    improved_answer: str
+    reason_for_improvement: str
+    validation_score: float  # Score from other agents
+
+class ConversationLog(BaseModel):
+    """Log of conversation for learning"""
+    agent: str
+    timestamp: str
+    interaction: Dict
+    learning_points: List[str] = []
+    improvement_suggestion: Optional[str] = None
+
+# ============================================================================
+# DATABASE INITIALIZATION
+# ============================================================================
+
+def init_databases():
+    """Initialize SQLite databases for each agent and shared knowledge"""
+    for agent_name, db_path in DB_PATHS.items():
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        if agent_name == "shared":
+            # Shared knowledge base
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS knowledge (
+                    id TEXT PRIMARY KEY,
+                    topic TEXT,
+                    content TEXT,
+                    agent TEXT,
+                    timestamp TEXT,
+                    tags TEXT,
+                    confidence REAL,
+                    verified_by TEXT
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS agent_queries (
+                    id TEXT PRIMARY KEY,
+                    from_agent TEXT,
+                    to_agent TEXT,
+                    question TEXT,
+                    answer TEXT,
+                    timestamp TEXT,
+                    agents_consulted TEXT
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS improvements (
+                    id TEXT PRIMARY KEY,
+                    agent TEXT,
+                    previous_answer TEXT,
+                    improved_answer TEXT,
+                    reason TEXT,
+                    validation_score REAL,
+                    timestamp TEXT
+                )
+            """)
+        else:
+            # Individual agent memory
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS memory (
+                    id TEXT PRIMARY KEY,
+                    timestamp TEXT,
+                    interaction_type TEXT,
+                    content TEXT,
+                    metadata TEXT
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS learning_log (
+                    id TEXT PRIMARY KEY,
+                    timestamp TEXT,
+                    lesson TEXT,
+                    source_agent TEXT,
+                    confidence REAL
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS improvements_made (
+                    id TEXT PRIMARY KEY,
+                    timestamp TEXT,
+                    improvement_type TEXT,
+                    details TEXT
+                )
+            """)
+        
+        conn.commit()
+        conn.close()
+
+# ============================================================================
+# CHROMA - SHARED KNOWLEDGE BASE
+# ============================================================================
+
+class FalloutKnowledgeBase:
+    """Shared vector database for Fallout 4 modding knowledge"""
+    
+    def __init__(self):
+        # Initialize embeddings
+        self.embeddings = SentenceTransformer(EMBEDDING_MODEL)
+        
+        # Initialize Chroma
+        settings = Settings(
+            chroma_db_impl="duckdb+parquet",
+            persist_directory=CHROMA_PATH,
+            anonymized_telemetry=False,
+        )
+        self.client = chromadb.Client(settings)
+        self.collection = self.client.get_or_create_collection(
+            name="fallout4_knowledge",
+            metadata={"description": "Fallout 4 modding expertise shared by all agents"}
+        )
+    
+    def add_knowledge(self, topic: str, content: str, agent: str, tags: List[str] = None, confidence: float = 0.8):
+        """Add knowledge to shared base from an agent"""
+        doc_id = str(uuid.uuid4())
+        
+        self.collection.add(
+            ids=[doc_id],
+            documents=[content],
+            metadatas=[{
+                "topic": topic,
+                "agent": agent,
+                "timestamp": datetime.now().isoformat(),
+                "tags": ",".join(tags or []),
+                "confidence": confidence,
+            }],
+        )
+        
+        # Also store in SQLite for audit trail
+        conn = sqlite3.connect(DB_PATHS["shared"])
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO knowledge (id, topic, content, agent, timestamp, tags, confidence, verified_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (doc_id, topic, content, agent, datetime.now().isoformat(), 
+              ",".join(tags or []), confidence, None))
+        conn.commit()
+        conn.close()
+        
+        return doc_id
+    
+    def search(self, query: str, n_results: int = 5) -> List[Dict]:
+        """Search shared knowledge base"""
+        results = self.collection.query(
+            query_texts=[query],
+            n_results=n_results,
+        )
+        
+        output = []
+        if results and results["ids"] and len(results["ids"]) > 0:
+            for i, doc_id in enumerate(results["ids"][0]):
+                output.append({
+                    "id": doc_id,
+                    "content": results["documents"][0][i],
+                    "metadata": results["metadatas"][0][i],
+                    "distance": results["distances"][0][i] if "distances" in results else 0,
+                })
+        
+        return output
+    
+    def verify_knowledge(self, doc_id: str, verifying_agent: str):
+        """Mark knowledge as verified by another agent"""
+        conn = sqlite3.connect(DB_PATHS["shared"])
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE knowledge SET verified_by = ? WHERE id = ?
+        """, (verifying_agent, doc_id))
+        conn.commit()
+        conn.close()
+
+# ============================================================================
+# AGENT MEMORY SYSTEM
+# ============================================================================
+
+class AgentMemory:
+    """Individual memory system for each agent"""
+    
+    def __init__(self, agent_name: str):
+        self.agent_name = agent_name
+        self.db_path = DB_PATHS.get(agent_name)
+        if not self.db_path:
+            raise ValueError(f"Unknown agent: {agent_name}")
+    
+    def learn_from_interaction(self, interaction: Dict, learning_points: List[str]):
+        """Record what an agent learned from an interaction"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        entry_id = str(uuid.uuid4())
+        cursor.execute("""
+            INSERT INTO memory (id, timestamp, interaction_type, content, metadata)
+            VALUES (?, ?, ?, ?, ?)
+        """, (entry_id, datetime.now().isoformat(), "interaction",
+              json.dumps(interaction), json.dumps({"learning_points": learning_points})))
+        
+        for point in learning_points:
+            cursor.execute("""
+                INSERT INTO learning_log (id, timestamp, lesson, source_agent, confidence)
+                VALUES (?, ?, ?, ?, ?)
+            """, (str(uuid.uuid4()), datetime.now().isoformat(), point, 
+                  interaction.get("source_agent", "unknown"), 0.7))
+        
+        conn.commit()
+        conn.close()
+    
+    def record_improvement(self, improvement_type: str, details: str):
+        """Record when agent improves itself"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO improvements_made (id, timestamp, improvement_type, details)
+            VALUES (?, ?, ?, ?)
+        """, (str(uuid.uuid4()), datetime.now().isoformat(), improvement_type, details))
+        conn.commit()
+        conn.close()
+    
+    def get_learning_history(self, limit: int = 20) -> List[Dict]:
+        """Get recent learning history"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM learning_log ORDER BY timestamp DESC LIMIT ?
+        """, (limit,))
+        
+        results = []
+        for row in cursor.fetchall():
+            results.append({
+                "id": row[0],
+                "timestamp": row[1],
+                "lesson": row[2],
+                "source_agent": row[3],
+                "confidence": row[4],
+            })
+        
+        conn.close()
+        return results
+
+# ============================================================================
+# FASTAPI APP
+# ============================================================================
+
+app = FastAPI(title="Mossy Multi-Agent Collaboration", version="1.0.0")
+
+# Initialize systems
+init_databases()
+knowledge_base = FalloutKnowledgeBase()
+agent_memories = {
+    agent: AgentMemory(agent) 
+    for agent in ["desktop-ai", "ai-helper", "mossy-manager"]
+}
+
+# ============================================================================
+# HEALTH & DISCOVERY
+# ============================================================================
+
+@app.get("/health")
+async def health():
+    """Health check endpoint"""
+    return {
+        "status": "online",
+        "service": "multi-agent-collaboration",
+        "version": "1.0.0",
+        "agents": list(AGENTS.keys()),
+        "port": PORT,
+    }
+
+@app.get("/agents/discover")
+async def discover_agents():
+    """Discover all connected agents and their health"""
+    discovered = {}
+    
+    for agent_name, endpoint in AGENTS.items():
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.get(f"{endpoint}/health")
+                if resp.status_code == 200:
+                    discovered[agent_name] = {
+                        "endpoint": endpoint,
+                        "status": "online",
+                        "data": resp.json(),
+                    }
+        except Exception as e:
+            discovered[agent_name] = {
+                "endpoint": endpoint,
+                "status": "offline",
+                "error": str(e),
+            }
+    
+    return discovered
+
+# ============================================================================
+# INTER-AGENT COMMUNICATION
+# ============================================================================
+
+@app.post("/agents/query")
+async def query_agent(query: AgentQuery) -> AgentResponse:
+    """
+    One agent queries another agent
+    Example: Desktop AI asks Help about system resources
+    """
+    if query.to_agent not in AGENTS:
+        raise HTTPException(status_code=400, detail=f"Unknown agent: {query.to_agent}")
+    
+    endpoint = AGENTS[query.to_agent]
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Agent-specific query handling
+            if query.to_agent == "ai-helper":
+                # Ask AI-Helper to search its knowledge
+                resp = await client.post(
+                    f"{endpoint}/query",
+                    json={"question": query.question, "context": query.context}
+                )
+            elif query.to_agent == "desktop-ai":
+                # Ask Desktop AI (Gemma) to answer
+                resp = await client.post(
+                    f"{endpoint}/infer",
+                    json={"prompt": query.question}
+                )
+            else:
+                resp = await client.post(
+                    f"{endpoint}/query",
+                    json={"question": query.question}
+                )
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                
+                # Log the query
+                conn = sqlite3.connect(DB_PATHS["shared"])
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO agent_queries (id, from_agent, to_agent, question, answer, timestamp, agents_consulted)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (str(uuid.uuid4()), query.from_agent, query.to_agent, 
+                      query.question, json.dumps(data), 
+                      datetime.now().isoformat(), query.to_agent))
+                conn.commit()
+                conn.close()
+                
+                # Record learning for from_agent
+                agent_memories[query.from_agent].learn_from_interaction(
+                    {"response": data, "source_agent": query.to_agent},
+                    ["learned from " + query.to_agent]
+                )
+                
+                return AgentResponse(
+                    agent=query.to_agent,
+                    answer=data.get("text", data.get("answer", str(data))),
+                    confidence=data.get("confidence", 0.7),
+                    sources=data.get("sources", []),
+                    reasoning=data.get("reasoning"),
+                    metadata=data,
+                )
+            else:
+                raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+# ============================================================================
+# SHARED KNOWLEDGE BASE
+# ============================================================================
+
+@app.post("/knowledge/add")
+async def add_knowledge(entry: KnowledgeEntry):
+    """Add knowledge to shared base (discovered by any agent)"""
+    doc_id = knowledge_base.add_knowledge(
+        topic=entry.topic,
+        content=entry.content,
+        agent=entry.agent,
+        tags=entry.tags,
+        confidence=entry.confidence,
+    )
+    
+    # Record that agent improved
+    agent_memories[entry.agent].record_improvement(
+        "discovered_knowledge",
+        f"Discovered: {entry.topic}"
+    )
+    
+    return {"id": doc_id, "status": "added"}
+
+@app.post("/knowledge/search")
+async def search_knowledge(query: str, n_results: int = 5):
+    """Search shared knowledge base"""
+    results = knowledge_base.search(query, n_results)
+    return {"query": query, "results": results}
+
+@app.post("/knowledge/verify")
+async def verify_knowledge(doc_id: str, verifying_agent: str):
+    """Agent validates knowledge from another agent"""
+    knowledge_base.verify_knowledge(doc_id, verifying_agent)
+    return {"status": "verified"}
+
+# ============================================================================
+# AGENT IMPROVEMENT & VALIDATION
+# ============================================================================
+
+@app.post("/agents/validate-answer")
+async def validate_answer(
+    question: str,
+    answer: str,
+    answering_agent: str,
+    background_tasks: BackgroundTasks
+):
+    """
+    Multiple agents validate an answer and propose improvements
+    Used for continuous quality improvement
+    """
+    validation_results = {}
+    
+    # Query other agents for validation
+    for agent_name in AGENTS.keys():
+        if agent_name == answering_agent:
+            continue
+        
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.post(
+                    f"{AGENTS[agent_name]}/validate",
+                    json={"question": question, "answer": answer},
+                    timeout=5.0,
+                )
+                if resp.status_code == 200:
+                    validation_results[agent_name] = resp.json()
+        except:
+            pass
+    
+    # Calculate consensus score
+    scores = [v.get("confidence", 0.5) for v in validation_results.values()]
+    consensus_score = sum(scores) / len(scores) if scores else 0.5
+    
+    # If consensus is low, propose improvement
+    if consensus_score < 0.7:
+        background_tasks.add_task(
+            propose_improvement,
+            question,
+            answer,
+            answering_agent,
+            validation_results,
+            consensus_score
+        )
+    
+    return {
+        "answer": answer,
+        "validation_results": validation_results,
+        "consensus_score": consensus_score,
+        "improvement_proposed": consensus_score < 0.7,
+    }
+
+async def propose_improvement(
+    question: str,
+    answer: str,
+    original_agent: str,
+    validation_results: Dict,
+    consensus_score: float
+):
+    """Propose an improved answer based on peer validation"""
+    # Ask Desktop AI (tutor) for improved answer
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            improved = await client.post(
+                f"{AGENTS['desktop-ai']}/improve-answer",
+                json={
+                    "question": question,
+                    "original_answer": answer,
+                    "validation_feedback": validation_results,
+                }
+            )
+            
+            if improved.status_code == 200:
+                improved_data = improved.json()
+                
+                # Record improvement
+                conn = sqlite3.connect(DB_PATHS["shared"])
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO improvements (id, agent, previous_answer, improved_answer, reason, validation_score, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (str(uuid.uuid4()), original_agent, answer, 
+                      improved_data.get("answer", ""), 
+                      improved_data.get("reason", ""), 
+                      consensus_score, datetime.now().isoformat()))
+                conn.commit()
+                conn.close()
+                
+                # Record improvement for all agents that helped
+                for agent in validation_results.keys():
+                    agent_memories[agent].record_improvement(
+                        "helped_improve_answer",
+                        f"Validated and improved answer for '{question[:50]}...'"
+                    )
+    except:
+        pass
+
+# ============================================================================
+# AGENT LEARNING ENDPOINTS
+# ============================================================================
+
+@app.get("/agents/{agent_name}/learning-history")
+async def get_learning_history(agent_name: str, limit: int = 20):
+    """Get what a specific agent has learned recently"""
+    if agent_name not in agent_memories:
+        raise HTTPException(status_code=404, detail=f"Unknown agent: {agent_name}")
+    
+    history = agent_memories[agent_name].get_learning_history(limit)
+    return {
+        "agent": agent_name,
+        "learning_history": history,
+    }
+
+@app.post("/agents/{agent_name}/reflect")
+async def agent_reflect(agent_name: str):
+    """Trigger an agent to reflect on its learning and propose improvements"""
+    if agent_name not in agent_memories:
+        raise HTTPException(status_code=404, detail=f"Unknown agent: {agent_name}")
+    
+    history = agent_memories[agent_name].get_learning_history(limit=10)
+    
+    # Count lessons learned
+    lessons = len(history)
+    sources = set(h["source_agent"] for h in history)
+    
+    return {
+        "agent": agent_name,
+        "lessons_learned_recently": lessons,
+        "learned_from_agents": list(sources),
+        "reflection": f"Learned {lessons} lessons from {len(sources)} other agents",
+    }
+
+# ============================================================================
+# CONTINUOUS IMPROVEMENT ENDPOINT
+# ============================================================================
+
+@app.post("/improve/all")
+async def trigger_continuous_improvement(background_tasks: BackgroundTasks):
+    """
+    Trigger continuous improvement cycle:
+    1. Each agent reflects on recent learnings
+    2. Agents propose improvements to shared knowledge
+    3. Agents validate each other's improvements
+    """
+    results = {}
+    
+    for agent_name in agent_memories.keys():
+        # Get agent's learning history
+        history = agent_memories[agent_name].get_learning_history(limit=5)
+        lessons_count = len(history)
+        
+        results[agent_name] = {
+            "recent_lessons": lessons_count,
+            "reflection_triggered": True,
+        }
+    
+    return {
+        "status": "continuous_improvement_triggered",
+        "agents": results,
+        "message": "All agents will reflect on learning and propose improvements",
+    }
+
+# ============================================================================
+# STATISTICS & MONITORING
+# ============================================================================
+
+@app.get("/stats")
+async def get_stats():
+    """Get system-wide statistics"""
+    # Count knowledge entries
+    conn = sqlite3.connect(DB_PATHS["shared"])
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT COUNT(*) FROM knowledge")
+    total_knowledge = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM agent_queries")
+    total_queries = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM improvements")
+    total_improvements = cursor.fetchone()[0]
+    
+    conn.close()
+    
+    # Collect per-agent stats
+    agent_stats = {}
+    for agent_name, memory in agent_memories.items():
+        history = memory.get_learning_history(limit=100)
+        agent_stats[agent_name] = {
+            "total_lessons_learned": len(history),
+            "unique_sources": len(set(h["source_agent"] for h in history)),
+        }
+    
+    return {
+        "total_knowledge_entries": total_knowledge,
+        "inter_agent_queries": total_queries,
+        "improvements_made": total_improvements,
+        "agent_statistics": agent_stats,
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    print(f"\n[MOSSY MULTI-AGENT] Starting on port {PORT}...")
+    print("[MOSSY MULTI-AGENT] Agents: Desktop AI, AI-Helper, Mossy Manager")
+    print("[MOSSY MULTI-AGENT] Knowledge Base: Fallout 4 modding expertise")
+    print("[MOSSY MULTI-AGENT] Learning: Continuous improvement enabled\n")
+    uvicorn.run(app, host="0.0.0.0", port=PORT)

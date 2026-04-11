@@ -211,7 +211,7 @@ describe('Electron packaging metadata', () => {
 
   it('package.json build config has productName', async () => {
     const pkg = await import('../../package.json') as any;
-    expect(pkg.build.productName).toBe('Mossy AI Assistant');
+    expect(pkg.build.productName).toBe("Mossy's. Desktop AIS, New Brain");
   });
 });
 

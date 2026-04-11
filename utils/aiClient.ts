@@ -21,7 +21,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { getApiKey, getProvider, getOllamaConfig } from './apiKey';
+import { getApiKey, getProvider, getOllamaConfig, getGemma4Config } from './apiKey';
 
 // ─── Shared result types ───────────────────────────────────────────────────
 
@@ -216,13 +216,112 @@ class GeminiClient implements AIClient {
   };
 }
 
+// ─── Gemma4 client ────────────────────────────────────────────────────────
+
+class Gemma4Client implements AIClient {
+  private readonly base: string;
+  private readonly modelPath: string;
+
+  constructor(serviceUrl: string, modelPath: string) {
+    this.base = serviceUrl.replace(/\/$/, '');
+    this.modelPath = modelPath;
+  }
+
+  models = {
+    generateContent: async (params: AIGenerateParams): Promise<AIGenerateResult> => {
+      const messages = toOllamaMessages(params.contents, params.config?.systemInstruction);
+
+      // Convert messages to prompt format for Gemma4
+      let prompt = '';
+      for (const msg of messages) {
+        if (msg.role === 'system') {
+          prompt += `[SYSTEM]\n${msg.content}\n\n`;
+        } else if (msg.role === 'user') {
+          prompt += `[USER]\n${msg.content}\n\n`;
+        } else if (msg.role === 'assistant') {
+          prompt += `[ASSISTANT]\n${msg.content}\n\n`;
+        }
+      }
+
+      const res = await fetch(`${this.base}/inference`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          model_path: this.modelPath,
+          max_tokens: 512,
+          temperature: params.config?.temperature ?? 0.7,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Gemma4 error ${res.status}: ${await res.text()}`);
+      }
+
+      const data = await res.json();
+      return { text: data.text ?? '', candidates: [] };
+    },
+
+    generateContentStream: async (
+      params: AIGenerateParams,
+    ): Promise<AsyncIterable<AIStreamChunk>> => {
+      const messages = toOllamaMessages(params.contents, params.config?.systemInstruction);
+
+      let prompt = '';
+      for (const msg of messages) {
+        if (msg.role === 'system') {
+          prompt += `[SYSTEM]\n${msg.content}\n\n`;
+        } else if (msg.role === 'user') {
+          prompt += `[USER]\n${msg.content}\n\n`;
+        } else if (msg.role === 'assistant') {
+          prompt += `[ASSISTANT]\n${msg.content}\n\n`;
+        }
+      }
+
+      const base = this.base;
+      const modelPath = this.modelPath;
+
+      const res = await fetch(`${base}/inference`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          model_path: modelPath,
+          max_tokens: 512,
+          temperature: params.config?.temperature ?? 0.7,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Gemma4 stream error ${res.status}: ${await res.text()}`);
+      }
+
+      async function* streamChunks(): AsyncIterable<AIStreamChunk> {
+        const data = await res.json();
+        const text = data.text ?? '';
+        // Split response into chunks for streaming effect
+        const chunkSize = 10;
+        for (let i = 0; i < text.length; i += chunkSize) {
+          yield { text: text.slice(i, i + chunkSize) };
+        }
+      }
+
+      return streamChunks();
+    },
+  };
+}
+
 // ─── Factory ───────────────────────────────────────────────────────────────
 
-/** Return the configured AI client (Ollama or Gemini). */
+/** Return the configured AI client (Ollama, Gemini, or Gemma4). */
 export function getAiClient(): AIClient {
-  if (getProvider() === 'ollama') {
+  const provider = getProvider();
+  if (provider === 'ollama') {
     const { endpoint, model } = getOllamaConfig();
     return new OllamaClient(endpoint, model);
+  } else if (provider === 'gemma4') {
+    const { serviceUrl, modelPath } = getGemma4Config();
+    return new Gemma4Client(serviceUrl, modelPath);
   }
   return new GeminiClient(getApiKey());
 }
@@ -230,6 +329,11 @@ export function getAiClient(): AIClient {
 /** True when the current provider is local Ollama. */
 export function isOllamaMode(): boolean {
   return getProvider() === 'ollama';
+}
+
+/** True when the current provider is local Gemma4. */
+export function isGemma4Mode(): boolean {
+  return getProvider() === 'gemma4';
 }
 
 // ─── Ollama model discovery ────────────────────────────────────────────────
@@ -259,9 +363,35 @@ export async function listOllamaModels(endpoint = 'http://localhost:11434'): Pro
  */
 export async function checkOllamaHealth(endpoint = 'http://localhost:11434'): Promise<boolean> {
   try {
-    const res = await fetch(`${endpoint.replace(/\/$/, '')}/`, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(`${endpoint.replace(/\/$/, '')}/api/tags`, { signal: AbortSignal.timeout(3000) });
     return res.ok;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Check whether a Gemma4 service instance is reachable at the given URL.
+ */
+export async function checkGemma4Health(serviceUrl = 'http://127.0.0.1:8000'): Promise<boolean> {
+  try {
+    const res = await fetch(`${serviceUrl.replace(/\/$/, '')}/health`, { signal: AbortSignal.timeout(3000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * List available models from the Gemma4 service.
+ */
+export async function listGemma4Models(serviceUrl = 'http://127.0.0.1:8000'): Promise<string[]> {
+  try {
+    const res = await fetch(`${serviceUrl.replace(/\/$/, '')}/models/available`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.models ?? [];
+  } catch {
+    return [];
   }
 }
