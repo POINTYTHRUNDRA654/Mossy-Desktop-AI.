@@ -21,12 +21,9 @@ import uuid
 import subprocess
 import sys
 import textwrap
-import traceback
-from io import StringIO
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from contextlib import redirect_stdout, redirect_stderr
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -621,70 +618,77 @@ async def self_reflect(request: ReflectRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 # ────────────────────────────────────────────────────────────────────────────
-# Safe Python tool execution
+# Safe Python tool execution — subprocess-isolated, no exec() in main process
 # ────────────────────────────────────────────────────────────────────────────
 
-SAFE_BUILTINS = {
-    "abs", "all", "any", "bin", "bool", "chr", "dict", "dir",
-    "divmod", "enumerate", "filter", "float", "format", "frozenset",
-    "getattr", "hasattr", "hash", "hex", "id", "int", "isinstance",
-    "issubclass", "iter", "len", "list", "map", "max", "min", "next",
-    "oct", "ord", "pow", "print", "range", "repr", "reversed", "round",
-    "set", "slice", "sorted", "str", "sum", "tuple", "type", "vars", "zip",
+# Preamble prepended to every snippet to block dangerous imports
+_SANDBOX_PREAMBLE = textwrap.dedent("""
+import builtins as _b
+_ALLOWED = {
+    'abs','all','any','bin','bool','chr','dict','divmod','enumerate',
+    'filter','float','format','frozenset','getattr','hasattr','hash',
+    'hex','id','int','isinstance','issubclass','iter','len','list','map',
+    'max','min','next','oct','ord','pow','print','range','repr','reversed',
+    'round','set','slice','sorted','str','sum','tuple','type','vars','zip',
 }
+_b.__dict__ = {k: v for k, v in _b.__dict__.items() if k in _ALLOWED}
+import sys as _sys
+_sys.modules['os'] = None
+_sys.modules['subprocess'] = None
+_sys.modules['socket'] = None
+_sys.modules['importlib'] = None
+_sys.modules['ctypes'] = None
+_sys.modules['pickle'] = None
+del _b, _ALLOWED, _sys
+""").strip()
 
 @app.post("/tools/execute")
 async def execute_tool(request: ToolExecuteRequest):
     """
-    Execute a small Python snippet safely inside a restricted namespace.
-    Useful for Mossy to do calculations, data processing, or logic checks.
-    Timeout is enforced via subprocess; dangerous builtins are stripped.
+    Execute a small Python snippet in a subprocess with hard time/resource limits.
+    The subprocess is isolated: dangerous modules are blocked before the snippet runs.
+    This is for local computation (math, data transforms, logic) only.
     """
-    stdout_buf = StringIO()
-    stderr_buf = StringIO()
-    result_val  = None
-
-    safe_globals: dict = {
-        "__builtins__": {k: __builtins__[k] for k in SAFE_BUILTINS
-                         if k in __builtins__}  # type: ignore[index]
-        if isinstance(__builtins__, dict)
-        else {k: getattr(__builtins__, k) for k in SAFE_BUILTINS
-              if hasattr(__builtins__, k)},
-    }
+    timeout = max(1, min(request.timeout_seconds, 15))
+    # Wrap the snippet: preamble + user code, then print the 'result' variable if set
+    wrapper = (
+        _SANDBOX_PREAMBLE + "\n"
+        + request.code + "\n"
+        + "if 'result' in dir(): print('__result__:', result)\n"
+    )
 
     try:
-        import signal
+        proc = subprocess.run(
+            [sys.executable, "-c", wrapper],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        stdout = proc.stdout or ""
+        stderr = proc.stderr or ""
 
-        def _timeout_handler(signum, frame):
-            raise TimeoutError("Execution exceeded time limit")
-
-        if hasattr(signal, "SIGALRM"):
-            signal.signal(signal.SIGALRM, _timeout_handler)
-            signal.alarm(max(1, min(request.timeout_seconds, 15)))
-
-        with redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
-            exec(compile(request.code, "<mossy_tool>", "exec"), safe_globals)   # noqa: S102
-            result_val = safe_globals.get("result")
-
-        if hasattr(signal, "SIGALRM"):
-            signal.alarm(0)
+        # Extract result value if present
+        result_val = None
+        filtered_lines = []
+        for line in stdout.splitlines():
+            if line.startswith("__result__: "):
+                result_val = line[len("__result__: "):]
+            else:
+                filtered_lines.append(line)
+        stdout = "\n".join(filtered_lines)
 
         return {
-            "stdout": stdout_buf.getvalue(),
-            "stderr": stderr_buf.getvalue(),
-            "result": str(result_val) if result_val is not None else None,
-            "success": True,
+            "stdout": stdout,
+            "stderr": stderr,
+            "result": result_val,
+            "success": proc.returncode == 0,
         }
-    except TimeoutError:
+    except subprocess.TimeoutExpired:
         return {"stdout": "", "stderr": "Execution timed out", "result": None, "success": False}
     except Exception as exc:
-        return {
-            "stdout": stdout_buf.getvalue(),
-            "stderr": traceback.format_exc(),
-            "result": None,
-            "success": False,
-            "error": str(exc),
-        }
+        # Do not expose internal tracebacks to caller
+        logger.error(f"Tool execution error: {exc}")
+        return {"stdout": "", "stderr": "Execution error", "result": None, "success": False}
 
 # ────────────────────────────────────────────────────────────────────────────
 # RAG — document Q&A

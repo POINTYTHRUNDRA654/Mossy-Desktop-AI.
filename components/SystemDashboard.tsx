@@ -36,12 +36,12 @@ export const SystemDashboard: React.FC = () => {
     const checkSystemStatus = async () => {
         try {
             // Detect system tools
-            const systemTools = await (window as any).electronAPI?.detectTools?.();
+            const systemTools = await window.electronAPI?.detectTools?.();
 
             // Check service health
-            const gemmaHealth = await (window as any).electronAPI?.gemmaHealthCheck?.();
-            const pytorchHealth = await (window as any).electronAPI?.pytorchHealthCheck?.();
-            const comfyuiHealth = await (window as any).electronAPI?.comfyuiHealthCheck?.('http://127.0.0.1:8188');
+            const gemmaHealth = await window.electronAPI?.gemmaHealthCheck?.();
+            const pytorchHealth = await window.electronAPI?.pytorchHealthCheck?.();
+            const comfyuiHealth = await window.electronAPI?.comfyuiHealthCheck?.('http://127.0.0.1:8188');
 
             setStatus({
                 gpu: systemTools?.gpu || { available: false, driver: '', computeCapability: '', deviceName: '' },

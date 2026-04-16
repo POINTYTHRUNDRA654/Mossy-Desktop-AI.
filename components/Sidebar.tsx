@@ -18,14 +18,14 @@ const Sidebar: React.FC = () => {
 
   // Read auto-launch setting from Electron (if running as a desktop app)
   useEffect(() => {
-    const eb = (window as any).electronBridge;
+    const eb = window.electronBridge;
     if (eb?.getAutoLaunch) {
       eb.getAutoLaunch().then((val: boolean) => setAutoLaunchState(val)).catch(() => {});
     }
   }, []);
 
   const toggleAutoLaunch = () => {
-    const eb = (window as any).electronBridge;
+    const eb = window.electronBridge;
     if (!eb?.setAutoLaunch) return;
     const next = !autoLaunch;
     setAutoLaunchState(next);
@@ -223,7 +223,7 @@ const Sidebar: React.FC = () => {
         </button>
 
         {/* Auto-launch toggle — only shown when running in Electron */}
-        {(window as any).electronBridge?.isElectron && (
+        {window.electronBridge?.isElectron && (
           <button
             onClick={toggleAutoLaunch}
             className={`mt-1.5 w-full flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-colors group ${

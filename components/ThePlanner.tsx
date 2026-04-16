@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ListTodo, Brain, Lightbulb, RefreshCw, ChevronRight, CheckCircle2, AlertCircle, Loader2, Zap, MessageSquare } from 'lucide-react';
+import type { ElectronAPI } from '../types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ const ThePlanner: React.FC = () => {
     const fetchHealth = async () => {
         setHealthLoading(true);
         try {
-            const result = await (window as any).electronAPI?.ipcInvoke('gemma:health-check');
+            const result = await window.electronAPI?.ipcInvoke('gemma:health-check');
             setHealth(result ?? null);
         } catch {
             setHealth(null);
@@ -93,7 +94,7 @@ const ThePlanner: React.FC = () => {
         if (!goal.trim()) { setPlanError('Please enter a goal.'); return; }
         setPlanLoading(true); setPlanError(''); setPlanResult(null);
         try {
-            const result: PlanResult = await (window as any).electronAPI?.ipcInvoke('gemma:plan', {
+            const result: PlanResult = await window.electronAPI?.ipcInvoke('gemma:plan', {
                 goal: goal.trim(),
                 context: planContext.trim() || undefined,
                 max_steps: maxSteps,
@@ -116,7 +117,7 @@ const ThePlanner: React.FC = () => {
         }
         setReflectLoading(true); setReflectError(''); setReflectResult(null);
         try {
-            const result: ReflectResult = await (window as any).electronAPI?.ipcInvoke('gemma:reflect', {
+            const result: ReflectResult = await window.electronAPI?.ipcInvoke('gemma:reflect', {
                 question: refQuestion.trim(),
                 answer: refAnswer.trim(),
                 context: refContext.trim() || undefined,
@@ -136,7 +137,7 @@ const ThePlanner: React.FC = () => {
         if (!cotProblem.trim()) { setCotError('Please enter a problem.'); return; }
         setCotLoading(true); setCotError(''); setCotResult(null);
         try {
-            const result: CoTResult = await (window as any).electronAPI?.ipcInvoke('gemma:chain-of-thought', {
+            const result: CoTResult = await window.electronAPI?.ipcInvoke('gemma:chain-of-thought', {
                 problem: cotProblem.trim(),
                 context: cotContext.trim() || undefined,
             });
