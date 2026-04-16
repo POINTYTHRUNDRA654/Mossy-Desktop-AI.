@@ -34,7 +34,11 @@ from datetime import datetime
 # Override via MOSSY_DATA_ROOT env var if you want a different location.
 # ────────────────────────────────────────────────────────────────────────────
 
-_DATA_ROOT = Path(os.environ.get("MOSSY_DATA_ROOT", r"D:\Mossy-AI"))
+_DATA_ROOT = Path(os.environ.get(
+    "MOSSY_DATA_ROOT",
+    # Default: D:\Mossy-AI on Windows, ~/Mossy-AI on macOS/Linux
+    r"D:\Mossy-AI" if sys.platform == "win32" else str(Path.home() / "Mossy-AI"),
+))
 
 # HuggingFace / Transformers cache
 os.environ.setdefault("HF_HOME",              str(_DATA_ROOT / "huggingface"))
@@ -691,7 +695,9 @@ async def self_reflect(request: ReflectRequest):
 # Safe Python tool execution — subprocess-isolated, no exec() in main process
 # ────────────────────────────────────────────────────────────────────────────
 
-# Preamble prepended to every snippet to block dangerous imports
+# Preamble prepended to every snippet to block dangerous imports.
+# Note: this provides best-effort restriction for simple calculation scripts.
+# Do not use for untrusted third-party code; use a container for that.
 _SANDBOX_PREAMBLE = textwrap.dedent("""
 import builtins as _b
 _ALLOWED = {
@@ -701,7 +707,12 @@ _ALLOWED = {
     'max','min','next','oct','ord','pow','print','range','repr','reversed',
     'round','set','slice','sorted','str','sum','tuple','type','vars','zip',
 }
-_b.__dict__ = {k: v for k, v in _b.__dict__.items() if k in _ALLOWED}
+for _k in list(vars(_b).keys()):
+    if _k not in _ALLOWED and not _k.startswith('__'):
+        try:
+            delattr(_b, _k)
+        except (AttributeError, TypeError):
+            pass
 import sys as _sys
 _sys.modules['os'] = None
 _sys.modules['subprocess'] = None
@@ -709,7 +720,7 @@ _sys.modules['socket'] = None
 _sys.modules['importlib'] = None
 _sys.modules['ctypes'] = None
 _sys.modules['pickle'] = None
-del _b, _ALLOWED, _sys
+del _b, _ALLOWED, _k, _sys
 """).strip()
 
 @app.post("/tools/execute")

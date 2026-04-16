@@ -100,7 +100,7 @@ const ThePlanner: React.FC = () => {
                 max_steps: maxSteps,
             });
             if (result?.success) setPlanResult(result);
-            else setPlanError(result?.raw_plan ?? 'Planning failed.');
+            else setPlanError((result as any)?.message ?? (result as any)?.detail ?? 'Planning failed. Check that the model is loaded.');
         } catch (e) {
             setPlanError(String(e));
         } finally {

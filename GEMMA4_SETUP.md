@@ -85,15 +85,21 @@ pip install -r requirements.txt
 python -c "import torch; print('GPU:', torch.cuda.get_device_name(0)); print('VRAM:', round(torch.cuda.get_device_properties(0).total_memory/1e9,1), 'GB')"
 ```
 
-### 6. Accept the Gemma 4 model license (one-time)
+### 6. Authenticate with HuggingFace (one-time)
 
-Visit **https://huggingface.co/google/gemma-4-9b** and click **"Agree and access"**.
-Then generate a HuggingFace access token at https://huggingface.co/settings/tokens
-and set it before the first download:
+Visit **https://huggingface.co/google/gemma-4-9b** and click **"Agree and access"**
+to accept the model license.
+
+Then log in securely using the HuggingFace CLI (credentials are stored in your
+user profile, not in command history or environment variables):
 
 ```cmd
-set HF_TOKEN=hf_YOUR_TOKEN_HERE
+pip install huggingface_hub
+huggingface-cli login
 ```
+
+You will be prompted to paste your access token from https://huggingface.co/settings/tokens.
+The token is stored in `~/.cache/huggingface/token` (not in plain text on screen).
 
 ### 7. Run the Application
 

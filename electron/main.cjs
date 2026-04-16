@@ -44,7 +44,11 @@ function startPythonService(serviceType = 'gemma') {
     const pythonScript = path.join(pythonDir, svc.script);
 
     // ── D: drive environment — all large downloads go to D:\Mossy-AI ────────
-    const mossyDataRoot = process.env.MOSSY_DATA_ROOT || 'D:\\Mossy-AI';
+    // On Windows defaults to D:\Mossy-AI; on other OS falls back to ~/Mossy-AI.
+    const defaultRoot = process.platform === 'win32'
+      ? 'D:\\Mossy-AI'
+      : path.join(require('os').homedir(), 'Mossy-AI');
+    const mossyDataRoot = process.env.MOSSY_DATA_ROOT || defaultRoot;
     const hfHome        = path.join(mossyDataRoot, 'huggingface');
 
     const pythonEnv = {
