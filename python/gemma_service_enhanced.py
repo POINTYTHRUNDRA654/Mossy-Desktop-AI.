@@ -21,9 +21,34 @@ import uuid
 import subprocess
 import sys
 import textwrap
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+
+# ────────────────────────────────────────────────────────────────────────────
+# D: DRIVE REDIRECTION — set ALL cache env vars before any library imports.
+# Everything large (model weights, HF cache, datasets, Torch, pip) goes to
+# D:\Mossy-AI  so the C: drive is never filled up.
+# Override via MOSSY_DATA_ROOT env var if you want a different location.
+# ────────────────────────────────────────────────────────────────────────────
+
+_DATA_ROOT = Path(os.environ.get("MOSSY_DATA_ROOT", r"D:\Mossy-AI"))
+
+# HuggingFace / Transformers cache
+os.environ.setdefault("HF_HOME",              str(_DATA_ROOT / "huggingface"))
+os.environ.setdefault("HF_HUB_CACHE",         str(_DATA_ROOT / "huggingface" / "hub"))
+os.environ.setdefault("TRANSFORMERS_CACHE",   str(_DATA_ROOT / "huggingface" / "hub"))
+os.environ.setdefault("HF_DATASETS_CACHE",    str(_DATA_ROOT / "huggingface" / "datasets"))
+
+# PyTorch model hub cache
+os.environ.setdefault("TORCH_HOME",           str(_DATA_ROOT / "torch"))
+
+# pip download/wheel cache
+os.environ.setdefault("PIP_CACHE_DIR",        str(_DATA_ROOT / "pip_cache"))
+
+# Unsloth uses HF_HOME automatically; no extra setting needed.
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -107,16 +132,18 @@ except ImportError:
     logger.warning("PEFT/TRL not available; fine-tuning disabled")
 
 # ────────────────────────────────────────────────────────────────────────────
-# Paths
+# Paths — everything on D: drive
 # ────────────────────────────────────────────────────────────────────────────
 
-BASE_DIR   = Path(__file__).parent.parent
-MODELS_DIR = BASE_DIR / "models"
-DATA_DIR   = BASE_DIR / "data"
-CHROMA_DIR = DATA_DIR / "chroma_db"
-JOBS_DIR   = DATA_DIR / "jobs"
+BASE_DIR    = _DATA_ROOT
+MODELS_DIR  = _DATA_ROOT / "models"
+DATA_DIR    = _DATA_ROOT / "data"
+CHROMA_DIR  = _DATA_ROOT / "data" / "chroma_db"
+JOBS_DIR    = _DATA_ROOT / "data" / "jobs"
+MEMORY_DIR  = _DATA_ROOT / "memory"
+MEMORY_FILE = MEMORY_DIR / "long_term.json"
 
-for d in (MODELS_DIR, DATA_DIR, CHROMA_DIR, JOBS_DIR):
+for d in (MODELS_DIR, DATA_DIR, CHROMA_DIR, JOBS_DIR, MEMORY_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -142,6 +169,34 @@ current_model_id: str = ""
 rag_index       = None
 conv_memory     = None
 fine_tune_jobs: Dict[str, dict] = {}
+
+# ────────────────────────────────────────────────────────────────────────────
+# Long-term memory helpers — persisted to D:\Mossy-AI\memory\long_term.json
+# ────────────────────────────────────────────────────────────────────────────
+
+def _load_memory() -> Dict[str, str]:
+    """Load the persistent key→value memory from disk."""
+    try:
+        if MEMORY_FILE.exists():
+            return json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+def _save_memory(mem: Dict[str, str]) -> None:
+    """Persist memory to disk."""
+    try:
+        MEMORY_FILE.write_text(json.dumps(mem, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as exc:
+        logger.warning(f"Could not save memory: {exc}")
+
+def _memory_block() -> str:
+    """Return a formatted memory string to prepend to prompts (empty string if no memories)."""
+    mem = _load_memory()
+    if not mem:
+        return ""
+    lines = "\n".join(f"  - {k}: {v}" for k, v in mem.items())
+    return f"[Mossy's memory from past sessions]\n{lines}\n"
 
 # ────────────────────────────────────────────────────────────────────────────
 # Pydantic models
@@ -185,7 +240,7 @@ class FineTuneRequest(BaseModel):
     model_name: str = "google/gemma-4-9b"
     dataset_text: Optional[List[str]] = None
     dataset_name: Optional[str] = None
-    output_dir: str = str(MODELS_DIR / "gemma4-finetuned")
+    output_dir: str = str(_DATA_ROOT / "models" / "gemma4-finetuned")
     num_epochs: int = 3
     batch_size: int = 2
     learning_rate: float = 2e-4
@@ -198,6 +253,14 @@ class LoadModelRequest(BaseModel):
     model_name: str = "google/gemma-4-9b"
     load_in_4bit: bool = True
     max_seq_length: int = 4096
+
+class MemoryAddRequest(BaseModel):
+    key: str
+    value: str
+
+class WebSearchRequest(BaseModel):
+    query: str
+    max_results: int = 5
 
 # ────────────────────────────────────────────────────────────────────────────
 # Model loader
@@ -234,9 +297,16 @@ def _load_model(model_name: str, load_in_4bit: bool = True, max_seq_length: int 
 # ────────────────────────────────────────────────────────────────────────────
 
 def _generate(prompt: str, max_tokens: int = 512, temperature: float = 0.7,
-              top_p: float = 0.95, top_k: int = 50) -> str:
+              top_p: float = 0.95, top_k: int = 50,
+              inject_memory: bool = True) -> str:
     if model is None:
         raise RuntimeError("Model not loaded. Call /models/load first.")
+
+    # Prepend long-term memory so Mossy "remembers" across sessions
+    if inject_memory:
+        mem = _memory_block()
+        if mem:
+            prompt = mem + "\n" + prompt
 
     inputs = tokenizer(prompt, return_tensors="pt", truncation=True,
                        max_length=3072).to(device)
@@ -846,6 +916,120 @@ async def fine_tune_status(job_id: str):
     if job_id not in fine_tune_jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     return fine_tune_jobs[job_id]
+
+# ────────────────────────────────────────────────────────────────────────────
+# Long-term memory endpoints
+# ────────────────────────────────────────────────────────────────────────────
+
+@app.get("/memory")
+async def get_memory():
+    """Return all stored long-term memory key-value pairs."""
+    return {"memory": _load_memory(), "memory_file": str(MEMORY_FILE)}
+
+@app.post("/memory/add")
+async def add_memory(req: MemoryAddRequest):
+    """Store a key→value fact in Mossy's long-term memory (persisted to D: drive)."""
+    mem = _load_memory()
+    mem[req.key.strip()] = req.value.strip()
+    _save_memory(mem)
+    return {"success": True, "key": req.key, "total_memories": len(mem)}
+
+@app.delete("/memory/{key}")
+async def delete_memory(key: str):
+    """Remove one key from long-term memory."""
+    mem = _load_memory()
+    removed = mem.pop(key, None)
+    _save_memory(mem)
+    return {"success": removed is not None, "key": key, "total_memories": len(mem)}
+
+@app.delete("/memory")
+async def clear_memory():
+    """Wipe all long-term memory."""
+    _save_memory({})
+    return {"success": True, "message": "All memory cleared"}
+
+# ────────────────────────────────────────────────────────────────────────────
+# Web search tool — DuckDuckGo Instant Answer API (no API key, no cost)
+# ────────────────────────────────────────────────────────────────────────────
+
+@app.post("/tools/web-search")
+async def web_search(request: WebSearchRequest):
+    """
+    Search the web using DuckDuckGo's free Instant Answer API.
+    Returns a summary + list of related topics.  No API key required.
+    Also optionally asks the model to synthesise the results into an answer.
+    """
+    try:
+        query_encoded = urllib.parse.quote_plus(request.query)
+        url = f"https://api.duckduckgo.com/?q={query_encoded}&format=json&no_redirect=1&no_html=1"
+
+        req_obj = urllib.request.Request(url, headers={"User-Agent": "Mossy-AI/3.0"})
+        with urllib.request.urlopen(req_obj, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        abstract   = data.get("Abstract", "")
+        answer     = data.get("Answer", "")
+        definition = data.get("Definition", "")
+
+        # Related topics as a list of short blurbs
+        topics: List[str] = []
+        for item in data.get("RelatedTopics", [])[:request.max_results]:
+            if isinstance(item, dict):
+                text = item.get("Text", "")
+                if text:
+                    topics.append(text)
+
+        # Build a readable summary
+        summary_parts = [p for p in (answer, abstract, definition) if p]
+        summary = " ".join(summary_parts) if summary_parts else "No instant answer found."
+
+        # Optionally synthesise with the model if loaded
+        synthesis = None
+        if model is not None and (summary_parts or topics):
+            context = summary + "\n" + "\n".join(topics[:3])
+            synth_prompt = (
+                f"You are Mossy, an AI assistant. Using only the search results below, "
+                f"answer the question: {request.query}\n\nSearch results:\n{context}\n\nAnswer:"
+            )
+            synthesis = _generate(synth_prompt, max_tokens=400, temperature=0.4,
+                                   inject_memory=False)
+
+        return {
+            "query":     request.query,
+            "summary":   summary,
+            "topics":    topics,
+            "synthesis": synthesis,
+            "success":   True,
+        }
+    except Exception as exc:
+        logger.error(f"Web search error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+# ────────────────────────────────────────────────────────────────────────────
+# Config / path info endpoint
+# ────────────────────────────────────────────────────────────────────────────
+
+@app.get("/config")
+async def get_config():
+    """
+    Show where everything is stored on disk.
+    Useful for verifying the D: drive layout is correct.
+    """
+    return {
+        "mossy_data_root":     str(_DATA_ROOT),
+        "models_dir":          str(MODELS_DIR),
+        "data_dir":            str(DATA_DIR),
+        "chroma_db_dir":       str(CHROMA_DIR),
+        "memory_file":         str(MEMORY_FILE),
+        "hf_home":             os.environ.get("HF_HOME"),
+        "hf_hub_cache":        os.environ.get("HF_HUB_CACHE"),
+        "transformers_cache":  os.environ.get("TRANSFORMERS_CACHE"),
+        "hf_datasets_cache":   os.environ.get("HF_DATASETS_CACHE"),
+        "torch_home":          os.environ.get("TORCH_HOME"),
+        "pip_cache_dir":       os.environ.get("PIP_CACHE_DIR"),
+        "current_model":       current_model_id,
+        "memory_count":        len(_load_memory()),
+    }
 
 # ────────────────────────────────────────────────────────────────────────────
 # Entry point

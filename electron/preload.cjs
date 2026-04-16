@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'gemma:plan',
       'gemma:reflect',
       'gemma:tools-execute',
+      'gemma:memory-get',
+      'gemma:memory-add',
+      'gemma:memory-delete',
+      'gemma:memory-clear',
+      'gemma:web-search',
+      'gemma:config',
       // PyTorch
       'pytorch:health-check',
       'pytorch:load-model',
@@ -94,5 +100,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gemmaPlan:             (req)    => ipcRenderer.invoke('gemma:plan', req),
   gemmaReflect:          (req)    => ipcRenderer.invoke('gemma:reflect', req),
   gemmaToolsExecute:     (req)    => ipcRenderer.invoke('gemma:tools-execute', req),
+  gemmaMemoryGet:        ()       => ipcRenderer.invoke('gemma:memory-get'),
+  gemmaMemoryAdd:        (req)    => ipcRenderer.invoke('gemma:memory-add', req),
+  gemmaMemoryDelete:     (key)    => ipcRenderer.invoke('gemma:memory-delete', key),
+  gemmaMemoryClear:      ()       => ipcRenderer.invoke('gemma:memory-clear'),
+  gemmaWebSearch:        (req)    => ipcRenderer.invoke('gemma:web-search', req),
+  gemmaConfig:           ()       => ipcRenderer.invoke('gemma:config'),
 });
 

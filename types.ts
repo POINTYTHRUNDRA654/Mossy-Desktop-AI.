@@ -53,6 +53,12 @@ export interface ElectronAPI {
   gemmaPlan:           (req: unknown) => Promise<unknown>;
   gemmaReflect:        (req: unknown) => Promise<unknown>;
   gemmaToolsExecute:   (req: unknown) => Promise<unknown>;
+  gemmaMemoryGet:      () => Promise<unknown>;
+  gemmaMemoryAdd:      (req: unknown) => Promise<unknown>;
+  gemmaMemoryDelete:   (key: string) => Promise<unknown>;
+  gemmaMemoryClear:    () => Promise<unknown>;
+  gemmaWebSearch:      (req: unknown) => Promise<unknown>;
+  gemmaConfig:         () => Promise<unknown>;
 }
 
 declare global {

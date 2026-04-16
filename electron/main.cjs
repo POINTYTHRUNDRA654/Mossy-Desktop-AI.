@@ -43,10 +43,26 @@ function startPythonService(serviceType = 'gemma') {
     const pythonDir = path.join(__dirname, '..', 'python');
     const pythonScript = path.join(pythonDir, svc.script);
 
+    // ── D: drive environment — all large downloads go to D:\Mossy-AI ────────
+    const mossyDataRoot = process.env.MOSSY_DATA_ROOT || 'D:\\Mossy-AI';
+    const hfHome        = path.join(mossyDataRoot, 'huggingface');
+
+    const pythonEnv = {
+      ...process.env,
+      MOSSY_DATA_ROOT:    mossyDataRoot,
+      HF_HOME:            hfHome,
+      HF_HUB_CACHE:       path.join(hfHome, 'hub'),
+      TRANSFORMERS_CACHE: path.join(hfHome, 'hub'),
+      HF_DATASETS_CACHE:  path.join(hfHome, 'datasets'),
+      TORCH_HOME:         path.join(mossyDataRoot, 'torch'),
+      PIP_CACHE_DIR:      path.join(mossyDataRoot, 'pip_cache'),
+    };
+
     const proc = spawn('python', [pythonScript], {
       cwd: pythonDir,
       stdio: 'pipe',
       detached: false,
+      env: pythonEnv,
     });
 
     svc.set(proc);
@@ -622,6 +638,88 @@ ipcMain.handle('gemma:load-model-advanced', async (_, request) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
     });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+// ── Memory IPC Handlers ───────────────────────────────────────────────────
+
+ipcMain.handle('gemma:memory-get', async () => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/memory`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:memory-add', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/memory/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:memory-delete', async (_, key) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/memory/${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:memory-clear', async () => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/memory`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+// ── Web Search IPC Handler ─────────────────────────────────────────────────
+
+ipcMain.handle('gemma:web-search', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/tools/web-search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+// ── Config / path info IPC Handler ────────────────────────────────────────
+
+ipcMain.handle('gemma:config', async () => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/config`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
   } catch (err) {
