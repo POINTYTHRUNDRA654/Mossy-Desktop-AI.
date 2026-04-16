@@ -231,24 +231,24 @@ class Gemma4Client implements AIClient {
     generateContent: async (params: AIGenerateParams): Promise<AIGenerateResult> => {
       const messages = toOllamaMessages(params.contents, params.config?.systemInstruction);
 
-      // Convert messages to prompt format for Gemma4
+      // Build prompt in Gemma instruction format
       let prompt = '';
       for (const msg of messages) {
         if (msg.role === 'system') {
-          prompt += `[SYSTEM]\n${msg.content}\n\n`;
+          prompt += `<start_of_turn>system\n${msg.content}<end_of_turn>\n`;
         } else if (msg.role === 'user') {
-          prompt += `[USER]\n${msg.content}\n\n`;
+          prompt += `<start_of_turn>user\n${msg.content}<end_of_turn>\n`;
         } else if (msg.role === 'assistant') {
-          prompt += `[ASSISTANT]\n${msg.content}\n\n`;
+          prompt += `<start_of_turn>model\n${msg.content}<end_of_turn>\n`;
         }
       }
+      prompt += '<start_of_turn>model\n';
 
-      const res = await fetch(`${this.base}/inference`, {
+      const res = await fetch(`${this.base}/infer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt,
-          model_path: this.modelPath,
           max_tokens: 512,
           temperature: params.config?.temperature ?? 0.7,
         }),
@@ -259,7 +259,7 @@ class Gemma4Client implements AIClient {
       }
 
       const data = await res.json();
-      return { text: data.text ?? '', candidates: [] };
+      return { text: data.response ?? data.text ?? '', candidates: [] };
     },
 
     generateContentStream: async (
@@ -270,23 +270,22 @@ class Gemma4Client implements AIClient {
       let prompt = '';
       for (const msg of messages) {
         if (msg.role === 'system') {
-          prompt += `[SYSTEM]\n${msg.content}\n\n`;
+          prompt += `<start_of_turn>system\n${msg.content}<end_of_turn>\n`;
         } else if (msg.role === 'user') {
-          prompt += `[USER]\n${msg.content}\n\n`;
+          prompt += `<start_of_turn>user\n${msg.content}<end_of_turn>\n`;
         } else if (msg.role === 'assistant') {
-          prompt += `[ASSISTANT]\n${msg.content}\n\n`;
+          prompt += `<start_of_turn>model\n${msg.content}<end_of_turn>\n`;
         }
       }
+      prompt += '<start_of_turn>model\n';
 
       const base = this.base;
-      const modelPath = this.modelPath;
 
-      const res = await fetch(`${base}/inference`, {
+      const res = await fetch(`${base}/infer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt,
-          model_path: modelPath,
           max_tokens: 512,
           temperature: params.config?.temperature ?? 0.7,
         }),
@@ -298,11 +297,11 @@ class Gemma4Client implements AIClient {
 
       async function* streamChunks(): AsyncIterable<AIStreamChunk> {
         const data = await res.json();
-        const text = data.text ?? '';
-        // Split response into chunks for streaming effect
-        const chunkSize = 10;
-        for (let i = 0; i < text.length; i += chunkSize) {
-          yield { text: text.slice(i, i + chunkSize) };
+        const text = data.response ?? data.text ?? '';
+        // Emit in word-sized chunks for a streaming effect
+        const words = text.split(' ');
+        for (let i = 0; i < words.length; i++) {
+          yield { text: (i === 0 ? '' : ' ') + words[i] };
         }
       }
 

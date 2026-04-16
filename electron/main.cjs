@@ -30,7 +30,7 @@ const CHROMA_SERVICE_URL = `http://127.0.0.1:${CHROMA_SERVICE_PORT}`;
 
 function startPythonService(serviceType = 'gemma') {
   const serviceMap = {
-    'gemma': { var: () => gemmaProcess, set: (p) => { gemmaProcess = p; }, script: 'gemma_service.py' },
+    'gemma': { var: () => gemmaProcess, set: (p) => { gemmaProcess = p; }, script: 'gemma_service_enhanced.py' },
     'pytorch': { var: () => pytorchProcess, set: (p) => { pytorchProcess = p; }, script: 'pytorch_service.py' },
     'whisper': { var: () => whisperProcess, set: (p) => { whisperProcess = p; }, script: 'whisper_service.py' },
     'chroma': { var: () => chromaProcess, set: (p) => { chromaProcess = p; }, script: 'chroma_service.py' }
@@ -544,6 +544,83 @@ ipcMain.handle('gemma:add-documents', async (_, documents) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(documents),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+// ── New Intelligence IPC Handlers ────────────────────────────────────────
+
+ipcMain.handle('gemma:chain-of-thought', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/chain-of-thought`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:plan', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:reflect', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/reflect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:tools-execute', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/tools/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:load-model-advanced', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/models/load`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();

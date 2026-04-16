@@ -88,7 +88,6 @@ export function getGemma4Config(): Gemma4Config {
     serviceUrl: 'http://127.0.0.1:8000'
   };
 }
-
 export function setGemma4Config(config: Gemma4Config): void {
   localStorage.setItem(GEMMA4_STORAGE, JSON.stringify(config));
 }

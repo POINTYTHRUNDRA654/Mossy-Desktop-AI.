@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Radio, Image, Mic2, Activity, Heart, Leaf, Monitor, Wifi, WifiOff, Hammer, GitBranch, Network, Gamepad2, Container, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Sparkles, Flame, Binary, Triangle, PenTool, FlaskConical, Map, FileDigit, Library, Bug, Package, Watch, ShieldCheck, Feather, Power, Volume2, VolumeX, KeyRound, HardDrive, Cloud } from 'lucide-react';
+import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Binary, Triangle, PenTool, FlaskConical, FileDigit, Library, Bug, Package, ShieldCheck, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo } from 'lucide-react';
 import { useLive } from './LiveContext';
 import AvatarCore from './AvatarCore';
 import ApiKeySetup from './ApiKeySetup';
@@ -8,7 +8,6 @@ import { getProvider } from '../utils/apiKey';
 
 const Sidebar: React.FC = () => {
   const [bridgeConnected, setBridgeConnected] = useState(false);
-  const [isPipBoy, setIsPipBoy] = useState(false);
   const [showKeySetup, setShowKeySetup] = useState(false);
   const [autoLaunch, setAutoLaunchState] = useState(false);
   const location = useLocation();
@@ -32,25 +31,6 @@ const Sidebar: React.FC = () => {
     setAutoLaunchState(next);
     eb.setAutoLaunch(next).catch(() => setAutoLaunchState(!next));
   };
-
-  // Toggle Pip-Boy Theme
-  const togglePipBoy = () => {
-      const newState = !isPipBoy;
-      setIsPipBoy(newState);
-      if (newState) {
-          document.body.classList.add('pip-boy-mode');
-      } else {
-          document.body.classList.remove('pip-boy-mode');
-      }
-      localStorage.setItem('mossy_pip_mode', JSON.stringify(newState));
-  };
-
-  // Init Theme
-  useEffect(() => {
-      const saved = localStorage.getItem('mossy_pip_mode') === 'true';
-      setIsPipBoy(saved);
-      if (saved) document.body.classList.add('pip-boy-mode');
-  }, []);
 
   // Poll for bridge status check
   useEffect(() => {
@@ -88,40 +68,45 @@ const Sidebar: React.FC = () => {
   }, [location]);
 
   const navItems = [
-    { to: '/', icon: LayoutDashboard, label: 'The Nexus' },
-    { to: '/chat', icon: MessageSquare, label: 'Talk to Mossy' },
-    { to: '/organizer', icon: Library, label: 'The Organizer' },
-    { to: '/assembler', icon: Package, label: 'The Assembler' },
-    { to: '/auditor', icon: ShieldCheck, label: 'The Auditor' },
-    { to: '/scribe', icon: Feather, label: 'The Scribe' },
-    { to: '/crucible', icon: Bug, label: 'The Crucible' },
-    { to: '/catalyst', icon: FlaskConical, label: 'The Catalyst' },
-    { to: '/fabric', icon: PenTool, label: 'The Fabric' },
-    { to: '/prism', icon: Triangle, label: 'The Prism' },
-    { to: '/anima', icon: Flame, label: 'The Anima' },
-    { to: '/reverie', icon: Sparkles, label: 'The Reverie' },
-    { to: '/genome', icon: Dna, label: 'The Genome' },
-    { to: '/hive', icon: Hexagon, label: 'The Hive' },
-    { to: '/cartographer', icon: Map, label: 'The Cartographer' },
-    { to: '/registry', icon: FileDigit, label: 'The Registry' },
-    { to: '/blueprint', icon: DraftingCompass, label: 'The Blueprint' },
-    { to: '/synapse', icon: Workflow, label: 'The Synapse' },
-    { to: '/splicer', icon: Binary, label: 'The Splicer' },
-    { to: '/lens', icon: Aperture, label: 'The Lens' },
-    { to: '/conduit', icon: Satellite, label: 'The Conduit' },
-    { to: '/cortex', icon: BrainCircuit, label: 'The Cortex' },
-    { to: '/terminal', icon: SquareTerminal, label: 'HyperTerminal' },
-    { to: '/holo', icon: Gamepad2, label: 'The Holodeck' },
-    { to: '/orchestrator', icon: GitBranch, label: 'The Orchestrator' },
-    { to: '/vault', icon: Container, label: 'The Vault' },
-    { to: '/lore', icon: Network, label: 'The Lorekeeper' },
-    { to: '/workshop', icon: Hammer, label: 'The Workshop' },
-    { to: '/images', icon: Image, label: 'Image Studio' },
-    { to: '/tts', icon: Mic2, label: 'Audio Studio' },
-    { to: '/monitor', icon: Activity, label: 'System Map' },
-    { to: '/live', icon: Radio, label: 'Live Voice' },
-    { to: '/bridge', icon: Monitor, label: 'Desktop Bridge' },
+    // ── Core ──────────────────────────────────────────────────────────────
+    { to: '/',            icon: LayoutDashboard, label: 'The Nexus',       group: 'Core' },
+    { to: '/chat',        icon: MessageSquare,   label: 'Talk to Mossy',   group: 'Core' },
+    { to: '/monitor',     icon: Activity,        label: 'System Map',      group: 'Core' },
+    { to: '/terminal',    icon: SquareTerminal,  label: 'HyperTerminal',   group: 'Core' },
+    { to: '/bridge',      icon: Monitor,         label: 'Desktop Bridge',  group: 'Core' },
+    { to: '/workshop',    icon: Hammer,          label: 'The Workshop',    group: 'Core' },
+
+    // ── Intelligence ──────────────────────────────────────────────────────
+    { to: '/cortex',      icon: BrainCircuit,    label: 'The Cortex',      group: 'Intelligence' },
+    { to: '/planner',     icon: ListTodo,        label: 'The Planner',     group: 'Intelligence' },
+    { to: '/synapse',     icon: Workflow,        label: 'The Synapse',     group: 'Intelligence' },
+    { to: '/conduit',     icon: Satellite,       label: 'The Conduit',     group: 'Intelligence' },
+    { to: '/lens',        icon: Aperture,        label: 'The Lens',        group: 'Intelligence' },
+    { to: '/prism',       icon: Triangle,        label: 'The Prism',       group: 'Intelligence' },
+    { to: '/hive',        icon: Hexagon,         label: 'The Hive',        group: 'Intelligence' },
+    { to: '/genome',      icon: Dna,             label: 'The Genome',      group: 'Intelligence' },
+
+    // ── Build & Craft ─────────────────────────────────────────────────────
+    { to: '/blueprint',   icon: DraftingCompass, label: 'The Blueprint',   group: 'Build' },
+    { to: '/splicer',     icon: Binary,          label: 'The Splicer',     group: 'Build' },
+    { to: '/fabric',      icon: PenTool,         label: 'The Fabric',      group: 'Build' },
+    { to: '/catalyst',    icon: FlaskConical,    label: 'The Catalyst',    group: 'Build' },
+    { to: '/assembler',   icon: Package,         label: 'The Assembler',   group: 'Build' },
+    { to: '/crucible',    icon: Bug,             label: 'The Crucible',    group: 'Build' },
+
+    // ── Data & Memory ─────────────────────────────────────────────────────
+    { to: '/vault',       icon: Container,       label: 'The Vault',       group: 'Data' },
+    { to: '/organizer',   icon: Library,         label: 'The Organizer',   group: 'Data' },
+    { to: '/registry',    icon: FileDigit,       label: 'The Registry',    group: 'Data' },
+    { to: '/scribe',      icon: Feather,         label: 'The Scribe',      group: 'Data' },
+    { to: '/auditor',     icon: ShieldCheck,     label: 'The Auditor',     group: 'Data' },
+
+    // ── Orchestration ─────────────────────────────────────────────────────
+    { to: '/orchestrator', icon: GitBranch,      label: 'The Orchestrator', group: 'Orchestration' },
   ];
+
+  const groups = ['Core', 'Intelligence', 'Build', 'Data', 'Orchestration'] as const;
+
 
   return (
     <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-full relative z-50 transition-colors duration-500">
@@ -186,50 +171,55 @@ const Sidebar: React.FC = () => {
           </div>
       )}
 
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-xs font-medium group ${
-                isActive 
-                  ? `bg-slate-800 ${moodColor} font-bold border border-slate-700 shadow-md` 
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-              }`
-            }
-          >
-            <item.icon className={`w-4 h-4 transition-transform group-hover:scale-110`} />
-            {item.label}
-          </NavLink>
-        ))}
+      <nav className="flex-1 p-3 overflow-y-auto custom-scrollbar">
+        {groups.map((group) => {
+          const items = navItems.filter((i) => i.group === group);
+          return (
+            <div key={group} className="mb-3">
+              <div className="px-3 py-1 text-[9px] font-bold tracking-widest text-slate-600 uppercase">
+                {group}
+              </div>
+              <div className="space-y-0.5">
+                {items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-xs font-medium group ${
+                        isActive
+                          ? `bg-slate-800 ${moodColor} font-bold border border-slate-700 shadow-md`
+                          : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                      }`
+                    }
+                  >
+                    <item.icon className="w-3.5 h-3.5 transition-transform group-hover:scale-110 shrink-0" />
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </nav>
       
-      {/* Footer Info & Pip-Boy Toggle */}
+      {/* Footer Info */}
       <div className="p-4 border-t border-slate-800 bg-slate-900/50">
         <div className="flex justify-between items-center mb-2">
-          <div className="text-[10px] text-slate-600 font-mono">CORE: v2.4.2</div>
-          <button
-              onClick={togglePipBoy}
-              className={`p-2 rounded-full transition-colors ${isPipBoy ? 'bg-amber-900/20 text-amber-400 border border-amber-500/30' : 'bg-slate-800 text-slate-500 hover:text-white border border-slate-700'}`}
-              title="Toggle Pip-Boy Theme"
-          >
-              <Radio className="w-3 h-3" />
-          </button>
+          <div className="text-[10px] text-slate-600 font-mono">MOSSY BRAIN v3.0</div>
+          <div className={`text-[9px] font-bold tracking-widest uppercase ${moodColor}`}>
+            {getProvider() === 'gemma4' ? '⚡ LOCAL GPU' : getProvider() === 'ollama' ? '🖥 LOCAL' : '☁ CLOUD'}
+          </div>
         </div>
         {/* AI Provider indicator + change button */}
         <button
           onClick={() => setShowKeySetup(true)}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:border-emerald-500/40 transition-colors group"
-          title="Change AI provider"
+          title="Change AI provider / model"
         >
-          {getProvider() === 'ollama'
-            ? <HardDrive className="w-3 h-3 text-emerald-400 shrink-0" />
-            : <Cloud className="w-3 h-3 text-blue-400 shrink-0" />}
+          <HardDrive className="w-3 h-3 text-emerald-400 shrink-0" />
           <span className="text-[10px] text-slate-500 group-hover:text-slate-300 transition-colors truncate">
-            {getProvider() === 'ollama' ? 'Ollama · Local' : 'Gemini · Cloud'}
+            {getProvider() === 'gemma4' ? 'Gemma 4 · NVIDIA' : getProvider() === 'ollama' ? 'Ollama · Local' : 'Gemini · Cloud'}
           </span>
-          <KeyRound className="w-3 h-3 text-slate-600 ml-auto group-hover:text-slate-400 shrink-0" />
         </button>
 
         {/* Auto-launch toggle — only shown when running in Electron */}
