@@ -20,20 +20,12 @@ const HyperTerminal = React.lazy(() => import('./components/HyperTerminal'));
 const TheCortex = React.lazy(() => import('./components/TheCortex'));
 const TheLens = React.lazy(() => import('./components/TheLens'));
 const TheNexus = React.lazy(() => import('./components/TheNexus'));
-const TheConduit = React.lazy(() => import('./components/TheConduit'));
-const TheSynapse = React.lazy(() => import('./components/TheSynapse'));
 const TheHive = React.lazy(() => import('./components/TheHive'));
 const TheBlueprint = React.lazy(() => import('./components/TheBlueprint'));
-const TheGenome = React.lazy(() => import('./components/TheGenome'));
-const TheSplicer = React.lazy(() => import('./components/TheSplicer'));
 const ThePrism = React.lazy(() => import('./components/ThePrism'));
-const TheFabric = React.lazy(() => import('./components/TheFabric'));
-const TheCatalyst = React.lazy(() => import('./components/TheCatalyst'));
-const TheRegistry = React.lazy(() => import('./components/TheRegistry'));
 const TheOrganizer = React.lazy(() => import('./components/TheOrganizer'));
 const TheCrucible = React.lazy(() => import('./components/TheCrucible'));
 const TheAssembler = React.lazy(() => import('./components/TheAssembler'));
-const TheAuditor = React.lazy(() => import('./components/TheAuditor'));
 const TheScribe = React.lazy(() => import('./components/TheScribe'));
 const ThePlanner = React.lazy(() => import('./components/ThePlanner'));
 
@@ -120,27 +112,19 @@ const App: React.FC = () => {
                 {/* ── Intelligence ── */}
                 <Route path="/cortex" element={<TheCortex />} />
                 <Route path="/planner" element={<ThePlanner />} />
-                <Route path="/synapse" element={<TheSynapse />} />
-                <Route path="/conduit" element={<TheConduit />} />
                 <Route path="/lens" element={<TheLens />} />
                 <Route path="/prism" element={<ThePrism />} />
                 <Route path="/hive" element={<TheHive />} />
-                <Route path="/genome" element={<TheGenome />} />
 
                 {/* ── Build & Craft ── */}
                 <Route path="/blueprint" element={<TheBlueprint />} />
-                <Route path="/splicer" element={<TheSplicer />} />
-                <Route path="/fabric" element={<TheFabric />} />
-                <Route path="/catalyst" element={<TheCatalyst />} />
                 <Route path="/assembler" element={<TheAssembler />} />
                 <Route path="/crucible" element={<TheCrucible />} />
 
                 {/* ── Data & Memory ── */}
                 <Route path="/vault" element={<TheVault />} />
                 <Route path="/organizer" element={<TheOrganizer />} />
-                <Route path="/registry" element={<TheRegistry />} />
                 <Route path="/scribe" element={<TheScribe />} />
-                <Route path="/auditor" element={<TheAuditor />} />
 
                 {/* ── Orchestration ── */}
                 <Route path="/orchestrator" element={<WorkflowOrchestrator />} />

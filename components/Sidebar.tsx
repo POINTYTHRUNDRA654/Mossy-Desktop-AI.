@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Satellite, Workflow, Hexagon, DraftingCompass, Dna, Binary, Triangle, PenTool, FlaskConical, FileDigit, Library, Bug, Package, ShieldCheck, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo } from 'lucide-react';
+import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo } from 'lucide-react';
 import { useLive } from './LiveContext';
 import AvatarCore from './AvatarCore';
 import ApiKeySetup from './ApiKeySetup';
@@ -56,11 +56,11 @@ const Sidebar: React.FC = () => {
       const path = location.pathname;
       if (path.includes('crucible') || path.includes('terminal')) {
           setMoodColor('text-red-400');
-      } else if (path.includes('reverie') || path.includes('prism') || path.includes('anima')) {
+      } else if (path.includes('prism') || path.includes('hive')) {
           setMoodColor('text-purple-400');
-      } else if (path.includes('splicer') || path.includes('blueprint') || path.includes('fabric')) {
+      } else if (path.includes('blueprint') || path.includes('cortex')) {
           setMoodColor('text-blue-400');
-      } else if (path.includes('workshop') || path.includes('assembler') || path.includes('auditor') || path.includes('scribe')) {
+      } else if (path.includes('workshop') || path.includes('assembler') || path.includes('scribe')) {
           setMoodColor('text-amber-400');
       } else {
           setMoodColor('text-emerald-400');
@@ -79,27 +79,19 @@ const Sidebar: React.FC = () => {
     // ── Intelligence ──────────────────────────────────────────────────────
     { to: '/cortex',      icon: BrainCircuit,    label: 'The Cortex',      group: 'Intelligence' },
     { to: '/planner',     icon: ListTodo,        label: 'The Planner',     group: 'Intelligence' },
-    { to: '/synapse',     icon: Workflow,        label: 'The Synapse',     group: 'Intelligence' },
-    { to: '/conduit',     icon: Satellite,       label: 'The Conduit',     group: 'Intelligence' },
     { to: '/lens',        icon: Aperture,        label: 'The Lens',        group: 'Intelligence' },
     { to: '/prism',       icon: Triangle,        label: 'The Prism',       group: 'Intelligence' },
     { to: '/hive',        icon: Hexagon,         label: 'The Hive',        group: 'Intelligence' },
-    { to: '/genome',      icon: Dna,             label: 'The Genome',      group: 'Intelligence' },
 
     // ── Build & Craft ─────────────────────────────────────────────────────
     { to: '/blueprint',   icon: DraftingCompass, label: 'The Blueprint',   group: 'Build' },
-    { to: '/splicer',     icon: Binary,          label: 'The Splicer',     group: 'Build' },
-    { to: '/fabric',      icon: PenTool,         label: 'The Fabric',      group: 'Build' },
-    { to: '/catalyst',    icon: FlaskConical,    label: 'The Catalyst',    group: 'Build' },
     { to: '/assembler',   icon: Package,         label: 'The Assembler',   group: 'Build' },
     { to: '/crucible',    icon: Bug,             label: 'The Crucible',    group: 'Build' },
 
     // ── Data & Memory ─────────────────────────────────────────────────────
     { to: '/vault',       icon: Container,       label: 'The Vault',       group: 'Data' },
     { to: '/organizer',   icon: Library,         label: 'The Organizer',   group: 'Data' },
-    { to: '/registry',    icon: FileDigit,       label: 'The Registry',    group: 'Data' },
     { to: '/scribe',      icon: Feather,         label: 'The Scribe',      group: 'Data' },
-    { to: '/auditor',     icon: ShieldCheck,     label: 'The Auditor',     group: 'Data' },
 
     // ── Orchestration ─────────────────────────────────────────────────────
     { to: '/orchestrator', icon: GitBranch,      label: 'The Orchestrator', group: 'Orchestration' },

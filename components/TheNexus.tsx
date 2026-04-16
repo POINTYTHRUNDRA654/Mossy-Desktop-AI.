@@ -240,11 +240,11 @@ const TheNexus: React.FC = () => {
                           <span className="text-sm font-bold text-slate-200">Registry</span>
                       </Link>
 
-                      <Link to="/holo" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-pink-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
+                      <Link to="/hive" className="p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl border border-slate-600 hover:border-pink-500 transition-all group flex flex-col items-center justify-center text-center gap-2 aspect-square">
                           <div className="w-10 h-10 bg-pink-500/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
                               <Gamepad2 className="w-5 h-5 text-pink-400" />
                           </div>
-                          <span className="text-sm font-bold text-slate-200">Holodeck</span>
+                          <span className="text-sm font-bold text-slate-200">The Hive</span>
                       </Link>
                       
                   </div>

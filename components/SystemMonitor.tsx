@@ -35,28 +35,17 @@ interface SystemModule {
 }
 
 const modulesList: SystemModule[] = [
-    { id: 'cortex', name: 'The Cortex', status: 'online', load: 45 },
-    { id: 'splicer', name: 'The Splicer', status: 'standby', load: 10 },
-    { id: 'hive', name: 'The Hive', status: 'online', load: 72 },
-    { id: 'anima', name: 'The Anima', status: 'online', load: 88 },
-    { id: 'lens', name: 'The Lens', status: 'standby', load: 5 },
-    { id: 'fabric', name: 'The Fabric', status: 'standby', load: 0 },
-    { id: 'prism', name: 'The Prism', status: 'online', load: 30 },
-    { id: 'conduit', name: 'The Conduit', status: 'online', load: 12 },
-    { id: 'blueprint', name: 'The Blueprint', status: 'standby', load: 0 },
-    { id: 'crucible', name: 'The Crucible', status: 'online', load: 55 },
-    { id: 'assembler', name: 'The Assembler', status: 'standby', load: 0 },
-    { id: 'registry', name: 'The Registry', status: 'online', load: 20 },
-    { id: 'reverie', name: 'The Reverie', status: 'online', load: 95 },
-    // Advanced Modules
-    { id: 'orchestrator', name: 'Orchestrator', status: 'online', load: 15 },
-    { id: 'lore', name: 'Lorekeeper', status: 'standby', load: 5 },
-    { id: 'carto', name: 'Cartographer', status: 'standby', load: 0 },
-    { id: 'holo', name: 'Holodeck', status: 'offline', load: 0 },
-    { id: 'vault', name: 'The Vault', status: 'online', load: 40 },
-    { id: 'organizer', name: 'Organizer', status: 'online', load: 60 },
-    { id: 'auditor', name: 'The Auditor', status: 'online', load: 25 },
-    { id: 'scribe', name: 'The Scribe', status: 'standby', load: 0 },
+    { id: 'cortex',       name: 'The Cortex',      status: 'online',  load: 45 },
+    { id: 'hive',         name: 'The Hive',        status: 'online',  load: 72 },
+    { id: 'lens',         name: 'The Lens',        status: 'standby', load: 5  },
+    { id: 'prism',        name: 'The Prism',       status: 'online',  load: 30 },
+    { id: 'blueprint',    name: 'The Blueprint',   status: 'standby', load: 0  },
+    { id: 'crucible',     name: 'The Crucible',    status: 'online',  load: 55 },
+    { id: 'assembler',    name: 'The Assembler',   status: 'standby', load: 0  },
+    { id: 'orchestrator', name: 'Orchestrator',    status: 'online',  load: 15 },
+    { id: 'vault',        name: 'The Vault',       status: 'online',  load: 40 },
+    { id: 'organizer',    name: 'Organizer',       status: 'online',  load: 60 },
+    { id: 'scribe',       name: 'The Scribe',      status: 'standby', load: 0  },
 ];
 
 const SystemMonitor: React.FC = () => {
