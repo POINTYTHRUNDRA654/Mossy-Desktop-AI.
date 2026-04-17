@@ -1051,12 +1051,12 @@ function startClipboardMonitor() {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     try {
       const text = clipboard.readText();
-      if (text && text !== _lastClipboardText) {
-        _lastClipboardText = text;
-        mainWindow.webContents.send('clipboard:changed', text);
-      }
+      // Skip empty clips and avoid processing very large clipboard content
+      if (!text || text === _lastClipboardText || text.length > 50000) return;
+      _lastClipboardText = text;
+      mainWindow.webContents.send('clipboard:changed', text);
     } catch {}
-  }, 1500);
+  }, 4000);
 }
 
 // ── Folder Watcher IPC ────────────────────────────────────────────────────
