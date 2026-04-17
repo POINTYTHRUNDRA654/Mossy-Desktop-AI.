@@ -1116,30 +1116,32 @@ ipcMain.handle('system:gpu-sensors', () => {
 app.on('before-quit', () => {
   app.isQuitting = true;
   stopPythonServices();
-  const gotLock = app.requestSingleInstanceLock();
-  if (!gotLock) {
-    app.quit();
-  } else {
-    app.on('second-instance', () => {
-      if (mainWindow) {
-        if (mainWindow.isMinimized() || !mainWindow.isVisible()) mainWindow.show();
-        mainWindow.focus();
-      }
-    });
+});
 
-    app.whenReady().then(() => {
-      createWindow();
-      createTray();
-      startClipboardMonitor();
-      app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
-      });
-    });
-  }
-
-  // Keep running in tray — do NOT quit when all windows are closed
-  app.on('window-all-closed', () => {
-    // On macOS, keep the app alive in the dock/tray as expected
-    // On Windows/Linux, also keep alive (we have a tray)
-    // Only quit when user explicitly selects "Quit Mossy" from tray
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized() || !mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
   });
+
+  app.whenReady().then(() => {
+    createWindow();
+    createTray();
+    startClipboardMonitor();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+}
+
+// Keep running in tray — do NOT quit when all windows are closed
+app.on('window-all-closed', () => {
+  // On macOS, keep the app alive in the dock/tray as expected
+  // On Windows/Linux, also keep alive (we have a tray)
+  // Only quit when user explicitly selects "Quit Mossy" from tray
+});
