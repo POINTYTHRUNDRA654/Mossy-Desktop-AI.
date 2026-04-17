@@ -59,6 +59,17 @@ export interface ElectronAPI {
   gemmaMemoryClear:    () => Promise<unknown>;
   gemmaWebSearch:      (req: unknown) => Promise<unknown>;
   gemmaConfig:         () => Promise<unknown>;
+  // Journal
+  journalWriteEntry:   (entry: { summary: string; timestamp: string }) => Promise<unknown>;
+  journalReadLast:     (n?: number) => Promise<unknown>;
+  // Folder Watcher
+  watcherSetFolders:   (folders: string[]) => Promise<unknown>;
+  watcherGetFolders:   () => Promise<unknown>;
+  // Hardware Sensors
+  gpuSensors:          () => Promise<unknown>;
+  // Push-event subscriptions (return cleanup fn)
+  onClipboardChange:   (cb: (text: string) => void) => () => void;
+  onFileChange:        (cb: (data: { folder: string; filename: string; event: string }) => void) => () => void;
 }
 
 declare global {

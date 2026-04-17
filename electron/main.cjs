@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, shell, session, Tray, Menu, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, session, Tray, Menu, nativeImage, ipcMain, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
@@ -1012,6 +1012,106 @@ function createWindow() {
   }
 }
 
+// ── Session Journal IPC ───────────────────────────────────────────────────
+const os = require('os');
+const MOSSY_DATA_ROOT_COMPUTED = process.platform === 'win32'
+  ? 'D:\\Mossy-AI'
+  : path.join(os.homedir(), 'Mossy-AI');
+const JOURNAL_PATH = path.join(
+  process.env.MOSSY_DATA_ROOT || MOSSY_DATA_ROOT_COMPUTED,
+  'journal.md'
+);
+
+ipcMain.handle('journal:write-entry', async (_, { summary, timestamp }) => {
+  try {
+    await fs.promises.mkdir(path.dirname(JOURNAL_PATH), { recursive: true });
+    const line = `\n---\n### ${timestamp}\n${summary}\n`;
+    await fs.promises.appendFile(JOURNAL_PATH, line, 'utf8');
+    return { status: 'ok' };
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('journal:read-last', async (_, n = 5) => {
+  try {
+    const content = await fs.promises.readFile(JOURNAL_PATH, 'utf8');
+    const parts = content.split('\n---\n').filter(e => e.trim().length > 0);
+    return { status: 'ok', entries: parts.slice(-(n)) };
+  } catch {
+    return { status: 'ok', entries: [] };
+  }
+});
+
+// ── Clipboard Monitor ─────────────────────────────────────────────────────
+let _lastClipboardText = '';
+
+function startClipboardMonitor() {
+  setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    try {
+      const text = clipboard.readText();
+      if (text && text !== _lastClipboardText) {
+        _lastClipboardText = text;
+        mainWindow.webContents.send('clipboard:changed', text);
+      }
+    } catch {}
+  }, 1500);
+}
+
+// ── Folder Watcher IPC ────────────────────────────────────────────────────
+const _watchHandles = new Map();
+
+ipcMain.handle('watcher:set-folders', async (_, folders) => {
+  for (const w of _watchHandles.values()) {
+    try { w.close(); } catch {}
+  }
+  _watchHandles.clear();
+
+  for (const folder of (folders || [])) {
+    try {
+      const w = fs.watch(folder, { recursive: true }, (event, filename) => {
+        if (!filename || !mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.webContents.send('watcher:file-change', { folder, filename, event });
+      });
+      _watchHandles.set(folder, w);
+    } catch (e) {
+      console.error(`[Watcher] Cannot watch ${folder}:`, e.message);
+    }
+  }
+  return { status: 'ok', watching: Array.from(_watchHandles.keys()) };
+});
+
+ipcMain.handle('watcher:get-folders', () => Array.from(_watchHandles.keys()));
+
+// ── Hardware / GPU Sensors IPC ────────────────────────────────────────────
+ipcMain.handle('system:gpu-sensors', () => {
+  return new Promise((resolve) => {
+    execFile(
+      'nvidia-smi',
+      [
+        '--query-gpu=temperature.gpu,memory.used,memory.total,utilization.gpu',
+        '--format=csv,noheader,nounits',
+      ],
+      { timeout: 5000 },
+      (err, stdout) => {
+        if (!err && stdout.trim()) {
+          const parts = stdout.trim().split(/,\s*/);
+          resolve({
+            status: 'ok',
+            gpu_temp:        parseInt(parts[0]) || null,
+            gpu_mem_used_mb: parseInt(parts[1]) || null,
+            gpu_mem_total_mb: parseInt(parts[2]) || null,
+            gpu_util_pct:    parseInt(parts[3]) || null,
+          });
+        } else {
+          resolve({ status: 'ok', gpu_temp: null, error: 'nvidia-smi unavailable' });
+        }
+      }
+    );
+  });
+});
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────
 app.on('before-quit', () => {
   app.isQuitting = true;
@@ -1030,6 +1130,7 @@ app.on('before-quit', () => {
     app.whenReady().then(() => {
       createWindow();
       createTray();
+      startClipboardMonitor();
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
       });

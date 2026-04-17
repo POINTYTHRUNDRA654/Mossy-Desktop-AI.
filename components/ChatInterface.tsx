@@ -519,6 +519,61 @@ export const ChatInterface: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
+  // Ref that always holds the current messages array — used in cleanup
+  const messagesRef = useRef(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // Persistent memory — fetched from gemma service on mount
+  const [persistentMemory, setPersistentMemory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('mossy_key_facts');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  // ── Session journal: save current messages on unmount so TheNexus
+  //    can generate a journal entry on next open ─────────────────────
+  useEffect(() => {
+    return () => {
+      const msgs = messagesRef.current.filter(m => m.role !== 'system');
+      if (msgs.length >= 4) {
+        try {
+          localStorage.setItem('mossy_pending_journal_messages', JSON.stringify(msgs.slice(-40)));
+          localStorage.setItem('mossy_pending_journal_date', new Date().toISOString());
+        } catch {}
+      }
+    };
+  }, []);
+
+  // ── Clipboard action injection — when ClipboardBanner navigates here
+  //    with a pre-filled prompt ──────────────────────────────────────
+  useEffect(() => {
+    const inject = localStorage.getItem('mossy_clipboard_inject');
+    if (inject) {
+      localStorage.removeItem('mossy_clipboard_inject');
+      setInputText(inject);
+    }
+
+    const handleClipAction = (e: CustomEvent<{ prompt: string }>) => {
+      setInputText(e.detail.prompt);
+    };
+    window.addEventListener('mossy-clipboard-action', handleClipAction as EventListener);
+    return () => window.removeEventListener('mossy-clipboard-action', handleClipAction as EventListener);
+  }, []);
+
+  // ── Load persistent memory from gemma service ────────────────────
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.gemmaMemoryGet) return;
+    api.gemmaMemoryGet().then((res: any) => {
+      if (res?.memories && Array.isArray(res.memories)) {
+        const facts = res.memories.map((m: any) => `${m.key}: ${m.value}`);
+        setPersistentMemory(facts);
+        localStorage.setItem('mossy_key_facts', JSON.stringify(facts));
+      }
+    }).catch(() => {});
+  }, []);
+
   // --- PERSISTENCE LAYER (DEBOUNCED) ---
   useEffect(() => {
     // Save messages with debounce
@@ -768,6 +823,11 @@ export const ChatInterface: React.FC = () => {
               learnedCtx = `\n**INGESTED KNOWLEDGE (TUTORIALS & DOCS):**\n${learnedItems}\n(Use this knowledge to answer user queries accurately based on the provided documents.)`;
           }
       }
+
+      let memoryCtx = "";
+      if (persistentMemory.length > 0) {
+          memoryCtx = `\n**PERSISTENT MEMORY (remembered from previous sessions):**\n${persistentMemory.map(f => `- ${f}`).join('\n')}\n(These are facts Mossy has stored. Reference them naturally in responses.)`;
+      }
       
       const bridgeStatus = isBridgeActive ? "ONLINE" : "OFFLINE (Simulated)";
       const blenderContext = isBlenderLinked 
@@ -783,6 +843,7 @@ export const ChatInterface: React.FC = () => {
       ${hardwareCtx}
       ${scanContext}
       ${learnedCtx}
+      ${memoryCtx}
       `;
   };
 

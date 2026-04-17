@@ -78,6 +78,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       // System
       'system:detect-tools',
       'bridge-scan',
+      // Journal
+      'journal:write-entry',
+      'journal:read-last',
+      // Folder Watcher
+      'watcher:set-folders',
+      'watcher:get-folders',
+      // Hardware sensors
+      'system:gpu-sensors',
     ]);
     if (!ALLOWED.has(channel)) {
       return Promise.reject(new Error(`IPC channel not allowed: ${channel}`));
@@ -106,5 +114,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gemmaMemoryClear:      ()       => ipcRenderer.invoke('gemma:memory-clear'),
   gemmaWebSearch:        (req)    => ipcRenderer.invoke('gemma:web-search', req),
   gemmaConfig:           ()       => ipcRenderer.invoke('gemma:config'),
+
+  // ── Journal ───────────────────────────────────────────────────────────
+  journalWriteEntry: (entry)  => ipcRenderer.invoke('journal:write-entry', entry),
+  journalReadLast:   (n)      => ipcRenderer.invoke('journal:read-last', n),
+
+  // ── Folder Watcher ────────────────────────────────────────────────────
+  watcherSetFolders: (folders) => ipcRenderer.invoke('watcher:set-folders', folders),
+  watcherGetFolders: ()        => ipcRenderer.invoke('watcher:get-folders'),
+
+  // ── Hardware Sensors ─────────────────────────────────────────────────
+  gpuSensors: () => ipcRenderer.invoke('system:gpu-sensors'),
+
+  // ── Push-event subscriptions (renderer ← main) ───────────────────────
+  // Returns an unsubscribe function.
+  onClipboardChange: (cb) => {
+    const handler = (_, text) => cb(text);
+    ipcRenderer.on('clipboard:changed', handler);
+    return () => ipcRenderer.removeListener('clipboard:changed', handler);
+  },
+  onFileChange: (cb) => {
+    const handler = (_, data) => cb(data);
+    ipcRenderer.on('watcher:file-change', handler);
+    return () => ipcRenderer.removeListener('watcher:file-change', handler);
+  },
 });
 

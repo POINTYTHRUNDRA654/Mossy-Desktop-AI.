@@ -68,6 +68,30 @@ const SystemMonitor: React.FC = () => {
   const [scanProgress, setScanProgress] = useState(0);
   const [modules, setModules] = useState<SystemModule[]>(modulesList);
   const [scanError, setScanError] = useState<string | null>(null);
+
+  // ── GPU / Hardware Sensor State ─────────────────────────────────────────
+  interface GpuSensors {
+    gpu_temp: number | null;
+    gpu_mem_used_mb: number | null;
+    gpu_mem_total_mb: number | null;
+    gpu_util_pct: number | null;
+    error?: string;
+  }
+  const [gpuSensors, setGpuSensors] = useState<GpuSensors | null>(null);
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.gpuSensors) return;
+    const poll = async () => {
+      try {
+        const res: any = await api.gpuSensors();
+        if (res?.status === 'ok') setGpuSensors(res);
+      } catch {}
+    };
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => clearInterval(id);
+  }, []);
   
   // Deployment State
   const [buildStatus, setBuildStatus] = useState<'idle' | 'building' | 'complete' | 'error'>('idle');
@@ -618,6 +642,45 @@ const SystemMonitor: React.FC = () => {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* GPU / Hardware Sensor Panel */}
+            {gpuSensors && !gpuSensors.error && (
+                <div className="mb-8 animate-fade-in">
+                    <h3 className="text-sm font-bold text-slate-500 mb-3 flex items-center gap-2 uppercase tracking-widest">
+                        <Cpu className="w-4 h-4" /> GPU Sensors
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {/* Temperature */}
+                        <div className={`bg-slate-800 border rounded-xl p-4 ${(gpuSensors.gpu_temp ?? 0) >= 85 ? 'border-red-500/50 bg-red-900/10' : (gpuSensors.gpu_temp ?? 0) >= 70 ? 'border-yellow-500/40' : 'border-slate-700'}`}>
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">GPU Temp</div>
+                            <div className={`text-2xl font-bold font-mono ${(gpuSensors.gpu_temp ?? 0) >= 85 ? 'text-red-400' : (gpuSensors.gpu_temp ?? 0) >= 70 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                                {gpuSensors.gpu_temp !== null ? `${gpuSensors.gpu_temp}°C` : '—'}
+                            </div>
+                        </div>
+                        {/* Utilisation */}
+                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">GPU Load</div>
+                            <div className="text-2xl font-bold font-mono text-blue-400">
+                                {gpuSensors.gpu_util_pct !== null ? `${gpuSensors.gpu_util_pct}%` : '—'}
+                            </div>
+                        </div>
+                        {/* VRAM Used */}
+                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">VRAM Used</div>
+                            <div className="text-2xl font-bold font-mono text-purple-400">
+                                {gpuSensors.gpu_mem_used_mb !== null ? `${(gpuSensors.gpu_mem_used_mb / 1024).toFixed(1)} GB` : '—'}
+                            </div>
+                        </div>
+                        {/* VRAM Total */}
+                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">VRAM Total</div>
+                            <div className="text-2xl font-bold font-mono text-slate-400">
+                                {gpuSensors.gpu_mem_total_mb !== null ? `${(gpuSensors.gpu_mem_total_mb / 1024).toFixed(0)} GB` : '—'}
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

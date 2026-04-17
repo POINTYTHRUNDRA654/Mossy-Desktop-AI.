@@ -4,7 +4,9 @@ import Sidebar from './components/Sidebar';
 import MossyObserver from './components/MossyObserver';
 import CommandPalette from './components/CommandPalette';
 import SystemBus from './components/SystemBus';
+import ClipboardBanner from './components/ClipboardBanner';
 import ApiKeySetup from './components/ApiKeySetup';
+import { MossyContextBusProvider } from './components/MossyContextBus';
 import { Loader2, Zap } from 'lucide-react';
 import { LiveProvider } from './components/LiveContext';
 import { hasApiKey, isConfigured } from './utils/apiKey';
@@ -91,15 +93,17 @@ const App: React.FC = () => {
 
   return (
     <LiveProvider>
-      <HashRouter>
-        <div className="flex h-screen w-screen overflow-hidden bg-forge-dark text-slate-200">
-          <NeuralController />
-          <CommandPalette />
-          <SystemBus />
-          <Sidebar />
-          <main className="flex-1 relative overflow-hidden bg-[#050910]">
-            <MossyObserver />
-            <Suspense fallback={<ModuleLoader />}>
+      <MossyContextBusProvider>
+        <HashRouter>
+          <div className="flex h-screen w-screen overflow-hidden bg-forge-dark text-slate-200">
+            <NeuralController />
+            <CommandPalette />
+            <SystemBus />
+            <Sidebar />
+            <main className="flex-1 relative overflow-hidden bg-[#050910]">
+              <MossyObserver />
+              <ClipboardBanner />
+              <Suspense fallback={<ModuleLoader />}>
               <Routes>
                 {/* ── Core ── */}
                 <Route path="/" element={<TheNexus />} />
@@ -136,6 +140,7 @@ const App: React.FC = () => {
           </main>
         </div>
       </HashRouter>
+      </MossyContextBusProvider>
     </LiveProvider>
   );
 };
