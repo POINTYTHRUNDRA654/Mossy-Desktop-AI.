@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, shell, session, Tray, Menu, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, session, Tray, Menu, nativeImage, ipcMain, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
@@ -30,7 +30,7 @@ const CHROMA_SERVICE_URL = `http://127.0.0.1:${CHROMA_SERVICE_PORT}`;
 
 function startPythonService(serviceType = 'gemma') {
   const serviceMap = {
-    'gemma': { var: () => gemmaProcess, set: (p) => { gemmaProcess = p; }, script: 'gemma_service.py' },
+    'gemma': { var: () => gemmaProcess, set: (p) => { gemmaProcess = p; }, script: 'gemma_service_enhanced.py' },
     'pytorch': { var: () => pytorchProcess, set: (p) => { pytorchProcess = p; }, script: 'pytorch_service.py' },
     'whisper': { var: () => whisperProcess, set: (p) => { whisperProcess = p; }, script: 'whisper_service.py' },
     'chroma': { var: () => chromaProcess, set: (p) => { chromaProcess = p; }, script: 'chroma_service.py' }
@@ -43,10 +43,30 @@ function startPythonService(serviceType = 'gemma') {
     const pythonDir = path.join(__dirname, '..', 'python');
     const pythonScript = path.join(pythonDir, svc.script);
 
+    // ── D: drive environment — all large downloads go to D:\Mossy-AI ────────
+    // On Windows defaults to D:\Mossy-AI; on other OS falls back to ~/Mossy-AI.
+    const defaultRoot = process.platform === 'win32'
+      ? 'D:\\Mossy-AI'
+      : path.join(require('os').homedir(), 'Mossy-AI');
+    const mossyDataRoot = process.env.MOSSY_DATA_ROOT || defaultRoot;
+    const hfHome        = path.join(mossyDataRoot, 'huggingface');
+
+    const pythonEnv = {
+      ...process.env,
+      MOSSY_DATA_ROOT:    mossyDataRoot,
+      HF_HOME:            hfHome,
+      HF_HUB_CACHE:       path.join(hfHome, 'hub'),
+      TRANSFORMERS_CACHE: path.join(hfHome, 'hub'),
+      HF_DATASETS_CACHE:  path.join(hfHome, 'datasets'),
+      TORCH_HOME:         path.join(mossyDataRoot, 'torch'),
+      PIP_CACHE_DIR:      path.join(mossyDataRoot, 'pip_cache'),
+    };
+
     const proc = spawn('python', [pythonScript], {
       cwd: pythonDir,
       stdio: 'pipe',
       detached: false,
+      env: pythonEnv,
     });
 
     svc.set(proc);
@@ -552,6 +572,165 @@ ipcMain.handle('gemma:add-documents', async (_, documents) => {
   }
 });
 
+// ── New Intelligence IPC Handlers ────────────────────────────────────────
+
+ipcMain.handle('gemma:chain-of-thought', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/chain-of-thought`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:plan', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:reflect', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/reflect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:tools-execute', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/tools/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:load-model-advanced', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/models/load`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+// ── Memory IPC Handlers ───────────────────────────────────────────────────
+
+ipcMain.handle('gemma:memory-get', async () => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/memory`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:memory-add', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/memory/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:memory-delete', async (_, key) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/memory/${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('gemma:memory-clear', async () => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/memory`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+// ── Web Search IPC Handler ─────────────────────────────────────────────────
+
+ipcMain.handle('gemma:web-search', async (_, request) => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/tools/web-search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+// ── Config / path info IPC Handler ────────────────────────────────────────
+
+ipcMain.handle('gemma:config', async () => {
+  try {
+    await startPythonService('gemma');
+    const response = await fetch(`${GEMMA_SERVICE_URL}/config`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
 // ── Multi-Agent Collaboration IPC Handlers ────────────────────────────────
 const AGENT_COLLAB_PORT = 8004;
 const AGENT_COLLAB_SERVICE = `http://127.0.0.1:${AGENT_COLLAB_PORT}`;
@@ -833,6 +1012,106 @@ function createWindow() {
   }
 }
 
+// ── Session Journal IPC ───────────────────────────────────────────────────
+const os = require('os');
+const MOSSY_DATA_ROOT_COMPUTED = process.platform === 'win32'
+  ? 'D:\\Mossy-AI'
+  : path.join(os.homedir(), 'Mossy-AI');
+const JOURNAL_PATH = path.join(
+  process.env.MOSSY_DATA_ROOT || MOSSY_DATA_ROOT_COMPUTED,
+  'journal.md'
+);
+
+ipcMain.handle('journal:write-entry', async (_, { summary, timestamp }) => {
+  try {
+    await fs.promises.mkdir(path.dirname(JOURNAL_PATH), { recursive: true });
+    const line = `\n---\n### ${timestamp}\n${summary}\n`;
+    await fs.promises.appendFile(JOURNAL_PATH, line, 'utf8');
+    return { status: 'ok' };
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('journal:read-last', async (_, n = 5) => {
+  try {
+    const content = await fs.promises.readFile(JOURNAL_PATH, 'utf8');
+    const parts = content.split('\n---\n').filter(e => e.trim().length > 0);
+    return { status: 'ok', entries: parts.slice(-(n)) };
+  } catch {
+    return { status: 'ok', entries: [] };
+  }
+});
+
+// ── Clipboard Monitor ─────────────────────────────────────────────────────
+let _lastClipboardText = '';
+
+function startClipboardMonitor() {
+  setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    try {
+      const text = clipboard.readText();
+      // Skip empty clips and avoid processing very large clipboard content
+      if (!text || text === _lastClipboardText || text.length > 50000) return;
+      _lastClipboardText = text;
+      mainWindow.webContents.send('clipboard:changed', text);
+    } catch {}
+  }, 4000);
+}
+
+// ── Folder Watcher IPC ────────────────────────────────────────────────────
+const _watchHandles = new Map();
+
+ipcMain.handle('watcher:set-folders', async (_, folders) => {
+  for (const w of _watchHandles.values()) {
+    try { w.close(); } catch {}
+  }
+  _watchHandles.clear();
+
+  for (const folder of (folders || [])) {
+    try {
+      const w = fs.watch(folder, { recursive: true }, (event, filename) => {
+        if (!filename || !mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.webContents.send('watcher:file-change', { folder, filename, event });
+      });
+      _watchHandles.set(folder, w);
+    } catch (e) {
+      console.error(`[Watcher] Cannot watch ${folder}:`, e.message);
+    }
+  }
+  return { status: 'ok', watching: Array.from(_watchHandles.keys()) };
+});
+
+ipcMain.handle('watcher:get-folders', () => Array.from(_watchHandles.keys()));
+
+// ── Hardware / GPU Sensors IPC ────────────────────────────────────────────
+ipcMain.handle('system:gpu-sensors', () => {
+  return new Promise((resolve) => {
+    execFile(
+      'nvidia-smi',
+      [
+        '--query-gpu=temperature.gpu,memory.used,memory.total,utilization.gpu',
+        '--format=csv,noheader,nounits',
+      ],
+      { timeout: 5000 },
+      (err, stdout) => {
+        if (!err && stdout.trim()) {
+          const parts = stdout.trim().split(/,\s*/);
+          resolve({
+            status: 'ok',
+            gpu_temp:        parseInt(parts[0]) || null,
+            gpu_mem_used_mb: parseInt(parts[1]) || null,
+            gpu_mem_total_mb: parseInt(parts[2]) || null,
+            gpu_util_pct:    parseInt(parts[3]) || null,
+          });
+        } else {
+          resolve({ status: 'ok', gpu_temp: null, error: 'nvidia-smi unavailable' });
+        }
+      }
+    );
+  });
+});
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────
 app.on('before-quit', () => {
   app.isQuitting = true;
@@ -851,6 +1130,7 @@ app.on('before-quit', () => {
     app.whenReady().then(() => {
       createWindow();
       createTray();
+      startClipboardMonitor();
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
       });

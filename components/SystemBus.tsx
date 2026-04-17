@@ -44,6 +44,32 @@ const SystemBus: React.FC = () => {
         window.addEventListener('mossy-blender-shortcut', handleShortcut as EventListener);
         window.addEventListener('mossy-control', handleControl as EventListener);
 
+        // ── Folder Watcher: register saved folders and listen for changes ──
+        const api = window.electronAPI;
+        let fileChangeUnsub: (() => void) | undefined;
+
+        if (api?.watcherSetFolders && api?.onFileChange) {
+            // Register watched folders from user preferences
+            const savedFolders: string[] = (() => {
+                try {
+                    return JSON.parse(localStorage.getItem('mossy_watched_folders') || '[]');
+                } catch { return []; }
+            })();
+
+            if (savedFolders.length > 0) {
+                api.watcherSetFolders(savedFolders).catch(() => {});
+            }
+
+            // Listen for file change events from main process
+            fileChangeUnsub = api.onFileChange((data) => {
+                const { folder, filename, event } = data;
+                handleLog('Watcher', `${event}: ${filename}`, 'ok');
+                window.dispatchEvent(new CustomEvent('mossy-file-change', {
+                    detail: { folder, filename, event }
+                }));
+            });
+        }
+
         // --- GLOBAL BRIDGE HEARTBEAT ---
         // Polls the local python server every 2 seconds to check if it's alive.
         // This allows Chat, Lens, and Sidebar to know the real status.
@@ -87,15 +113,8 @@ const SystemBus: React.FC = () => {
                     throw new Error("Bridge responded with error");
                 }
             } catch (e: any) {
-                // IMPORTANT: If we fail to fetch, it might be PNA/CORS block even if server is running.
-                // If it was previously active, we give it a grace period or assume it's just blocked by browser
-                // UNLESS the user explicitly disconnected or we want to be strict.
-                
-                // Current strict mode:
                 const wasUp = localStorage.getItem('mossy_bridge_active') === 'true';
                 
-                // Only mark as down if we are certain it's not just a transient network hiccup
-                // But for now, we must be honest with the UI state.
                 if (e.name !== 'AbortError') {
                      localStorage.setItem('mossy_bridge_active', 'false');
                      if (wasUp) {
@@ -109,6 +128,7 @@ const SystemBus: React.FC = () => {
 
         return () => {
             clearInterval(heartbeat);
+            fileChangeUnsub?.();
             window.removeEventListener('mossy-blender-command', handleBlenderCmd as EventListener);
             window.removeEventListener('mossy-blender-shortcut', handleShortcut as EventListener);
             window.removeEventListener('mossy-control', handleControl as EventListener);

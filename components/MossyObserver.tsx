@@ -25,11 +25,6 @@ const QUIPS: Record<string, string[]> = {
         "Let's hunt some errors.",
         "Crash logs are just screams for help in hex."
     ],
-    '/reverie': [
-        "Dreaming optimizes the logic matrix.",
-        "Letting my weights drift...",
-        "Processing... or daydreaming. Hard to tell."
-    ],
     '/workshop': [
         "Ready to build something.",
         "What are we creating today?",
@@ -45,25 +40,30 @@ const QUIPS: Record<string, string[]> = {
         "Once the bridge is up, I can do a lot more.",
         "Keep this running for maximum capability."
     ],
+    '/cortex': [
+        "Knowledge base online.",
+        "Feed me documents and I'll remember everything.",
+        "The more I learn, the more useful I become."
+    ],
+    '/planner': [
+        "Let's break this down into steps.",
+        "Planning is how chaos becomes progress.",
+        "What's the goal we're working toward?"
+    ],
     '/orchestrator': [
         "Workflow automation is my specialty.",
         "Tell me the steps, I'll build the pipeline.",
         "Repetitive tasks are meant to be automated."
     ],
-    '/splicer': [
-        "Be careful with those bytes.",
-        "Binary surgery requires steady hands.",
-        "Havok physics are chaotic by nature."
+    '/hive': [
+        "Multiple minds, one directive.",
+        "Deploying specialist agents.",
+        "Collaboration makes complex problems tractable."
     ],
-    '/genome': [
-        "Evolution is iterative.",
-        "Rewriting my own definition.",
-        "Am I more than my code?"
-    ],
-    '/fabric': [
-        "Design is intelligence made visible.",
-        "Let's make it beautiful.",
-        "Clean structure, clean mind."
+    '/prism': [
+        "Every problem has multiple angles.",
+        "Let me analyse this from all sides.",
+        "Logic, creativity, critique — all at once."
     ],
     '/live': [
         "Voice circuits primed.",
@@ -136,9 +136,23 @@ const MossyObserver: React.FC = () => {
         window.addEventListener('mossy-blender-command', handleBlenderCommand as EventListener);
         window.addEventListener('mossy-blender-shortcut', handleShortcut as EventListener);
         
+        // ── File-change alerts from folder watcher ──────────────────────
+        const handleFileChange = (e: CustomEvent<{ folder: string; filename: string; event: string }>) => {
+            const { filename, event: evt } = e.detail;
+            const ext = filename.split('.').pop()?.toLowerCase() || '';
+            const isRelevant = ['esp', 'esm', 'esl', 'psc', 'nif', 'dds', 'json', 'txt', 'md', 'py', 'js'].includes(ext);
+            if (!isRelevant) return;
+            setIsAlert(true);
+            setMessage(`File ${evt}: ${filename}`);
+            setVisible(true);
+            setTimeout(() => { setVisible(false); setIsAlert(false); }, 6000);
+        };
+        window.addEventListener('mossy-file-change', handleFileChange as EventListener);
+        
         return () => {
             window.removeEventListener('mossy-blender-command', handleBlenderCommand as EventListener);
             window.removeEventListener('mossy-blender-shortcut', handleShortcut as EventListener);
+            window.removeEventListener('mossy-file-change', handleFileChange as EventListener);
         };
     }, []);
 

@@ -99,7 +99,7 @@ const DesktopBridge: React.FC = () => {
         setScanning(true);
         setScanErrors([]);
         try {
-            const bridge = (window as any).electronBridge;
+            const bridge = window.electronBridge;
             if (!bridge?.scanDirectory) {
                 setScanErrors([{ path: 'preload', message: 'scanDirectory not available' }]);
                 return;

@@ -66,7 +66,7 @@ export const Gemma4FineTuner: React.FC = () => {
             };
 
             // Use IPC to start fine-tuning job
-            const result = await (window as any).electronAPI?.gemmaStartFineTune?.(fineTuneConfig);
+            const result = await window.electronAPI?.gemmaStartFineTune?.(fineTuneConfig);
             if (!result) {
                 throw new Error('Failed to start fine-tuning job');
             }
@@ -93,7 +93,7 @@ export const Gemma4FineTuner: React.FC = () => {
         try {
             const interval = setInterval(async () => {
                 try {
-                    const status = await (window as any).electronAPI?.gemmaFineTuneStatus?.(jobId);
+                    const status = await window.electronAPI?.gemmaFineTuneStatus?.(jobId);
                     if (!status) return;
 
                     const job: FineTuneJob = {

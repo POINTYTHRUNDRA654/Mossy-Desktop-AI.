@@ -1,210 +1,265 @@
-# Gemma 4 Integration Guide
+# Mossy Brain — Setup Guide
 
-Mossy's. Desktop AIS, New Brain now includes **Gemma 4 fine-tuning capabilities**. This guide walks you through setup and usage.
+> **Everything downloads to your D: drive.** No C: drive space is consumed
+> by model weights, cache files, or datasets.  All large files land under
+> `D:\Mossy-AI\` automatically.
 
-## Overview
+---
 
-The Gemma 4 integration provides:
-- **Local Model Inference**: Run Gemma 4 locally without cloud API costs
-- **Fine-Tuning**: Customize Gemma 4 with your own data using LoRA (Low-Rank Adaptation)
-- **GPU-Optimized Training**: Uses `unsloth` for efficient fine-tuning on limited VRAM
-- **REST API Backend**: Python FastAPI service communicates with Electron app
+## D: Drive Layout
+
+```
+D:\Mossy-AI\
+├── huggingface\           ← HuggingFace model cache (Gemma 4 weights live here)
+│   ├── hub\               ← Downloaded model shards (~18 GB for Gemma 4 9B)
+│   └── datasets\          ← Cached HF datasets used for fine-tuning
+├── models\                ← Saved / fine-tuned LoRA adapters
+│   └── gemma4-finetuned\  ← Output of a fine-tuning run
+├── data\
+│   ├── chroma_db\         ← RAG vector index (LlamaIndex + Chroma)
+│   └── jobs\              ← Fine-tune job status files
+├── memory\
+│   └── long_term.json     ← Mossy's persistent cross-session memory
+├── torch\                 ← PyTorch model hub cache
+└── pip_cache\             ← pip wheel/download cache
+```
+
+---
 
 ## System Requirements
 
-- **GPU**: NVIDIA GPU with CUDA (RTX 3060+ recommended for fine-tuning)
-- **VRAM**: 
-  - 8GB minimum for inference
-  - 16GB+ recommended for fine-tuning
-- **Python**: 3.10 or higher
-- **Disk Space**: 20GB+ (for model weights)
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| GPU | NVIDIA 8 GB VRAM | RTX 3060 12 GB+ |
+| VRAM (inference) | 8 GB | 12 GB |
+| VRAM (fine-tuning) | 12 GB | 16 GB+ |
+| Disk (D: drive) | 30 GB free | 60 GB free |
+| Python | 3.10 | 3.11 |
+| CUDA | 12.0+ | 12.1+ |
+
+---
 
 ## Setup Instructions
 
-### 1. Install Python Dependencies
+### 1. Create the D: drive folders (one-time)
 
-Set up a Python virtual environment in the `python/` directory:
+```cmd
+mkdir D:\Mossy-AI
+mkdir D:\Mossy-AI\python-venv
+```
 
-```bash
-cd python
-python -m venv venv
+### 2. Install Python Virtual Environment on D: drive
 
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
+```cmd
+cd path\to\Mossy-Desktop-AI\python
 
-# Install dependencies
+:: Create the venv on D: so even pip packages don't go to C:
+python -m venv D:\Mossy-AI\python-venv
+
+:: Activate it
+D:\Mossy-AI\python-venv\Scripts\activate
+```
+
+### 3. Install PyTorch with CUDA 12.1 (downloads to D: pip cache)
+
+```cmd
+:: Set pip cache to D: before installing
+set PIP_CACHE_DIR=D:\Mossy-AI\pip_cache
+
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+### 4. Install all other dependencies
+
+```cmd
+pip install unsloth
 pip install -r requirements.txt
 ```
 
-**Note**: The first installation may take 10-15 minutes due to PyTorch and Transformers compilation.
+> First install may take 15–25 minutes. All wheels are cached to
+> `D:\Mossy-AI\pip_cache` so re-installs are instant.
 
-### 2. Verify CUDA/GPU Setup
+### 5. Verify CUDA / GPU
 
-Ensure PyTorch can access your GPU:
-
-```bash
-python -c "import torch; print('GPU Available:', torch.cuda.is_available()); print('Device:', torch.cuda.get_device_name(0))"
+```cmd
+python -c "import torch; print('GPU:', torch.cuda.get_device_name(0)); print('VRAM:', round(torch.cuda.get_device_properties(0).total_memory/1e9,1), 'GB')"
 ```
 
-If GPU is not detected, install CUDA toolkit: https://developer.nvidia.com/cuda-downloads
+### 6. Authenticate with HuggingFace (one-time)
 
-### 3. Download Gemma 4 Model
+Visit **https://huggingface.co/google/gemma-4-9b** and click **"Agree and access"**
+to accept the model license.
 
-The model will be auto-downloaded on first use. Accept the model license at:
-https://huggingface.co/google/gemma-4-9b
+Then log in securely using the HuggingFace CLI (credentials are stored in your
+user profile, not in command history or environment variables):
 
-### 4. Run the Application
+```cmd
+pip install huggingface_hub
+huggingface-cli login
+```
 
-```bash
-# Terminal 1: Start React dev server + Electron
+You will be prompted to paste your access token from https://huggingface.co/settings/tokens.
+The token is stored in `~/.cache/huggingface/token` (not in plain text on screen).
+
+### 7. Run the Application
+
+```cmd
+:: Terminal 1 (from repo root)
 npm run electron:dev
 
-# Terminal 2: (Optional, for manual testing)
-# Start Python service directly
-cd python
-source venv/bin/activate
-python gemma_service.py
+:: The Electron app will automatically start the Python brain service.
+:: On first launch, Gemma 4 (~18 GB) will download to D:\Mossy-AI\huggingface\hub
+:: This takes 15–30 minutes depending on your internet connection.
 ```
 
-The Electron app will auto-spawn the Python service on port 8000.
+---
 
-## Usage
+## Verify D: Drive Is Being Used
 
-### Switching to Gemma 4
-
-1. Open Settings/API Key Setup
-2. Select **"Gemma 4 (Local Fine-Tuning)"** as provider
-3. Service auto-starts on first use
-
-### Fine-Tuning a Model
-
-1. Open the **Gemma 4 Fine-Tuner** component
-2. Paste training examples (separate with blank lines):
-   ```
-   User: What is machine learning?
-   Assistant: Machine learning is a subset of AI...
-   
-   User: How does neural networks work?
-   Assistant: Neural networks are inspired by biological neurons...
-   ```
-3. Adjust hyperparameters if needed:
-   - **Epochs**: Number of training passes (3-5 recommended)
-   - **Batch Size**: 4-8 for 16GB VRAM
-   - **Learning Rate**: 2e-4 (standard for LoRA)
-   - **LoRA Rank**: 8-16 (higher = more capacity but slower)
-
-4. Click **"Start Fine-Tuning"**
-5. Monitor progress in the status panel
-
-### Using Fine-Tuned Models
-
-After fine-tuning completes:
-1. The model is saved to `./gemma4_finetuned` 
-2. Go back to chat and select it as the model path
-3. Chat will now use your fine-tuned version
-
-## Architecture
+Once the app is running, open **The Planner** or any module and check:
 
 ```
-Electron App (React)
-    ↓
-Electron IPC Bridge (gemma:* handlers)
-    ↓
-Python FastAPI Service (port 8000)
-    ↓
-Gemma 4 Model + LoRA Library
-    ↓
-NVIDIA GPU (CUDA)
+GET http://127.0.0.1:8000/config
 ```
 
-### IPC Handlers
+This returns all active paths. You should see:
+```json
+{
+  "mossy_data_root": "D:\\Mossy-AI",
+  "hf_home": "D:\\Mossy-AI\\huggingface",
+  "transformers_cache": "D:\\Mossy-AI\\huggingface\\hub",
+  ...
+}
+```
 
-The Electron bridge exposes:
-- `gemma:health-check` - Service status
-- `gemma:start-fine-tune` - Begin fine-tuning job
-- `gemma:fine-tune-status` - Poll job progress
-- `gemma:run-inference` - Generate text
-- `gemma:list-models` - Available models
-- `gemma:load-model` - Load specific model
+Or use the `gemma:config` IPC channel from any component:
+```ts
+const cfg = await window.electronAPI?.gemmaConfig();
+```
+
+---
+
+## Changing the D: Drive Location
+
+If you want a different root (e.g., `E:\AI` or a network drive):
+
+**Option A — Before starting the app**, set the environment variable:
+```cmd
+set MOSSY_DATA_ROOT=E:\MyAI
+npm run electron:dev
+```
+
+**Option B — Permanent (Windows)**: add `MOSSY_DATA_ROOT=D:\Mossy-AI` to
+System Properties → Environment Variables → System variables.
+
+---
+
+## Intelligence Features
+
+| Feature | Endpoint | IPC Channel |
+|---------|----------|-------------|
+| Inference (Gemma 4) | `POST /infer` | `gemma:run-inference` |
+| Reasoning chains | `POST /chain` | `gemma:chain` |
+| Chain-of-thought | `POST /chain-of-thought` | `gemma:chain-of-thought` |
+| Goal planning | `POST /plan` | `gemma:plan` |
+| Self-reflection | `POST /reflect` | `gemma:reflect` |
+| RAG document Q&A | `POST /rag-query` | `gemma:rag-query` |
+| **Web search** | `POST /tools/web-search` | `gemma:web-search` |
+| **Long-term memory** | `GET/POST/DELETE /memory` | `gemma:memory-*` |
+| Safe code execution | `POST /tools/execute` | `gemma:tools-execute` |
+| Fine-tune (LoRA) | `POST /fine-tune/start` | `gemma:start-fine-tune` |
+| Config / paths | `GET /config` | `gemma:config` |
+
+---
+
+## Long-Term Memory
+
+Mossy can remember facts across sessions.  Memories are stored in
+`D:\Mossy-AI\memory\long_term.json` and **automatically injected** into
+every inference prompt so she "knows" them without being told again.
+
+```ts
+// Save a memory
+await window.electronAPI?.ipcInvoke('gemma:memory-add', {
+  key: 'user_name',
+  value: 'The user prefers detailed technical answers.'
+});
+
+// Read all memories
+const { memory } = await window.electronAPI?.ipcInvoke('gemma:memory-get');
+```
+
+---
+
+## Web Search (No API Key)
+
+Mossy can search DuckDuckGo and synthesise results into a natural language
+answer.  No account or API key required.
+
+```ts
+const result = await window.electronAPI?.ipcInvoke('gemma:web-search', {
+  query: 'latest NVIDIA GPU drivers 2025',
+  max_results: 5,
+});
+// result.synthesis — Mossy's answer based on search results
+// result.topics   — raw search snippets
+```
+
+---
+
+## Fine-Tuning on D: Drive
+
+All fine-tuned models are saved to `D:\Mossy-AI\models\gemma4-finetuned`
+by default.  To use a fine-tuned model, load it:
+
+```ts
+await window.electronAPI?.ipcInvoke('gemma:load-model-advanced', {
+  model_name: 'D:\\Mossy-AI\\models\\gemma4-finetuned',
+  load_in_4bit: true,
+});
+```
+
+---
+
+## Performance Tips (NVIDIA)
+
+| Config | VRAM | Speed | Quality |
+|--------|------|-------|---------|
+| Gemma 4 9B · 4-bit · Unsloth | 8 GB | Fast | Excellent |
+| Gemma 4 9B · 4-bit · Rank 8 fine-tune | 10 GB | Medium | Very good |
+| Gemma 4 9B · 4-bit · Rank 16 fine-tune | 12 GB | Good | Best |
+| Flash Attention 2 (RTX 30xx+) | same | 2–3× faster | same |
+
+---
 
 ## Troubleshooting
 
-### "Python service failed to start"
-- Check Python 3.10+ is installed
-- Verify `python/requirements.txt` installed successfully
-- Check `python` is in your PATH
+### Downloads still going to C:
+- Check `GET http://127.0.0.1:8000/config` and verify `mossy_data_root` is `D:\Mossy-AI`
+- Make sure you are using the **`D:\Mossy-AI\python-venv`** virtual environment, not the system Python
+
+### "Model won't load — out of space"
+- Run `du -sh D:\Mossy-AI\huggingface\hub\*` to see what's taking space
+- Use a smaller model: `unsloth/gemma-3-4b-it` (~5 GB) instead of `google/gemma-4-9b`
 
 ### "CUDA not detected"
-- Install NVIDIA CUDA Toolkit 12.0+
-- Restart system after CUDA install
-- Run `nvidia-smi` to verify GPU visibility
-
-### "Out of Memory (OOM) error"
-- Reduce `batch_size` to 2-4
-- Reduce `lora_rank` to 8
-- Enable CPU offloading in config
-- Use smaller model (`gemma-2-9b` instead of `gemma-4-9b`)
-
-### "Fine-tuning very slow"
-- Verify GPU usage: `nvidia-smi` (should show 80%+ utilization)
-- Check for CPU bottleneck: System Monitor
-- Reduce `num_epochs` for testing
-- Use smaller dataset for iteration
-
-### "Model won't load"
-- First-time loads download 10-30GB (takes 10-20 min)
-- Check internet connection and disk space
-- Try manually: `huggingface-cli download google/gemma-4-9b`
-
-## Advanced Configuration
-
-Edit `python/gemma_service.py` to:
-- Change default model (`model_name`)
-- Adjust max token limits
-- Add custom inference parameters
-- Enable LoRA merging on save
-
-## Performance Tips
-
-| Configuration | VRAM | Speed | Quality |
-|---|---|---|---|
-| Rank 8, BS 2 | 8GB | Slow | Good |
-| Rank 16, BS 4 | 12GB | Medium | Better |
-| Rank 32, BS 8 | 16GB | Fast | Best |
-
-## File Structure
-
+```cmd
+nvidia-smi         ← should show your GPU
+nvcc --version     ← should show CUDA 12.x
 ```
-python/
-├── requirements.txt           # Python dependencies
-├── gemma_service.py          # FastAPI service (main)
-└── venv/                      # Virtual environment
+If missing, install CUDA Toolkit 12.1+ from https://developer.nvidia.com/cuda-downloads
 
-utils/
-├── apiKey.ts                 # Provider + config management
-└── aiClient.ts               # AI client factory
+### "pip still installing to C:"
+Make sure `D:\Mossy-AI\python-venv\Scripts\activate` is active **and**
+`PIP_CACHE_DIR=D:\Mossy-AI\pip_cache` is set before running `pip install`.
 
-components/
-└── Gemma4FineTuner.tsx       # UI for fine-tuning
-```
-
-## Next Steps
-
-1. **Fine-tune for your use case** - Gather domain-specific data
-2. **Merge LoRA weights** - For production, merge adapters into base model
-3. **Deploy to edge** - Export quantized model for other devices
-4. **Monitor quality** - Evaluate fine-tuned outputs vs. base model
+---
 
 ## References
 
 - Unsloth: https://github.com/unslothai/unsloth
-- Gemma: https://ai.google.dev/gemma
-- LoRA: https://arxiv.org/abs/2106.09685
-- FastAPI: https://fastapi.tiangolo.com/
+- Gemma 4: https://ai.google.dev/gemma
+- HuggingFace cache docs: https://huggingface.co/docs/huggingface_hub/guides/manage-cache
+- CUDA Toolkit: https://developer.nvidia.com/cuda-downloads
+- DuckDuckGo API: https://duckduckgo.com/api
 
----
-
-**Questions?** Check the logs in `python/gemma_service.py` output or enable debug mode in Electron DevTools (F12).

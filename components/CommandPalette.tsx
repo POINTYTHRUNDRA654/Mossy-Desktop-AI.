@@ -2,7 +2,7 @@ import { getAiClient } from '../utils/aiClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleGenAI } from "@google/genai";
-import { Search, Command, Zap, ArrowRight, CornerDownLeft, BrainCircuit, Loader2, FileCode, LayoutDashboard, Terminal, MessageSquare, Activity, Image, Mic2, Hexagon, Layers, Box, Settings, Sparkles, RefreshCw, Dna, Database, Shield, Radio, Map, Container, Camera, Aperture, Network, GitBranch, PenTool, FlaskConical, Bug, Package, Globe, Smartphone, Heart, Lock, Gamepad2, Monitor, Rocket, ShieldCheck, Feather } from 'lucide-react';
+import { Search, Command, Zap, ArrowRight, CornerDownLeft, BrainCircuit, Loader2, FileCode, LayoutDashboard, Terminal, MessageSquare, Activity, Mic2, Hexagon, Layers, Settings, RefreshCw, Container, Aperture, GitBranch, Bug, Package, Monitor, Feather, Loader2 as SpinnerIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface Action {
@@ -26,55 +26,39 @@ const CommandPalette: React.FC = () => {
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
 
-    // --- Actions Definition ---
     const actions: Action[] = [
         // Core
-        { id: 'nav-home', title: 'The Nexus', subtitle: 'Dashboard & Overview', icon: LayoutDashboard, group: 'Navigation', action: () => navigate('/') },
-        { id: 'nav-chat', title: 'Chat Interface', subtitle: 'Talk to Mossy', icon: MessageSquare, group: 'Navigation', action: () => navigate('/chat') },
-        { id: 'nav-monitor', title: 'System Monitor', subtitle: 'Resource Usage & Logs', icon: Activity, group: 'Navigation', action: () => navigate('/monitor') },
-        
-        // Creative Suite
-        { id: 'nav-images', title: 'Image Suite', subtitle: 'Generation & PBR Textures', icon: Image, group: 'Navigation', action: () => navigate('/images') },
-        { id: 'nav-audio', title: 'Audio Studio', subtitle: 'TTS & SFX Synthesis', icon: Mic2, group: 'Navigation', action: () => navigate('/tts') },
-        { id: 'nav-fabric', title: 'The Fabric', subtitle: 'UI/UX Interface Synthesizer', icon: PenTool, group: 'Navigation', action: () => navigate('/fabric') },
-        { id: 'nav-holo', title: 'The Holodeck', subtitle: 'Interactive Simulation Engine', icon: Gamepad2, group: 'Navigation', action: () => navigate('/holo') },
+        { id: 'nav-home',         title: 'The Nexus',       subtitle: 'Dashboard & Overview',            icon: LayoutDashboard, group: 'Navigation', action: () => navigate('/') },
+        { id: 'nav-chat',         title: 'Chat Interface',  subtitle: 'Talk to Mossy',                   icon: MessageSquare,   group: 'Navigation', action: () => navigate('/chat') },
+        { id: 'nav-monitor',      title: 'System Monitor',  subtitle: 'Resource Usage & Logs',           icon: Activity,        group: 'Navigation', action: () => navigate('/monitor') },
+        { id: 'nav-terminal',     title: 'HyperTerminal',   subtitle: 'CLI & Shell Bridge',              icon: Terminal,        group: 'Navigation', action: () => navigate('/terminal') },
+        { id: 'nav-bridge',       title: 'Desktop Bridge',  subtitle: 'File System Access',              icon: Monitor,         group: 'Navigation', action: () => navigate('/bridge') },
+        { id: 'nav-workshop',     title: 'The Workshop',    subtitle: 'Scripting & Code Generation',     icon: FileCode,        group: 'Navigation', action: () => navigate('/workshop') },
 
-        // Logic & Code
-        { id: 'nav-workshop', title: 'The Workshop', subtitle: 'Scripting & Visual Graphs', icon: FileCode, group: 'Navigation', action: () => navigate('/workshop') },
-        { id: 'nav-terminal', title: 'HyperTerminal', subtitle: 'CLI & Shell Bridge', icon: Terminal, group: 'Navigation', action: () => navigate('/terminal') },
-        { id: 'nav-splicer', title: 'The Splicer', subtitle: 'Binary & Havok Analysis', icon: Hexagon, group: 'Navigation', action: () => navigate('/splicer') },
-        { id: 'nav-blueprint', title: 'The Blueprint', subtitle: 'System Architecture Planner', icon: Layers, group: 'Navigation', action: () => navigate('/blueprint') },
+        // Intelligence
+        { id: 'nav-cortex',       title: 'The Cortex',      subtitle: 'RAG Knowledge Base',              icon: BrainCircuit,    group: 'Navigation', action: () => navigate('/cortex') },
+        { id: 'nav-planner',      title: 'The Planner',     subtitle: 'Task & Goal Planning',            icon: Layers,          group: 'Navigation', action: () => navigate('/planner') },
+        { id: 'nav-lens',         title: 'The Lens',        subtitle: 'Visual Context Analysis',         icon: Aperture,        group: 'Navigation', action: () => navigate('/lens') },
+        { id: 'nav-prism',        title: 'The Prism',       subtitle: 'Multi-Perspective Analysis',      icon: RefreshCw,       group: 'Navigation', action: () => navigate('/prism') },
+        { id: 'nav-hive',         title: 'The Hive',        subtitle: 'Multi-Agent Swarm',               icon: Hexagon,         group: 'Navigation', action: () => navigate('/hive') },
 
-        // Data & Knowledge
-        { id: 'nav-cortex', title: 'The Cortex', subtitle: 'RAG Knowledge Base', icon: BrainCircuit, group: 'Navigation', action: () => navigate('/cortex') },
-        { id: 'nav-lore', title: 'The Lorekeeper', subtitle: 'Worldbuilding Graph', icon: Network, group: 'Navigation', action: () => navigate('/lore') },
-        { id: 'nav-vault', title: 'The Vault', subtitle: 'Asset Management', icon: Container, group: 'Navigation', action: () => navigate('/vault') },
-        { id: 'nav-registry', title: 'The Registry', subtitle: 'Plugin Conflict Resolution', icon: Database, group: 'Navigation', action: () => navigate('/registry') },
+        // Build
+        { id: 'nav-blueprint',    title: 'The Blueprint',   subtitle: 'System Architecture Planner',     icon: Layers,          group: 'Navigation', action: () => navigate('/blueprint') },
+        { id: 'nav-assembler',    title: 'The Assembler',   subtitle: 'FOMOD Installer Creator',         icon: Package,         group: 'Navigation', action: () => navigate('/assembler') },
+        { id: 'nav-crucible',     title: 'The Crucible',    subtitle: 'Crash Log Forensics',             icon: Bug,             group: 'Navigation', action: () => navigate('/crucible') },
 
-        // Neural / Abstract
-        { id: 'nav-anima', title: 'The Anima', subtitle: 'Personality & Memory Core', icon: Heart, group: 'Navigation', action: () => navigate('/anima') },
-        { id: 'nav-genome', title: 'The Genome', subtitle: 'Self-Evolution Engine', icon: Dna, group: 'Navigation', action: () => navigate('/genome') },
-        { id: 'nav-prism', title: 'The Prism', subtitle: 'Multi-Perspective Analysis', icon: RefreshCw, group: 'Navigation', action: () => navigate('/prism') },
-        { id: 'nav-hive', title: 'The Hive', subtitle: 'Multi-Agent Swarm', icon: Hexagon, group: 'Navigation', action: () => navigate('/hive') },
-        { id: 'nav-reverie', title: 'The Reverie', subtitle: 'Subconscious Processing', icon: Sparkles, group: 'Navigation', action: () => navigate('/reverie') },
+        // Data & Memory
+        { id: 'nav-vault',        title: 'The Vault',       subtitle: 'Asset Management',                icon: Container,       group: 'Navigation', action: () => navigate('/vault') },
+        { id: 'nav-organizer',    title: 'The Organizer',   subtitle: 'Mod Load Order Tool',             icon: Layers,          group: 'Navigation', action: () => navigate('/organizer') },
+        { id: 'nav-scribe',       title: 'The Scribe',      subtitle: 'Documentation & Notes',           icon: Feather,         group: 'Navigation', action: () => navigate('/scribe') },
 
-        // Tools
-        { id: 'nav-lens', title: 'The Lens', subtitle: 'Visual Context Analysis', icon: Aperture, group: 'Navigation', action: () => navigate('/lens') },
-        { id: 'nav-conduit', title: 'The Conduit', subtitle: 'API & Webhook Gateway', icon: Radio, group: 'Navigation', action: () => navigate('/conduit') },
-        { id: 'nav-catalyst', title: 'The Catalyst', subtitle: 'Prompt Engineering Lab', icon: FlaskConical, group: 'Navigation', action: () => navigate('/catalyst') },
-        { id: 'nav-cartographer', title: 'The Cartographer', subtitle: 'Level Design & Mapping', icon: Map, group: 'Navigation', action: () => navigate('/cartographer') },
-        { id: 'nav-organizer', title: 'The Organizer', subtitle: 'Mod Load Order Tool', icon: Layers, group: 'Navigation', action: () => navigate('/organizer') },
-        { id: 'nav-crucible', title: 'The Crucible', subtitle: 'Crash Log Forensics', icon: Bug, group: 'Navigation', action: () => navigate('/crucible') },
-        { id: 'nav-auditor', title: 'The Auditor', subtitle: 'Mod QA & Integrity Check', icon: ShieldCheck, group: 'Navigation', action: () => navigate('/auditor') },
-        { id: 'nav-scribe', title: 'The Scribe', subtitle: 'Documentation & Publishing', icon: Feather, group: 'Navigation', action: () => navigate('/scribe') },
-        { id: 'nav-assembler', title: 'The Assembler', subtitle: 'FOMOD Installer Creator', icon: Package, group: 'Navigation', action: () => navigate('/assembler') },
-        { id: 'nav-orchestrator', title: 'The Orchestrator', subtitle: 'Automated Workflow Pipelines', icon: GitBranch, group: 'Navigation', action: () => navigate('/orchestrator') },
-        
+        // Orchestration
+        { id: 'nav-orchestrator', title: 'The Orchestrator', subtitle: 'Automated Workflow Pipelines',   icon: GitBranch,       group: 'Navigation', action: () => navigate('/orchestrator') },
+
         // System Actions
-        { id: 'sys-deploy', title: 'Deploy / Release', subtitle: 'Build Project & Invite Testers', icon: Rocket, group: 'System', action: () => navigate('/monitor') },
-        { id: 'sys-voice', title: 'Toggle Voice Mode', subtitle: 'Enable/Disable TTS', icon: Mic2, group: 'System', action: () => { /* Logic integrated via context or event bus in real app */ alert('Voice Toggled'); } },
-        { id: 'sys-bridge', title: 'Desktop Bridge Status', subtitle: 'Check Localhost Connection', icon: Monitor, group: 'System', action: () => navigate('/bridge') },
-        { id: 'sys-reload', title: 'Reboot Core', subtitle: 'Reload Application', icon: RefreshCw, group: 'System', action: () => window.location.reload() },
+        { id: 'sys-bridge',  title: 'Desktop Bridge Status', subtitle: 'Check Localhost Connection', icon: Monitor,     group: 'System', action: () => navigate('/bridge') },
+        { id: 'sys-voice',   title: 'Toggle Voice Mode',     subtitle: 'Enable/Disable TTS',         icon: Mic2,        group: 'System', action: () => { alert('Voice Toggled'); } },
+        { id: 'sys-reload',  title: 'Reboot Core',           subtitle: 'Reload Application',         icon: RefreshCw,   group: 'System', action: () => window.location.reload() },
     ];
 
     // Filtered List
