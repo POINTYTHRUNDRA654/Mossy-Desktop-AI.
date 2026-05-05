@@ -75,6 +75,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'agent:get-stats',
       'agent:trigger-improvement',
       'agent:get-learning-history',
+      // Secure credential storage (OS keychain via safeStorage)
+      'secrets:set',
+      'secrets:get',
+      'secrets:delete',
+      // ComfyUI image generation
+      'comfyui:health-check',
+      'comfyui:generate-image',
+      'comfyui:list-models',
       // System
       'system:detect-tools',
       'bridge-scan',
@@ -141,6 +149,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
       // LOOT
       'loot:analyze',
       'loot:sort',
+      // ── Fallout 4 Modding Tools ──────────────────────────────────────────
+      // FO4Edit / xEdit conflict detection
+      'fo4edit:health-check',
+      'fo4edit:set-path',
+      'fo4edit:check-conflicts',
+      'fo4edit:get-records',
+      // BA2 / BSA archive handler
+      'ba2:health-check',
+      'ba2:inspect',
+      'ba2:extract',
+      'ba2:create',
+      'ba2:get-archive2-path',
+      // Papyrus script compiler & validator
+      'papyrus:health-check',
+      'papyrus:compile',
+      'papyrus:validate',
+      'papyrus:generate-template',
+      'papyrus:common-events',
+      'papyrus:snippet-library',
+      'papyrus:set-compiler-path',
+      // FOMOD installer XML builder
+      'fomod:health-check',
+      'fomod:create-installer',
+      'fomod:validate',
+      'fomod:parse',
+      'fomod:templates',
+      'fomod:ai-generate',
     ]);
     if (!ALLOWED.has(channel)) {
       return Promise.reject(new Error(`IPC channel not allowed: ${channel}`));

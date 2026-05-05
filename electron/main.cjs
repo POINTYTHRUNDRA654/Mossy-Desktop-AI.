@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, shell, session, Tray, Menu, nativeImage, ipcMain, clipboard } = require('electron');
+const { app, BrowserWindow, shell, session, Tray, Menu, nativeImage, ipcMain, clipboard, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
@@ -42,6 +42,11 @@ function startPythonService(serviceType = 'gemma') {
     'esrgan': { var: () => esrganProcess, set: (p) => { esrganProcess = p; }, script: 'esrgan_service.py' },
     // New: WolvenKit CLI automation (WolvenKit/WolvenKit on GitHub)
     'wolvenkit': { var: () => wolvenKitProcess, set: (p) => { wolvenKitProcess = p; }, script: 'wolvenkit_service.py' },
+    // New: Fallout 4 modding services
+    'fo4edit':  { var: () => fo4editProcess,  set: (p) => { fo4editProcess = p; },  script: 'fo4edit_service.py' },
+    'ba2':      { var: () => ba2Process,      set: (p) => { ba2Process = p; },      script: 'ba2_service.py' },
+    'papyrus':  { var: () => papyrusProcess,  set: (p) => { papyrusProcess = p; },  script: 'papyrus_service.py' },
+    'fomod':    { var: () => fomodProcess,    set: (p) => { fomodProcess = p; },    script: 'fomod_service.py' },
   };
 
   const svc = serviceMap[serviceType] || serviceMap['gemma'];
@@ -131,6 +136,10 @@ function stopPythonServices() {
   if (rvcProcess) { rvcProcess.kill(); rvcProcess = null; }
   if (esrganProcess) { esrganProcess.kill(); esrganProcess = null; }
   if (wolvenKitProcess) { wolvenKitProcess.kill(); wolvenKitProcess = null; }
+  if (fo4editProcess)  { fo4editProcess.kill();  fo4editProcess = null; }
+  if (ba2Process)      { ba2Process.kill();      ba2Process = null; }
+  if (papyrusProcess)  { papyrusProcess.kill();  papyrusProcess = null; }
+  if (fomodProcess)    { fomodProcess.kill();    fomodProcess = null; }
 }
 
 // ── Auto-launch at OS startup ──────────────────────────────────────────────
@@ -153,6 +162,55 @@ ipcMain.handle('get-auto-launch', () => getAutoLaunch());
 ipcMain.handle('set-auto-launch', (_, enable) => { setAutoLaunch(enable); return enable; });
 ipcMain.handle('window-minimize', () => { mainWindow?.minimize(); });
 ipcMain.handle('window-hide', () => { mainWindow?.hide(); });
+
+// ── Secure credential storage (Electron safeStorage — OS keychain) ────────
+// Replaces storing API keys in localStorage (plaintext).
+// Components call: window.electronAPI.ipcInvoke('secrets:set', { key, value })
+//                  window.electronAPI.ipcInvoke('secrets:get', { key })
+const SECRETS_FILE = path.join(
+  process.env.MOSSY_DATA_ROOT || (process.platform === 'win32' ? 'D:\\Mossy-AI' : require('os').homedir() + '/Mossy-AI'),
+  'secrets.enc'
+);
+
+async function readSecrets() {
+  try {
+    const raw = await fs.promises.readFile(SECRETS_FILE);
+    if (!safeStorage.isEncryptionAvailable()) return JSON.parse(raw.toString('utf8'));
+    return JSON.parse(safeStorage.decryptString(raw));
+  } catch { return {}; }
+}
+
+async function writeSecrets(obj) {
+  await fs.promises.mkdir(path.dirname(SECRETS_FILE), { recursive: true });
+  const text = JSON.stringify(obj);
+  const data = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text) : Buffer.from(text, 'utf8');
+  await fs.promises.writeFile(SECRETS_FILE, data);
+}
+
+ipcMain.handle('secrets:set', async (_, { key, value }) => {
+  try {
+    const store = await readSecrets();
+    store[key] = value;
+    await writeSecrets(store);
+    return { status: 'ok' };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('secrets:get', async (_, { key }) => {
+  try {
+    const store = await readSecrets();
+    return { status: 'ok', value: store[key] ?? null };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('secrets:delete', async (_, { key }) => {
+  try {
+    const store = await readSecrets();
+    delete store[key];
+    await writeSecrets(store);
+    return { status: 'ok' };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
 ipcMain.handle('bridge-scan', async (_, { base = 'D:\\', depth = 3, maxEntries = 4000, includeExe = true } = {}) => {
   const normalizedBase = path.resolve(base);
   if (!normalizedBase.toLowerCase().startsWith('d:')) {
@@ -759,18 +817,31 @@ let triposrProcess = null;
 let rvcProcess = null;
 let esrganProcess = null;
 let wolvenKitProcess = null;
+// ── Fallout 4 Modding Services ────────────────────────────────────────────
+let fo4editProcess  = null;
+let ba2Process      = null;
+let papyrusProcess  = null;
+let fomodProcess    = null;
 const OPENCV_SERVICE_PORT = 8005;
 const PIPER_SERVICE_PORT = 8006;
 const TRIPOSR_SERVICE_PORT = 8007;
 const RVC_SERVICE_PORT = 8008;
 const ESRGAN_SERVICE_PORT = 8009;
 const WOLVENKIT_SERVICE_PORT = 8010;
+const FO4EDIT_SERVICE_PORT  = 8012;
+const BA2_SERVICE_PORT      = 8013;
+const PAPYRUS_SERVICE_PORT  = 8014;
+const FOMOD_SERVICE_PORT    = 8015;
 const OPENCV_SERVICE_URL = `http://127.0.0.1:${OPENCV_SERVICE_PORT}`;
 const PIPER_SERVICE_URL = `http://127.0.0.1:${PIPER_SERVICE_PORT}`;
 const TRIPOSR_SERVICE_URL = `http://127.0.0.1:${TRIPOSR_SERVICE_PORT}`;
 const RVC_SERVICE_URL = `http://127.0.0.1:${RVC_SERVICE_PORT}`;
 const ESRGAN_SERVICE_URL = `http://127.0.0.1:${ESRGAN_SERVICE_PORT}`;
 const WOLVENKIT_SERVICE_URL = `http://127.0.0.1:${WOLVENKIT_SERVICE_PORT}`;
+const FO4EDIT_SERVICE_URL  = `http://127.0.0.1:${FO4EDIT_SERVICE_PORT}`;
+const BA2_SERVICE_URL      = `http://127.0.0.1:${BA2_SERVICE_PORT}`;
+const PAPYRUS_SERVICE_URL  = `http://127.0.0.1:${PAPYRUS_SERVICE_PORT}`;
+const FOMOD_SERVICE_URL    = `http://127.0.0.1:${FOMOD_SERVICE_PORT}`;
 
 function startAgentCollaborationService() {
   if (agentCollabProcess) return Promise.resolve();
@@ -1424,6 +1495,103 @@ ipcMain.handle('rtxremix:capture-scene', async () => {
   } catch (err) { return { status: 'error', message: String(err) }; }
 });
 
+// ── Fallout 4 Modding IPC Handlers ──────────────────────────────────────
+// ── FO4Edit / xEdit conflict detection ──────────────────────────────────
+ipcMain.handle('fo4edit:health-check', async () => {
+  try { await startPythonService('fo4edit'); return await (await fetch(`${FO4EDIT_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fo4edit:set-path', async (_, args) => {
+  try { await startPythonService('fo4edit'); return await (await fetch(`${FO4EDIT_SERVICE_URL}/set-path`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fo4edit:check-conflicts', async (_, args) => {
+  try { await startPythonService('fo4edit'); const r = await fetch(`${FO4EDIT_SERVICE_URL}/check-conflicts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(120000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fo4edit:get-records', async (_, args) => {
+  try { await startPythonService('fo4edit'); return await (await fetch(`${FO4EDIT_SERVICE_URL}/get-records`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── BA2 / BSA Archive Handler ────────────────────────────────────────────
+ipcMain.handle('ba2:health-check', async () => {
+  try { await startPythonService('ba2'); return await (await fetch(`${BA2_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ba2:inspect', async (_, args) => {
+  try { await startPythonService('ba2'); return await (await fetch(`${BA2_SERVICE_URL}/inspect`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ba2:extract', async (_, args) => {
+  try { await startPythonService('ba2'); const r = await fetch(`${BA2_SERVICE_URL}/extract`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(300000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ba2:create', async (_, args) => {
+  try { await startPythonService('ba2'); const r = await fetch(`${BA2_SERVICE_URL}/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(300000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ba2:get-archive2-path', async () => {
+  try { await startPythonService('ba2'); return await (await fetch(`${BA2_SERVICE_URL}/archive2-path`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Papyrus Script Compiler / Validator ──────────────────────────────────
+ipcMain.handle('papyrus:health-check', async () => {
+  try { await startPythonService('papyrus'); return await (await fetch(`${PAPYRUS_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('papyrus:compile', async (_, args) => {
+  try { await startPythonService('papyrus'); const r = await fetch(`${PAPYRUS_SERVICE_URL}/compile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(60000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('papyrus:validate', async (_, args) => {
+  try { await startPythonService('papyrus'); return await (await fetch(`${PAPYRUS_SERVICE_URL}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('papyrus:generate-template', async (_, args) => {
+  try { await startPythonService('papyrus'); return await (await fetch(`${PAPYRUS_SERVICE_URL}/generate-template`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('papyrus:common-events', async () => {
+  try { await startPythonService('papyrus'); return await (await fetch(`${PAPYRUS_SERVICE_URL}/common-events`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('papyrus:snippet-library', async () => {
+  try { await startPythonService('papyrus'); return await (await fetch(`${PAPYRUS_SERVICE_URL}/snippet-library`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('papyrus:set-compiler-path', async (_, args) => {
+  try { await startPythonService('papyrus'); return await (await fetch(`${PAPYRUS_SERVICE_URL}/set-compiler-path`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── FOMOD Installer Builder ───────────────────────────────────────────────
+ipcMain.handle('fomod:health-check', async () => {
+  try { await startPythonService('fomod'); return await (await fetch(`${FOMOD_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fomod:create-installer', async (_, args) => {
+  try { await startPythonService('fomod'); return await (await fetch(`${FOMOD_SERVICE_URL}/create-installer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fomod:validate', async (_, args) => {
+  try { await startPythonService('fomod'); return await (await fetch(`${FOMOD_SERVICE_URL}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fomod:parse', async (_, args) => {
+  try { await startPythonService('fomod'); return await (await fetch(`${FOMOD_SERVICE_URL}/parse`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fomod:templates', async () => {
+  try { await startPythonService('fomod'); return await (await fetch(`${FOMOD_SERVICE_URL}/templates`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fomod:ai-generate', async (_, args) => {
+  try { await startPythonService('fomod'); return await (await fetch(`${FOMOD_SERVICE_URL}/ai-generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
 // ── System Tray ───────────────────────────────────────────────────────────
 function createTray() {
   let icon;
@@ -1513,7 +1681,7 @@ function createWindow() {
             "font-src 'self' https://fonts.gstatic.com",
             "img-src 'self' data: blob: https:",
             "media-src 'self' blob:",
-            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 http://localhost:8005 http://127.0.0.1:8005 http://localhost:8006 http://127.0.0.1:8006 http://localhost:8007 http://127.0.0.1:8007 http://localhost:8008 http://127.0.0.1:8008 http://localhost:8009 http://127.0.0.1:8009 http://localhost:8010 http://127.0.0.1:8010 http://localhost:8011 http://127.0.0.1:8011 https://api.steampowered.com https://api.nexusmods.com https://search.nexusmods.com wss://generativelanguage.googleapis.com",
+            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 http://localhost:8005 http://127.0.0.1:8005 http://localhost:8006 http://127.0.0.1:8006 http://localhost:8007 http://127.0.0.1:8007 http://localhost:8008 http://127.0.0.1:8008 http://localhost:8009 http://127.0.0.1:8009 http://localhost:8010 http://127.0.0.1:8010 http://localhost:8011 http://127.0.0.1:8011 http://localhost:8012 http://127.0.0.1:8012 http://localhost:8013 http://127.0.0.1:8013 http://localhost:8014 http://127.0.0.1:8014 http://localhost:8015 http://127.0.0.1:8015 https://api.steampowered.com https://api.nexusmods.com https://search.nexusmods.com wss://generativelanguage.googleapis.com",
             "worker-src 'self' blob:",
           ].join('; '),
         ],
