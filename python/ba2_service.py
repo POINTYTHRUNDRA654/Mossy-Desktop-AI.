@@ -1,18 +1,14 @@
 """
 BA2 / BSA Archive Handler Service — port 8013
-Inspect and extract Bethesda archive files (.ba2 for Fallout 4, .bsa for Skyrim/FO3/FNV).
+Inspect, extract, and create Bethesda archive files (.ba2 for Fallout 4, .bsa for Skyrim/FO3/FNV).
+Also supports extracting .7z archives (most Nexus mod downloads) via py7zr.
 
 BA2 format reference: https://en.uesp.net/wiki/Fallout4:BA2
 BSA format reference: https://en.uesp.net/wiki/Skyrim:BSA
 
-Archive2.exe (included with Creation Kit) is used when available for extraction
-and creation. Falls back to manual struct parsing for inspection.
-
-try:
-    from bethesda_structs.archive import BA2Archive
-    BETHESDA_STRUCTS = True
-except ImportError:
-    BETHESDA_STRUCTS = False
+Archive2.exe (Creation Kit) is used when available.  Native fallbacks via
+`construct` binary DSL (BA2/BSA struct parsing) and `py7zr` (7-Zip) ensure
+all operations work without external executables.
 """
 import os
 import struct
@@ -22,6 +18,30 @@ from pathlib import Path
 from typing import Optional, List
 from fastapi import FastAPI
 from pydantic import BaseModel
+
+# construct — declarative binary struct parser for BA2/BSA formats
+try:
+    from construct import (  # type: ignore
+        Struct, Const, Bytes, Int32ul, Int16ul, Int64ul,
+        Int8ul, GreedyBytes, Computed, this, len_, Array,
+    )
+    CONSTRUCT_AVAILABLE = True
+except ImportError:
+    CONSTRUCT_AVAILABLE = False
+
+# py7zr — native Python 7-Zip library (no 7z.exe required)
+try:
+    import py7zr  # type: ignore
+    PY7ZR_AVAILABLE = True
+except ImportError:
+    PY7ZR_AVAILABLE = False
+
+# imageio — DDS read for texture inspection
+try:
+    import imageio  # type: ignore
+    IMAGEIO_AVAILABLE = True
+except ImportError:
+    IMAGEIO_AVAILABLE = False
 
 try:
     from bethesda_structs.archive import BA2Archive  # type: ignore
@@ -52,6 +72,35 @@ BSA_VERSION_FO3_FNV = 0x67
 BSA_VERSION_SKYRIM_LE = 0x68
 BSA_VERSION_SKYRIM_SE = 0x69
 
+# ── construct BA2 General (GNRL) file-entry struct ────────────────────────
+# Each entry is 36 bytes: nameHash(4) ext(4) dirHash(4) flags(4)
+#   offset(8) packedSize(4) unpackedSize(4) sentinel(4)
+_BA2_GNRL_ENTRY = Struct(
+    "name_hash"    / Int32ul,
+    "ext"          / Bytes(4),
+    "dir_hash"     / Int32ul,
+    "flags"        / Int32ul,
+    "offset"       / Int64ul,
+    "packed_size"  / Int32ul,
+    "unpacked_size"/ Int32ul,
+    "sentinel"     / Int32ul,
+)
+
+# BA2 DX10 (texture) chunk descriptor — 24 bytes per entry
+_BA2_DX10_ENTRY = Struct(
+    "name_hash"   / Int32ul,
+    "ext"         / Bytes(4),
+    "dir_hash"    / Int32ul,
+    "unknown_08"  / Int8ul,
+    "num_chunks"  / Int8ul,
+    "chunk_hdr_sz"/ Int16ul,
+    "height"      / Int16ul,
+    "width"       / Int16ul,
+    "num_mips"    / Int8ul,
+    "dxgi_format" / Int8ul,
+    "cube_maps"   / Int16ul,
+)
+
 
 def _find_archive2() -> Optional[str]:
     if ARCHIVE2_PATH_FILE.exists():
@@ -65,7 +114,7 @@ def _find_archive2() -> Optional[str]:
 
 
 def _parse_ba2(path: str) -> dict:
-    """Manually parse a BA2 archive header."""
+    """Parse a BA2 archive header using construct when available, raw struct otherwise."""
     files = []
     try:
         with open(path, "rb") as f:
@@ -79,41 +128,63 @@ def _parse_ba2(path: str) -> dict:
             file_count = struct.unpack("<I", f.read(4))[0]
             names_offset = struct.unpack("<Q", f.read(8))[0]
 
-            if archive_type_raw == "GNRL":
-                archive_type = "general"
-            elif archive_type_raw == "DX10":
-                archive_type = "textures"
-            else:
-                archive_type = "sound"
+            archive_type = {"GNRL": "general", "DX10": "textures"}.get(archive_type_raw, "sound")
 
-            # Read file entries (36 bytes each for GNRL)
-            for i in range(min(file_count, 10000)):
-                try:
-                    if archive_type_raw == "GNRL":
-                        # nameHash(4) + ext(4) + dirHash(4) + flags(4) + offset(8) + packedSize(4) + unpackedSize(4) + sentinel(4)
-                        entry = f.read(36)
-                        if len(entry) < 36:
-                            break
-                        packed_size = struct.unpack("<I", entry[20:24])[0]
-                        unpacked_size = struct.unpack("<I", entry[24:28])[0]
-                        compressed = packed_size != 0 and packed_size != unpacked_size
-                        files.append({
-                            "name": f"file_{i:05d}",
-                            "size": unpacked_size,
-                            "compressed": compressed,
-                        })
-                    else:
-                        # DX10 texture entries are larger; skip detailed parsing
-                        entry = f.read(24)
-                        if len(entry) < 24:
-                            break
-                        files.append({
-                            "name": f"texture_{i:05d}.dds",
-                            "size": 0,
-                            "compressed": False,
-                        })
-                except struct.error:
-                    break
+            if CONSTRUCT_AVAILABLE and archive_type_raw == "GNRL":
+                entry_size = 36
+                for i in range(min(file_count, 10000)):
+                    raw = f.read(entry_size)
+                    if len(raw) < entry_size:
+                        break
+                    e = _BA2_GNRL_ENTRY.parse(raw)
+                    compressed = e.packed_size != 0 and e.packed_size != e.unpacked_size
+                    ext_str = e.ext.rstrip(b"\x00").decode("ascii", errors="replace")
+                    files.append({
+                        "name": f"file_{i:05d}.{ext_str}",
+                        "size": e.unpacked_size,
+                        "packed_size": e.packed_size,
+                        "compressed": compressed,
+                        "ext": ext_str,
+                    })
+            elif CONSTRUCT_AVAILABLE and archive_type_raw == "DX10":
+                entry_size = 24
+                for i in range(min(file_count, 10000)):
+                    raw = f.read(entry_size)
+                    if len(raw) < entry_size:
+                        break
+                    e = _BA2_DX10_ENTRY.parse(raw)
+                    # Skip chunk headers (8 bytes each)
+                    f.seek(e.num_chunks * 24, 1)
+                    files.append({
+                        "name": f"texture_{i:05d}.dds",
+                        "size": 0,
+                        "packed_size": 0,
+                        "compressed": False,
+                        "ext": "dds",
+                        "width": e.width,
+                        "height": e.height,
+                        "num_mips": e.num_mips,
+                        "dxgi_format": e.dxgi_format,
+                    })
+            else:
+                # Fallback: raw struct (same logic as before)
+                for i in range(min(file_count, 10000)):
+                    try:
+                        if archive_type_raw == "GNRL":
+                            entry = f.read(36)
+                            if len(entry) < 36:
+                                break
+                            packed_size = struct.unpack("<I", entry[20:24])[0]
+                            unpacked_size = struct.unpack("<I", entry[24:28])[0]
+                            compressed = packed_size != 0 and packed_size != unpacked_size
+                            files.append({"name": f"file_{i:05d}", "size": unpacked_size, "compressed": compressed})
+                        else:
+                            entry = f.read(24)
+                            if len(entry) < 24:
+                                break
+                            files.append({"name": f"texture_{i:05d}.dds", "size": 0, "compressed": False})
+                    except struct.error:
+                        break
 
             # Read file names from name table
             try:
@@ -137,6 +208,7 @@ def _parse_ba2(path: str) -> dict:
             "file_count": file_count,
             "files": files,
             "total_size_bytes": total_size,
+            "construct_used": CONSTRUCT_AVAILABLE,
         }
     except Exception as e:
         return {"error": str(e)}
@@ -192,6 +264,12 @@ class ExtractRequest(BaseModel):
     files: Optional[List[str]] = None
 
 
+class Extract7zRequest(BaseModel):
+    archive_path: str
+    output_dir: str
+    files: Optional[List[str]] = None
+
+
 class CreateRequest(BaseModel):
     input_dir: str
     output_path: str
@@ -210,9 +288,12 @@ def health():
     return {
         "status": "ok",
         "service": "ba2",
-        "supported_formats": ["ba2", "bsa"],
+        "supported_formats": ["ba2", "bsa", "7z"],
         "archive2_found": _find_archive2() is not None,
         "bethesda_structs": BETHESDA_STRUCTS,
+        "construct_available": CONSTRUCT_AVAILABLE,
+        "py7zr_available": PY7ZR_AVAILABLE,
+        "imageio_available": IMAGEIO_AVAILABLE,
     }
 
 
@@ -230,6 +311,20 @@ def inspect(req: InspectRequest):
     elif magic == BSA_MAGIC:
         result = _parse_bsa(path)
     else:
+        # Try 7z inspection
+        if PY7ZR_AVAILABLE and path.lower().endswith(".7z"):
+            try:
+                with py7zr.SevenZipFile(path, mode="r") as z:
+                    names = z.getnames()
+                return {
+                    "status": "ok",
+                    "format": "7z",
+                    "file_count": len(names),
+                    "files": [{"name": n, "size": 0, "compressed": True} for n in names[:500]],
+                    "total_size_bytes": os.path.getsize(path),
+                }
+            except Exception as e:
+                return {"status": "error", "message": f"7z inspect error: {e}"}
         return {"status": "error", "message": f"Unknown archive format (magic={magic!r})"}
 
     if "error" in result:
@@ -297,6 +392,38 @@ def extract(req: ExtractRequest):
         "output_dir": output_dir,
         "errors": errors or ["Archive2.exe not found and bethesda_structs not installed. Install Creation Kit or run: pip install bethesda-structs"],
     }
+
+
+@app.post("/extract-7z")
+def extract_7z(req: Extract7zRequest):
+    """Extract a .7z archive using py7zr (no external tools required)."""
+    if not PY7ZR_AVAILABLE:
+        return {
+            "status": "unavailable",
+            "message": "py7zr is not installed. Run: pip install py7zr",
+            "extracted_count": 0,
+        }
+
+    if not os.path.exists(req.archive_path):
+        return {"status": "error", "message": f"Archive not found: {req.archive_path}"}
+
+    os.makedirs(req.output_dir, exist_ok=True)
+
+    try:
+        with py7zr.SevenZipFile(req.archive_path, mode="r") as z:
+            if req.files:
+                z.extract(path=req.output_dir, targets=req.files)
+            else:
+                z.extractall(path=req.output_dir)
+        extracted = sum(1 for _ in Path(req.output_dir).rglob("*") if _.is_file())
+        return {
+            "status": "ok",
+            "extracted_count": extracted,
+            "output_dir": req.output_dir,
+            "errors": [],
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/create")

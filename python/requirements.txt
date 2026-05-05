@@ -99,3 +99,25 @@ soundfile>=0.12.0            # audio I/O for voice conversion pipeline
 # ── Vector search (Chroma dependency) ────────────────────────────────────
 hnswlib>=0.7.0
 
+# ── Fallout 4 / Bethesda Modding ─────────────────────────────────────────
+# construct — declarative binary DSL for ESP/ESM record parsing & BA2 structs
+construct>=2.10.0
+# networkx — directed graph for load-order topological sort & cycle detection
+networkx>=3.3.0
+# pyffi — read/write NIF mesh files and KF animation files
+pyffi>=2.2.4
+# deepdiff — diff mod configs (JSON/INI) across versions for conflict review
+deepdiff>=6.7.0
+# py7zr — extract/create 7-Zip archives (most Nexus mod downloads are .7z)
+py7zr>=0.21.0
+# lxml — high-performance XML parser for FOMOD ModuleConfig.xml validation
+lxml>=5.2.0
+# watchdog — filesystem events; tools react instantly when a plugin is saved
+watchdog>=4.0.0
+# pywin32 — Windows COM automation to drive FO4Edit, MO2, xEdit headlessly
+pywin32>=306; sys_platform == "win32"
+# imageio — DDS read/write pipeline for texture inspection & upscaling tools
+imageio>=2.34.0
+# jinja2 — C++ template codegen for F4SE plugin scaffolding (headers, hooks)
+jinja2>=3.1.0
+
