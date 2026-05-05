@@ -86,6 +86,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'watcher:get-folders',
       // Hardware sensors
       'system:gpu-sensors',
+      // Vision (OpenCV)
+      'vision:health-check',
+      'vision:screenshot',
+      'vision:analyze-hud',
+      'vision:ocr-text',
+      'vision:detect-game-state',
+      // Piper TTS
+      'piper:health-check',
+      'piper:voices',
+      'piper:synthesize',
+      // TripoSR 3D
+      'triposr:health-check',
+      'triposr:generate-mesh',
+      'triposr:outputs',
+      // RVC Voice
+      'rvc:health-check',
+      'rvc:models',
+      'rvc:convert',
+      'rvc:train-model',
+      'rvc:training-status',
+      // Ollama Code Gen
+      'ollama:health-check',
+      'ollama:code-gen',
+      'ollama:list-models',
+      // Steam
+      'steam:get-library',
+      'steam:get-achievements',
+      'steam:get-recent',
+      'steam:get-player',
+      // Nexus Mods
+      'nexus:search',
+      'nexus:get-mod',
+      'nexus:trending',
+      // LOOT
+      'loot:analyze',
+      'loot:sort',
     ]);
     if (!ALLOWED.has(channel)) {
       return Promise.reject(new Error(`IPC channel not allowed: ${channel}`));

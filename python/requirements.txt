@@ -59,3 +59,24 @@ librosa>=0.10.0
 requests>=2.31.0
 aiohttp>=3.9.0
 
+# ── OpenCV Vision (Game Screen Analysis) ─────────────────────────────────
+opencv-python>=4.9.0
+mss>=9.0.0
+pytesseract>=0.3.10
+scikit-image>=0.22.0
+
+# ── Piper TTS (Local Text-to-Speech) ─────────────────────────────────────
+piper-tts>=1.2.0
+
+# ── TripoSR (3D Mesh Generation) ──────────────────────────────────────────
+# Install separately: pip install git+https://github.com/VAST-AI-Research/TripoSR.git
+# tsr  (TripoSR, optional - service works without it)
+trimesh>=4.3.0
+pyglet>=2.0.0
+
+# ── RVC Voice Conversion ───────────────────────────────────────────────────
+# Install separately: pip install git+https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI.git
+# rvc  (optional - service works without it)
+soundfile>=0.12.0
+librosa>=0.10.0
+

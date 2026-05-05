@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo } from 'lucide-react';
+import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo, Gamepad2, Code2, Scan, Trophy, PackageSearch, ListOrdered, Map, Layers, Mic, Box } from 'lucide-react';
 import { useLive } from './LiveContext';
 import AvatarCore from './AvatarCore';
 import ApiKeySetup from './ApiKeySetup';
@@ -95,9 +95,22 @@ const Sidebar: React.FC = () => {
 
     // ── Orchestration ─────────────────────────────────────────────────────
     { to: '/orchestrator', icon: GitBranch,      label: 'The Orchestrator', group: 'Orchestration' },
+
+    // ── Gamer Tools ───────────────────────────────────────────────────────────
+    { to: '/gamer-hub',    icon: Gamepad2,        label: 'Gamer Hub',       group: 'Gamer' },
+    { to: '/game-scripts', icon: Code2,           label: 'Script Forge',    group: 'Gamer' },
+    { to: '/game-vision',  icon: Scan,            label: 'Game Vision',     group: 'Gamer' },
+    { to: '/steam',        icon: Trophy,          label: 'Steam Library',   group: 'Gamer' },
+    { to: '/mod-browser',  icon: PackageSearch,   label: 'Mod Browser',     group: 'Gamer' },
+    { to: '/load-order',   icon: ListOrdered,     label: 'Load Order',      group: 'Gamer' },
+    { to: '/blender-forge', icon: Box,            label: 'Blender Forge',   group: 'Gamer' },
+    { to: '/godot-forge',  icon: Triangle,        label: 'Godot Forge',     group: 'Gamer' },
+    { to: '/map-forge',    icon: Map,             label: 'Map Forge',       group: 'Gamer' },
+    { to: '/asset-forge',  icon: Layers,          label: '3D Asset Forge',  group: 'Gamer' },
+    { to: '/voice-forge',  icon: Mic,             label: 'Voice Forge',     group: 'Gamer' },
   ];
 
-  const groups = ['Core', 'Intelligence', 'Build', 'Data', 'Orchestration'] as const;
+  const groups = ['Core', 'Intelligence', 'Build', 'Data', 'Orchestration', 'Gamer'] as const;
 
 
   return (

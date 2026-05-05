@@ -33,7 +33,11 @@ function startPythonService(serviceType = 'gemma') {
     'gemma': { var: () => gemmaProcess, set: (p) => { gemmaProcess = p; }, script: 'gemma_service_enhanced.py' },
     'pytorch': { var: () => pytorchProcess, set: (p) => { pytorchProcess = p; }, script: 'pytorch_service.py' },
     'whisper': { var: () => whisperProcess, set: (p) => { whisperProcess = p; }, script: 'whisper_service.py' },
-    'chroma': { var: () => chromaProcess, set: (p) => { chromaProcess = p; }, script: 'chroma_service.py' }
+    'chroma': { var: () => chromaProcess, set: (p) => { chromaProcess = p; }, script: 'chroma_service.py' },
+    'opencv': { var: () => opencvProcess, set: (p) => { opencvProcess = p; }, script: 'opencv_service.py' },
+    'piper': { var: () => piperProcess, set: (p) => { piperProcess = p; }, script: 'piper_service.py' },
+    'triposr': { var: () => triposrProcess, set: (p) => { triposrProcess = p; }, script: 'triposr_service.py' },
+    'rvc': { var: () => rvcProcess, set: (p) => { rvcProcess = p; }, script: 'rvc_service.py' },
   };
 
   const svc = serviceMap[serviceType] || serviceMap['gemma'];
@@ -117,6 +121,10 @@ function stopPythonServices() {
     agentCollabProcess.kill();
     agentCollabProcess = null;
   }
+  if (opencvProcess) { opencvProcess.kill(); opencvProcess = null; }
+  if (piperProcess) { piperProcess.kill(); piperProcess = null; }
+  if (triposrProcess) { triposrProcess.kill(); triposrProcess = null; }
+  if (rvcProcess) { rvcProcess.kill(); rvcProcess = null; }
 }
 
 // ── Auto-launch at OS startup ──────────────────────────────────────────────
@@ -738,6 +746,20 @@ const AGENT_COLLAB_SERVICE = `http://127.0.0.1:${AGENT_COLLAB_PORT}`;
 // Start agent collaboration service if not running
 let agentCollabProcess = null;
 
+// ── Gamer Tools Service Management ──────────────────────────────────────
+let opencvProcess = null;
+let piperProcess = null;
+let triposrProcess = null;
+let rvcProcess = null;
+const OPENCV_SERVICE_PORT = 8005;
+const PIPER_SERVICE_PORT = 8006;
+const TRIPOSR_SERVICE_PORT = 8007;
+const RVC_SERVICE_PORT = 8008;
+const OPENCV_SERVICE_URL = `http://127.0.0.1:${OPENCV_SERVICE_PORT}`;
+const PIPER_SERVICE_URL = `http://127.0.0.1:${PIPER_SERVICE_PORT}`;
+const TRIPOSR_SERVICE_URL = `http://127.0.0.1:${TRIPOSR_SERVICE_PORT}`;
+const RVC_SERVICE_URL = `http://127.0.0.1:${RVC_SERVICE_PORT}`;
+
 function startAgentCollaborationService() {
   if (agentCollabProcess) return Promise.resolve();
 
@@ -884,6 +906,304 @@ ipcMain.handle('agent:get-learning-history', async (_, agentName) => {
   }
 });
 
+// ── OpenCV Vision IPC Handlers ──────────────────────────────────────────
+ipcMain.handle('vision:health-check', async () => {
+  try {
+    await startPythonService('opencv');
+    const response = await fetch(`${OPENCV_SERVICE_URL}/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('vision:screenshot', async (_, args) => {
+  try {
+    await startPythonService('opencv');
+    const response = await fetch(`${OPENCV_SERVICE_URL}/screenshot`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args || {}),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('vision:analyze-hud', async (_, args) => {
+  try {
+    await startPythonService('opencv');
+    const response = await fetch(`${OPENCV_SERVICE_URL}/analyze-hud`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('vision:ocr-text', async (_, args) => {
+  try {
+    await startPythonService('opencv');
+    const response = await fetch(`${OPENCV_SERVICE_URL}/ocr-text`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('vision:detect-game-state', async (_, args) => {
+  try {
+    await startPythonService('opencv');
+    const response = await fetch(`${OPENCV_SERVICE_URL}/detect-game-state`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Piper TTS IPC Handlers ───────────────────────────────────────────────
+ipcMain.handle('piper:health-check', async () => {
+  try {
+    await startPythonService('piper');
+    const response = await fetch(`${PIPER_SERVICE_URL}/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('piper:voices', async () => {
+  try {
+    await startPythonService('piper');
+    const response = await fetch(`${PIPER_SERVICE_URL}/voices`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('piper:synthesize', async (_, args) => {
+  try {
+    await startPythonService('piper');
+    const response = await fetch(`${PIPER_SERVICE_URL}/synthesize`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── TripoSR 3D IPC Handlers ─────────────────────────────────────────────
+ipcMain.handle('triposr:health-check', async () => {
+  try {
+    await startPythonService('triposr');
+    const response = await fetch(`${TRIPOSR_SERVICE_URL}/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('triposr:generate-mesh', async (_, args) => {
+  try {
+    await startPythonService('triposr');
+    const response = await fetch(`${TRIPOSR_SERVICE_URL}/generate-mesh`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('triposr:outputs', async () => {
+  try {
+    await startPythonService('triposr');
+    const response = await fetch(`${TRIPOSR_SERVICE_URL}/outputs`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── RVC Voice Conversion IPC Handlers ──────────────────────────────────
+ipcMain.handle('rvc:health-check', async () => {
+  try {
+    await startPythonService('rvc');
+    const response = await fetch(`${RVC_SERVICE_URL}/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('rvc:models', async () => {
+  try {
+    await startPythonService('rvc');
+    const response = await fetch(`${RVC_SERVICE_URL}/models`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('rvc:convert', async (_, args) => {
+  try {
+    await startPythonService('rvc');
+    const response = await fetch(`${RVC_SERVICE_URL}/convert`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('rvc:train-model', async (_, args) => {
+  try {
+    await startPythonService('rvc');
+    const response = await fetch(`${RVC_SERVICE_URL}/train-model`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('rvc:training-status', async (_, jobId) => {
+  try {
+    const response = await fetch(`${RVC_SERVICE_URL}/training-status/${encodeURIComponent(jobId)}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Ollama Code Generation IPC Handlers ─────────────────────────────────
+const OLLAMA_URL = 'http://127.0.0.1:11434';
+ipcMain.handle('ollama:health-check', async () => {
+  try {
+    const response = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(3000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'healthy', models: data.models?.map(m => m.name) || [] };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ollama:code-gen', async (_, { model, system_prompt, prompt }) => {
+  try {
+    const response = await fetch(`${OLLAMA_URL}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model || 'deepseek-coder-v2',
+        system: system_prompt || 'You are an expert game developer and modder. Generate clean, well-commented code.',
+        prompt: prompt,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', code: data.response, model_used: data.model };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ollama:list-models', async () => {
+  try {
+    const response = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', models: data.models || [] };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Steam Web API IPC Handlers ───────────────────────────────────────────
+const STEAM_API_BASE = 'https://api.steampowered.com';
+ipcMain.handle('steam:get-library', async (_, { apiKey, steamId }) => {
+  try {
+    const url = `${STEAM_API_BASE}/IPlayerService/GetOwnedGames/v1/?key=${encodeURIComponent(apiKey)}&steamid=${encodeURIComponent(steamId)}&include_appinfo=1&include_played_free_games=1&format=json`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', games: data.response?.games || [], count: data.response?.game_count || 0 };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('steam:get-achievements', async (_, { apiKey, steamId, appId }) => {
+  try {
+    const url = `${STEAM_API_BASE}/ISteamUserStats/GetPlayerAchievements/v1/?key=${encodeURIComponent(apiKey)}&steamid=${encodeURIComponent(steamId)}&appid=${encodeURIComponent(appId)}&l=en&format=json`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', achievements: data.playerstats?.achievements || [], game_name: data.playerstats?.gameName || '' };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('steam:get-recent', async (_, { apiKey, steamId }) => {
+  try {
+    const url = `${STEAM_API_BASE}/IPlayerService/GetRecentlyPlayedGames/v1/?key=${encodeURIComponent(apiKey)}&steamid=${encodeURIComponent(steamId)}&count=10&format=json`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', games: data.response?.games || [] };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('steam:get-player', async (_, { apiKey, steamId }) => {
+  try {
+    const url = `${STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v2/?key=${encodeURIComponent(apiKey)}&steamids=${encodeURIComponent(steamId)}&format=json`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const player = data.response?.players?.[0];
+    return { status: 'ok', player: player || null };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Nexus Mods API IPC Handlers ──────────────────────────────────────────
+const NEXUS_API_BASE = 'https://api.nexusmods.com/v1';
+ipcMain.handle('nexus:search', async (_, { apiKey, game, query, page }) => {
+  try {
+    const searchUrl = `https://search.nexusmods.com/mods?terms=${encodeURIComponent(query)}&game_id=${encodeURIComponent(game)}&blocked_tags=&blocked_authors=&include_adult=0&page_size=20&page=${page || 0}`;
+    const response = await fetch(searchUrl, {
+      headers: { apiKey: apiKey, 'Application-Name': 'MossyAI', 'Application-Version': '1.0.0' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', results: data.results || [], total: data.total || 0 };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nexus:get-mod', async (_, { apiKey, game, modId }) => {
+  try {
+    const response = await fetch(`${NEXUS_API_BASE}/games/${encodeURIComponent(game)}/mods/${encodeURIComponent(modId)}.json`, {
+      headers: { apikey: apiKey, 'Application-Name': 'MossyAI', 'Application-Version': '1.0.0' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', mod: data };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nexus:trending', async (_, { apiKey, game }) => {
+  try {
+    const response = await fetch(`${NEXUS_API_BASE}/games/${encodeURIComponent(game)}/mods/trending.json`, {
+      headers: { apikey: apiKey, 'Application-Name': 'MossyAI', 'Application-Version': '1.0.0' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', mods: data };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── LOOT Load Order IPC Handlers ─────────────────────────────────────────
+ipcMain.handle('loot:analyze', async (_, { lootPath, game, modsDir }) => {
+  try {
+    const { promisify } = require('util');
+    const execFileAsync = promisify(execFile);
+    const lootExe = lootPath || (process.platform === 'win32' ? 'C:\\Program Files\\LOOT\\LOOT.exe' : 'loot');
+    const args = ['--game', game || 'Skyrim', '--game-path', modsDir || ''];
+    const { stdout, stderr } = await execFileAsync(lootExe, args, { timeout: 60000 });
+    return { status: 'ok', output: stdout, warnings: stderr };
+  } catch (err) {
+    return { status: 'error', message: String(err), output: '', warnings: '' };
+  }
+});
+ipcMain.handle('loot:sort', async (_, { lootPath, game }) => {
+  try {
+    const { promisify } = require('util');
+    const execFileAsync = promisify(execFile);
+    const lootExe = lootPath || (process.platform === 'win32' ? 'C:\\Program Files\\LOOT\\LOOT.exe' : 'loot');
+    const { stdout } = await execFileAsync(lootExe, ['--game', game || 'Skyrim', '--auto-sort'], { timeout: 60000 });
+    return { status: 'ok', output: stdout };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
 // ── System Tray ───────────────────────────────────────────────────────────
 function createTray() {
   let icon;
@@ -973,7 +1293,7 @@ function createWindow() {
             "font-src 'self' https://fonts.gstatic.com",
             "img-src 'self' data: blob: https:",
             "media-src 'self' blob:",
-            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 wss://generativelanguage.googleapis.com",
+            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 http://localhost:8005 http://127.0.0.1:8005 http://localhost:8006 http://127.0.0.1:8006 http://localhost:8007 http://127.0.0.1:8007 http://localhost:8008 http://127.0.0.1:8008 https://api.steampowered.com https://api.nexusmods.com https://search.nexusmods.com wss://generativelanguage.googleapis.com",
             "worker-src 'self' blob:",
           ].join('; '),
         ],

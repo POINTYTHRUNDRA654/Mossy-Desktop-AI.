@@ -31,6 +31,19 @@ const TheAssembler = React.lazy(() => import('./components/TheAssembler'));
 const TheScribe = React.lazy(() => import('./components/TheScribe'));
 const ThePlanner = React.lazy(() => import('./components/ThePlanner'));
 
+// ── Gamer Tools ──
+const GamerHub = React.lazy(() => import('./components/GamerHub'));
+const GameScriptForge = React.lazy(() => import('./components/GameScriptForge'));
+const GameVision = React.lazy(() => import('./components/GameVision'));
+const SteamPanel = React.lazy(() => import('./components/SteamPanel'));
+const ModBrowser = React.lazy(() => import('./components/ModBrowser'));
+const LoadOrderAnalyzer = React.lazy(() => import('./components/LoadOrderAnalyzer'));
+const BlenderForge = React.lazy(() => import('./components/BlenderForge'));
+const GodotForge = React.lazy(() => import('./components/GodotForge'));
+const MapForge = React.lazy(() => import('./components/MapForge'));
+const AssetForge3D = React.lazy(() => import('./components/AssetForge3D'));
+const VoiceForge = React.lazy(() => import('./components/VoiceForge'));
+
 // Define window interface for AI Studio helpers & Custom Events
 declare global {
   interface Window {
@@ -132,6 +145,19 @@ const App: React.FC = () => {
 
                 {/* ── Orchestration ── */}
                 <Route path="/orchestrator" element={<WorkflowOrchestrator />} />
+
+                {/* ── Gamer Tools ── */}
+                <Route path="/gamer-hub" element={<GamerHub />} />
+                <Route path="/game-scripts" element={<GameScriptForge />} />
+                <Route path="/game-vision" element={<GameVision />} />
+                <Route path="/steam" element={<SteamPanel />} />
+                <Route path="/mod-browser" element={<ModBrowser />} />
+                <Route path="/load-order" element={<LoadOrderAnalyzer />} />
+                <Route path="/blender-forge" element={<BlenderForge />} />
+                <Route path="/godot-forge" element={<GodotForge />} />
+                <Route path="/map-forge" element={<MapForge />} />
+                <Route path="/asset-forge" element={<AssetForge3D />} />
+                <Route path="/voice-forge" element={<VoiceForge />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
