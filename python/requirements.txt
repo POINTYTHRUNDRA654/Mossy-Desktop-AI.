@@ -59,24 +59,43 @@ librosa>=0.10.0
 requests>=2.31.0
 aiohttp>=3.9.0
 
-# ── OpenCV Vision (Game Screen Analysis) ─────────────────────────────────
-opencv-python>=4.9.0
-mss>=9.0.0
-pytesseract>=0.3.10
-scikit-image>=0.22.0
+# ── HuggingFace Hub — model downloads & management ───────────────────────
+huggingface_hub>=0.23.0
 
-# ── Piper TTS (Local Text-to-Speech) ─────────────────────────────────────
+# ── OpenCV Vision & YOLOv8 Game Screen Analysis ───────────────────────────
+# opencv-python and ultralytics enable screenshot capture, HUD parsing,
+# object detection on game screens (YOLOv8 via Ultralytics).
+opencv-python>=4.9.0
+mss>=9.0.0                   # fast cross-platform screen capture
+pytesseract>=0.3.10          # OCR — reads text from game HUDs
+scikit-image>=0.22.0         # structural similarity (compare screenshots)
+# YOLOv8 real-time object detection (ultralytics/ultralytics on GitHub)
+# pip install ultralytics
+ultralytics>=8.2.0
+
+# ── Real-ESRGAN Texture Upscaling (xinntao/Real-ESRGAN on GitHub) ─────────
+# Upscales game textures 2×-4× with AI; HuggingFace model: nateraw/real-esrgan
+# pip install realesrgan basicsr facexlib gfpgan
+realesrgan>=0.3.0
+basicsr>=1.4.2
+facexlib>=0.3.0
+gfpgan>=1.3.8
+
+# ── Piper TTS (rhasspy/piper on GitHub — voices on HuggingFace) ───────────
+# Voices hosted at: huggingface.co/rhasspy/piper-voices
+# pip install piper-tts
 piper-tts>=1.2.0
 
-# ── TripoSR (3D Mesh Generation) ──────────────────────────────────────────
+# ── TripoSR 3D Mesh Generation (VAST-AI-Research/TripoSR on GitHub) ───────
 # Install separately: pip install git+https://github.com/VAST-AI-Research/TripoSR.git
-# tsr  (TripoSR, optional - service works without it)
-trimesh>=4.3.0
-pyglet>=2.0.0
+# tsr  (TripoSR, optional — service works without it via stub cube OBJ)
+trimesh>=4.3.0               # 3D mesh manipulation, OBJ/GLB export
 
-# ── RVC Voice Conversion ───────────────────────────────────────────────────
+# ── RVC Voice Conversion (RVC-Project on GitHub) ──────────────────────────
 # Install separately: pip install git+https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI.git
-# rvc  (optional - service works without it)
-soundfile>=0.12.0
-librosa>=0.10.0
+# rvc  (optional — service stubs gracefully without it)
+soundfile>=0.12.0            # audio I/O for voice conversion pipeline
+
+# ── Vector search (Chroma dependency) ────────────────────────────────────
+hnswlib>=0.7.0
 

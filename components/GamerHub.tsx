@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Gamepad2, Code2, Monitor, PackageSearch, List, Box,
   Wind, Map, Mic, Layers3, ChevronRight, Cpu, Zap,
+  Sparkles, PackageOpen,
 } from 'lucide-react';
 
 interface ToolCard {
@@ -94,6 +95,22 @@ const TOOLS: ToolCard[] = [
     path: '/voice-forge',
     status: 'experimental',
     badge: 'Port 8008',
+  },
+  {
+    title: 'Texture Upscaler',
+    description: 'Upscale game textures 2×–4× with Real-ESRGAN AI. Auto-downloads models from HuggingFace.',
+    icon: Sparkles,
+    path: '/texture-upscaler',
+    status: 'experimental',
+    badge: 'Real-ESRGAN',
+  },
+  {
+    title: 'WolvenKit',
+    description: 'Automate Cyberpunk 2077 & Witcher 3 modding — extract, pack, convert and search archives.',
+    icon: PackageOpen,
+    path: '/wolvenkit',
+    status: 'requires-setup',
+    badge: 'REDengine',
   },
 ];
 

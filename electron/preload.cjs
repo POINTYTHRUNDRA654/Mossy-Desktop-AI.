@@ -86,12 +86,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'watcher:get-folders',
       // Hardware sensors
       'system:gpu-sensors',
-      // Vision (OpenCV)
+      // Vision (OpenCV + YOLOv8)
       'vision:health-check',
       'vision:screenshot',
       'vision:analyze-hud',
       'vision:ocr-text',
       'vision:detect-game-state',
+      'vision:detect-objects',      // YOLOv8 via ultralytics
       // Piper TTS
       'piper:health-check',
       'piper:voices',
@@ -106,6 +107,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'rvc:convert',
       'rvc:train-model',
       'rvc:training-status',
+      // Real-ESRGAN Texture Upscaling (xinntao/Real-ESRGAN + nateraw/real-esrgan on HuggingFace)
+      'esrgan:health-check',
+      'esrgan:list-models',
+      'esrgan:upscale',
+      'esrgan:upscale-batch',
+      // WolvenKit CLI Automation (WolvenKit/WolvenKit on GitHub)
+      'wolvenkit:health-check',
+      'wolvenkit:set-cli-path',
+      'wolvenkit:extract',
+      'wolvenkit:pack',
+      'wolvenkit:convert',
+      'wolvenkit:export',
+      'wolvenkit:search',
+      // RTX Remix REST API (NVIDIAGameWorks/rtx-remix on GitHub)
+      'rtxremix:health-check',
+      'rtxremix:list-assets',
+      'rtxremix:replace-asset',
+      'rtxremix:capture-scene',
       // Ollama Code Gen
       'ollama:health-check',
       'ollama:code-gen',

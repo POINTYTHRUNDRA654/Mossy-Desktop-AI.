@@ -43,6 +43,8 @@ const GodotForge = React.lazy(() => import('./components/GodotForge'));
 const MapForge = React.lazy(() => import('./components/MapForge'));
 const AssetForge3D = React.lazy(() => import('./components/AssetForge3D'));
 const VoiceForge = React.lazy(() => import('./components/VoiceForge'));
+const TextureUpscaler = React.lazy(() => import('./components/TextureUpscaler'));
+const WolvenKitPanel = React.lazy(() => import('./components/WolvenKitPanel'));
 
 // Define window interface for AI Studio helpers & Custom Events
 declare global {
@@ -158,6 +160,8 @@ const App: React.FC = () => {
                 <Route path="/map-forge" element={<MapForge />} />
                 <Route path="/asset-forge" element={<AssetForge3D />} />
                 <Route path="/voice-forge" element={<VoiceForge />} />
+                <Route path="/texture-upscaler" element={<TextureUpscaler />} />
+                <Route path="/wolvenkit" element={<WolvenKitPanel />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />

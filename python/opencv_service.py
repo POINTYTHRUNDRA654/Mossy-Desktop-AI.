@@ -1,10 +1,14 @@
 """
 OpenCV Vision Service — port 8005
-Game screen analysis: screenshots, HUD detection, OCR, game state detection.
+Game screen analysis: screenshots, HUD detection, OCR, YOLOv8 object detection,
+and game state heuristics.
+
+GitHub: ultralytics/ultralytics (YOLOv8)  — pip install ultralytics
+GitHub: madmaze/pytesseract               — pip install pytesseract
+GitHub: BoboTiG/python-mss                — pip install mss
 """
 import base64
 import io
-import json
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Optional, List
@@ -17,6 +21,7 @@ try:
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
+    np = None
 
 try:
     import mss
@@ -35,6 +40,16 @@ try:
     SKIMAGE_AVAILABLE = True
 except ImportError:
     SKIMAGE_AVAILABLE = False
+
+# YOLOv8 via Ultralytics (github.com/ultralytics/ultralytics)
+# HuggingFace models: huggingface.co/ultralytics
+try:
+    from ultralytics import YOLO
+    _yolo_model = YOLO("yolov8n.pt")  # nano — fastest, ~6 MB
+    YOLO_AVAILABLE = True
+except Exception:
+    YOLO_AVAILABLE = False
+    _yolo_model = None
 
 from PIL import Image
 
@@ -66,6 +81,8 @@ async def health():
         "opencv_version": cv_ver,
         "mss_available": MSS_AVAILABLE,
         "tesseract_available": TESSERACT_AVAILABLE,
+        "yolo_available": YOLO_AVAILABLE,
+        "skimage_available": SKIMAGE_AVAILABLE,
     }
 
 
@@ -252,6 +269,72 @@ async def detect_game_state(req: GameStateRequest):
         }
     except Exception as e:
         return {"status": "error", "message": f"{type(e).__name__}: {e.__class__.__doc__ or "Processing failed"}"}
+
+
+class YoloRequest(BaseModel):
+    image_base64: str
+    model: Optional[str] = "yolov8n.pt"
+    confidence: Optional[float] = 0.25
+    classes: Optional[List[int]] = None  # filter to specific COCO class IDs
+
+
+@app.post("/detect-objects")
+async def detect_objects(req: YoloRequest):
+    """
+    YOLOv8 object detection on game screenshots.
+    Uses Ultralytics YOLOv8 (github.com/ultralytics/ultralytics).
+    Pretrained models available on HuggingFace: huggingface.co/ultralytics
+    """
+    if not YOLO_AVAILABLE:
+        return {
+            "status": "unavailable",
+            "message": "ultralytics not installed. Run: pip install ultralytics",
+            "install_url": "https://github.com/ultralytics/ultralytics",
+        }
+    if not CV2_AVAILABLE:
+        return {"status": "unavailable", "message": "opencv-python not installed"}
+    try:
+        img = decode_image(req.image_base64)
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        global _yolo_model
+        # Hot-swap model if a different one was requested
+        if req.model and req.model != "yolov8n.pt":
+            try:
+                _yolo_model = YOLO(req.model)
+            except Exception:
+                pass  # fall back to default
+
+        results = _yolo_model.predict(
+            img_rgb,
+            conf=req.confidence or 0.25,
+            classes=req.classes,
+            verbose=False,
+        )
+
+        detections = []
+        for r in results:
+            for box in r.boxes:
+                detections.append({
+                    "class_id":   int(box.cls[0]),
+                    "class_name": r.names[int(box.cls[0])],
+                    "confidence": round(float(box.conf[0]), 3),
+                    "bbox": {
+                        "x": int(box.xyxy[0][0]),
+                        "y": int(box.xyxy[0][1]),
+                        "x2": int(box.xyxy[0][2]),
+                        "y2": int(box.xyxy[0][3]),
+                    },
+                })
+
+        return {
+            "status": "ok",
+            "detections": detections,
+            "count": len(detections),
+            "model_used": req.model or "yolov8n.pt",
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 if __name__ == "__main__":

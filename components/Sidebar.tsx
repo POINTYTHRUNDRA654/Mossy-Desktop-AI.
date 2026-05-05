@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo, Gamepad2, Code2, Scan, Trophy, PackageSearch, ListOrdered, Map, Layers, Mic, Box } from 'lucide-react';
+import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo, Gamepad2, Code2, Scan, Trophy, PackageSearch, ListOrdered, Map, Layers, Mic, Box, Sparkles, PackageOpen } from 'lucide-react';
 import { useLive } from './LiveContext';
 import AvatarCore from './AvatarCore';
 import ApiKeySetup from './ApiKeySetup';
@@ -107,7 +107,9 @@ const Sidebar: React.FC = () => {
     { to: '/godot-forge',  icon: Triangle,        label: 'Godot Forge',     group: 'Gamer' },
     { to: '/map-forge',    icon: Map,             label: 'Map Forge',       group: 'Gamer' },
     { to: '/asset-forge',  icon: Layers,          label: '3D Asset Forge',  group: 'Gamer' },
-    { to: '/voice-forge',  icon: Mic,             label: 'Voice Forge',     group: 'Gamer' },
+    { to: '/voice-forge',        icon: Mic,         label: 'Voice Forge',     group: 'Gamer' },
+    { to: '/texture-upscaler',   icon: Sparkles,    label: 'Texture Upscaler',group: 'Gamer' },
+    { to: '/wolvenkit',          icon: PackageOpen, label: 'WolvenKit',       group: 'Gamer' },
   ];
 
   const groups = ['Core', 'Intelligence', 'Build', 'Data', 'Orchestration', 'Gamer'] as const;

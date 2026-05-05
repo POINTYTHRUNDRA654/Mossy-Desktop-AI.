@@ -38,6 +38,10 @@ function startPythonService(serviceType = 'gemma') {
     'piper': { var: () => piperProcess, set: (p) => { piperProcess = p; }, script: 'piper_service.py' },
     'triposr': { var: () => triposrProcess, set: (p) => { triposrProcess = p; }, script: 'triposr_service.py' },
     'rvc': { var: () => rvcProcess, set: (p) => { rvcProcess = p; }, script: 'rvc_service.py' },
+    // New: Real-ESRGAN texture upscaling (xinntao/Real-ESRGAN on GitHub)
+    'esrgan': { var: () => esrganProcess, set: (p) => { esrganProcess = p; }, script: 'esrgan_service.py' },
+    // New: WolvenKit CLI automation (WolvenKit/WolvenKit on GitHub)
+    'wolvenkit': { var: () => wolvenKitProcess, set: (p) => { wolvenKitProcess = p; }, script: 'wolvenkit_service.py' },
   };
 
   const svc = serviceMap[serviceType] || serviceMap['gemma'];
@@ -125,6 +129,8 @@ function stopPythonServices() {
   if (piperProcess) { piperProcess.kill(); piperProcess = null; }
   if (triposrProcess) { triposrProcess.kill(); triposrProcess = null; }
   if (rvcProcess) { rvcProcess.kill(); rvcProcess = null; }
+  if (esrganProcess) { esrganProcess.kill(); esrganProcess = null; }
+  if (wolvenKitProcess) { wolvenKitProcess.kill(); wolvenKitProcess = null; }
 }
 
 // ── Auto-launch at OS startup ──────────────────────────────────────────────
@@ -751,14 +757,20 @@ let opencvProcess = null;
 let piperProcess = null;
 let triposrProcess = null;
 let rvcProcess = null;
+let esrganProcess = null;
+let wolvenKitProcess = null;
 const OPENCV_SERVICE_PORT = 8005;
 const PIPER_SERVICE_PORT = 8006;
 const TRIPOSR_SERVICE_PORT = 8007;
 const RVC_SERVICE_PORT = 8008;
+const ESRGAN_SERVICE_PORT = 8009;
+const WOLVENKIT_SERVICE_PORT = 8010;
 const OPENCV_SERVICE_URL = `http://127.0.0.1:${OPENCV_SERVICE_PORT}`;
 const PIPER_SERVICE_URL = `http://127.0.0.1:${PIPER_SERVICE_PORT}`;
 const TRIPOSR_SERVICE_URL = `http://127.0.0.1:${TRIPOSR_SERVICE_PORT}`;
 const RVC_SERVICE_URL = `http://127.0.0.1:${RVC_SERVICE_PORT}`;
+const ESRGAN_SERVICE_URL = `http://127.0.0.1:${ESRGAN_SERVICE_PORT}`;
+const WOLVENKIT_SERVICE_URL = `http://127.0.0.1:${WOLVENKIT_SERVICE_PORT}`;
 
 function startAgentCollaborationService() {
   if (agentCollabProcess) return Promise.resolve();
@@ -1204,6 +1216,214 @@ ipcMain.handle('loot:sort', async (_, { lootPath, game }) => {
   } catch (err) { return { status: 'error', message: String(err) }; }
 });
 
+    return { status: 'ok', output: stdout };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── YOLOv8 Object Detection via Vision service ──────────────────────────
+ipcMain.handle('vision:detect-objects', async (_, args) => {
+  try {
+    await startPythonService('opencv');
+    const response = await fetch(`${OPENCV_SERVICE_URL}/detect-objects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Real-ESRGAN Texture Upscaling IPC Handlers ──────────────────────────
+// GitHub: https://github.com/xinntao/Real-ESRGAN
+// HuggingFace: https://huggingface.co/nateraw/real-esrgan
+ipcMain.handle('esrgan:health-check', async () => {
+  try {
+    await startPythonService('esrgan');
+    const response = await fetch(`${ESRGAN_SERVICE_URL}/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('esrgan:list-models', async () => {
+  try {
+    await startPythonService('esrgan');
+    const response = await fetch(`${ESRGAN_SERVICE_URL}/models`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('esrgan:upscale', async (_, args) => {
+  try {
+    await startPythonService('esrgan');
+    const response = await fetch(`${ESRGAN_SERVICE_URL}/upscale`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(180000), // upscaling can be slow on CPU
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('esrgan:upscale-batch', async (_, args) => {
+  try {
+    await startPythonService('esrgan');
+    const response = await fetch(`${ESRGAN_SERVICE_URL}/upscale-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(600000), // batch can be very slow
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── WolvenKit CLI Automation IPC Handlers ──────────────────────────────
+// GitHub: https://github.com/WolvenKit/WolvenKit
+// Automates Cyberpunk 2077 and Witcher 3 mod workflows
+ipcMain.handle('wolvenkit:health-check', async () => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('wolvenkit:set-cli-path', async (_, { path: cliPath }) => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/set-cli-path`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: cliPath }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('wolvenkit:extract', async (_, args) => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('wolvenkit:pack', async (_, args) => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/pack`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('wolvenkit:convert', async (_, args) => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/convert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('wolvenkit:export', async (_, args) => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('wolvenkit:search', async (_, args) => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── RTX Remix REST API IPC Handlers ─────────────────────────────────────
+// GitHub: https://github.com/NVIDIAGameWorks/rtx-remix (MIT License)
+// RTX Remix Toolkit exposes a local REST API when running.
+// Default port is 8011; adjust if your RTX Remix uses a different port.
+const RTX_REMIX_URL = 'http://127.0.0.1:8011';
+
+ipcMain.handle('rtxremix:health-check', async () => {
+  try {
+    const response = await fetch(`${RTX_REMIX_URL}/health`, { signal: AbortSignal.timeout(3000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return { status: 'healthy', ...(await response.json()) };
+  } catch (err) { return { status: 'offline', message: 'RTX Remix Toolkit not running. Launch it from NVIDIA App or start it manually.' }; }
+});
+
+ipcMain.handle('rtxremix:list-assets', async () => {
+  try {
+    const response = await fetch(`${RTX_REMIX_URL}/assets`, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('rtxremix:replace-asset', async (_, args) => {
+  try {
+    const response = await fetch(`${RTX_REMIX_URL}/assets/replace`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('rtxremix:capture-scene', async () => {
+  try {
+    const response = await fetch(`${RTX_REMIX_URL}/capture`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
 // ── System Tray ───────────────────────────────────────────────────────────
 function createTray() {
   let icon;
@@ -1293,7 +1513,7 @@ function createWindow() {
             "font-src 'self' https://fonts.gstatic.com",
             "img-src 'self' data: blob: https:",
             "media-src 'self' blob:",
-            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 http://localhost:8005 http://127.0.0.1:8005 http://localhost:8006 http://127.0.0.1:8006 http://localhost:8007 http://127.0.0.1:8007 http://localhost:8008 http://127.0.0.1:8008 https://api.steampowered.com https://api.nexusmods.com https://search.nexusmods.com wss://generativelanguage.googleapis.com",
+            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 http://localhost:8005 http://127.0.0.1:8005 http://localhost:8006 http://127.0.0.1:8006 http://localhost:8007 http://127.0.0.1:8007 http://localhost:8008 http://127.0.0.1:8008 http://localhost:8009 http://127.0.0.1:8009 http://localhost:8010 http://127.0.0.1:8010 http://localhost:8011 http://127.0.0.1:8011 https://api.steampowered.com https://api.nexusmods.com https://search.nexusmods.com wss://generativelanguage.googleapis.com",
             "worker-src 'self' blob:",
           ].join('; '),
         ],
