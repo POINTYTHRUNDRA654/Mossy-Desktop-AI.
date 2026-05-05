@@ -6,7 +6,6 @@ import base64
 import io
 import os
 import time
-import glob as _glob
 from pathlib import Path
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -131,7 +130,7 @@ async def generate_mesh(req: GenerateMeshRequest):
         mesh_b64 = base64.b64encode(STUB_CUBE_OBJ.encode()).decode()
         return {
             "status": "error",
-            "message": str(e),
+            "message": f"Mesh generation error: {type(e).__name__}",
             "mesh_base64": mesh_b64,
             "format": "obj",
             "vertex_count": 8,
@@ -157,7 +156,7 @@ async def list_outputs():
             ],
         }
     except Exception as e:
-        return {"status": "error", "message": str(e), "files": []}
+        return {"status": "error", "message": f"Output listing error: {type(e).__name__}", "files": []}
 
 
 class ExportBlenderRequest(BaseModel):
@@ -170,15 +169,20 @@ async def export_blender(req: ExportBlenderRequest):
     try:
         mesh_data = base64.b64decode(req.mesh_base64)
         safe_name = "".join(c for c in req.mesh_name if c.isalnum() or c in ("_", "-"))
-        out_path = OUTPUT_DIR / f"{safe_name}.obj"
+        if not safe_name:
+            safe_name = "mesh_export"
+        # Resolve output path and verify it stays within OUTPUT_DIR
+        out_path = (OUTPUT_DIR / f"{safe_name}.obj").resolve()
+        if not str(out_path).startswith(str(OUTPUT_DIR.resolve())):
+            return {"status": "error", "message": "Invalid mesh name"}
         out_path.write_bytes(mesh_data)
         return {
             "status": "ok",
-            "file_path": str(out_path.resolve()),
-            "blender_command": f'blender --python-expr "import bpy; bpy.ops.import_scene.obj(filepath=\'{out_path.resolve()}\')"',
+            "file_path": str(out_path),
+            "blender_command": f"blender --python-expr \"import bpy; bpy.ops.import_scene.obj(filepath='{out_path}')\"",
         }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": f"Export failed: {type(e).__name__}"}
 
 
 if __name__ == "__main__":

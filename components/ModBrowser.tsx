@@ -23,6 +23,7 @@ interface ModResult {
 }
 
 const ModBrowser: React.FC = () => {
+  // API key stored in localStorage for convenience in this local-only desktop app
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('mossy_nexus_api_key') || '');
   const [game, setGame] = useState('skyrimspecialedition');
   const [query, setQuery] = useState('');
@@ -59,7 +60,6 @@ const ModBrowser: React.FC = () => {
   };
 
   const openOnNexus = (mod: ModResult) => {
-    const gameSlug = GAMES.find(g => g.value === game)?.label.toLowerCase().replace(/\s+/g, '').replace("'", '') || game;
     window.open(`https://www.nexusmods.com/${game}/mods/${mod.mod_id}`, '_blank');
   };
 

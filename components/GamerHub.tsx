@@ -77,7 +77,7 @@ const TOOLS: ToolCard[] = [
     icon: Map,
     path: '/map-forge',
     status: 'ready',
-    badge: 'AI',
+    badge: 'Built-in',
   },
   {
     title: '3D Asset Forge',

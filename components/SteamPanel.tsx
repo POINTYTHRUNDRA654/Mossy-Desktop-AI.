@@ -24,6 +24,7 @@ interface Player {
 }
 
 const SteamPanel: React.FC = () => {
+  // API keys stored in localStorage for convenience in this local-only desktop app
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('mossy_steam_api_key') || '');
   const [steamId, setSteamId] = useState(() => localStorage.getItem('mossy_steam_id') || '');
   const [games, setGames] = useState<Game[]>([]);

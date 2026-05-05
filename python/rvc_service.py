@@ -117,7 +117,7 @@ async def convert(req: ConvertRequest):
             "model_used": req.model_name,
         }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": f"{type(e).__name__}: {e.__class__.__doc__ or "Processing failed"}"}
 
 
 class AudioFile(BaseModel):

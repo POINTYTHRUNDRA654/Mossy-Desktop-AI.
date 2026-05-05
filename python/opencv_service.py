@@ -105,7 +105,7 @@ async def screenshot(req: ScreenshotRequest):
                 "height": shot.height,
             }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": f"{type(e).__name__}: {e.__class__.__doc__ or "Processing failed"}"}
 
 
 class ImageRequest(BaseModel):
@@ -148,7 +148,7 @@ async def analyze_hud(req: ImageRequest):
 
         return {"status": "ok", "elements": elements}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": f"{type(e).__name__}: {e.__class__.__doc__ or "Processing failed"}"}
 
 
 @app.post("/ocr-text")
@@ -171,7 +171,7 @@ async def ocr_text(req: ImageRequest):
                 "engine": "none",
             }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": f"{type(e).__name__}: {e.__class__.__doc__ or "Processing failed"}"}
 
 
 class CompareRequest(BaseModel):
@@ -203,7 +203,7 @@ async def compare_images(req: CompareRequest):
 
         return {"status": "ok", "similarity": round(float(score), 4)}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": f"{type(e).__name__}: {e.__class__.__doc__ or "Processing failed"}"}
 
 
 class GameStateRequest(BaseModel):
@@ -251,7 +251,7 @@ async def detect_game_state(req: GameStateRequest):
             "estimated_state": state,
         }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": f"{type(e).__name__}: {e.__class__.__doc__ or "Processing failed"}"}
 
 
 if __name__ == "__main__":

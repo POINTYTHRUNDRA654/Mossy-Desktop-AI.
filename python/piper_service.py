@@ -87,11 +87,15 @@ class SynthesizeRequest(BaseModel):
 
 @app.post("/synthesize")
 async def synthesize(req: SynthesizeRequest):
-    voice_used = req.voice or "en_US-amy-medium"
+    # Sanitize voice name to prevent path injection
+    raw_voice = req.voice or "en_US-amy-medium"
+    voice_used = "".join(c for c in raw_voice if c.isalnum() or c in ("-", "_"))
+    if not voice_used:
+        voice_used = "en_US-amy-medium"
 
     if _piper_available():
         try:
-            onnx_path = os.path.expanduser(f"~/piper-voices/{voice_used}.onnx")
+            onnx_path = os.path.join(os.path.expanduser("~/piper-voices"), f"{voice_used}.onnx")
             if not os.path.exists(onnx_path):
                 onnx_path = voice_used
             proc = subprocess.run(

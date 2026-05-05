@@ -1150,7 +1150,7 @@ ipcMain.handle('nexus:search', async (_, { apiKey, game, query, page }) => {
   try {
     const searchUrl = `https://search.nexusmods.com/mods?terms=${encodeURIComponent(query)}&game_id=${encodeURIComponent(game)}&blocked_tags=&blocked_authors=&include_adult=0&page_size=20&page=${page || 0}`;
     const response = await fetch(searchUrl, {
-      headers: { apiKey: apiKey, 'Application-Name': 'MossyAI', 'Application-Version': '1.0.0' },
+      headers: { apikey: apiKey, 'Application-Name': 'MossyAI', 'Application-Version': '1.0.0' },
       signal: AbortSignal.timeout(15000),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
