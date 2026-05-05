@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo, Gamepad2, Code2, Scan, Trophy, PackageSearch, ListOrdered, Map, Layers, Mic, Box, Sparkles, PackageOpen } from 'lucide-react';
+import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo, Gamepad2, Code2, Scan, Trophy, PackageSearch, ListOrdered, Map, Layers, Mic, Box, Sparkles, PackageOpen, AlertTriangle, Archive, FileCode2, PackagePlus } from 'lucide-react';
 import { useLive } from './LiveContext';
 import AvatarCore from './AvatarCore';
 import ApiKeySetup from './ApiKeySetup';
@@ -110,6 +110,11 @@ const Sidebar: React.FC = () => {
     { to: '/voice-forge',        icon: Mic,         label: 'Voice Forge',     group: 'Gamer' },
     { to: '/texture-upscaler',   icon: Sparkles,    label: 'Texture Upscaler',group: 'Gamer' },
     { to: '/wolvenkit',          icon: PackageOpen, label: 'WolvenKit',       group: 'Gamer' },
+    // ── Fallout 4 Modding Tools ──────────────────────────────────────────
+    { to: '/fo4edit',  icon: AlertTriangle, label: 'FO4 Conflicts',  group: 'Gamer' },
+    { to: '/ba2',      icon: Archive,       label: 'BA2 Browser',    group: 'Gamer' },
+    { to: '/papyrus',  icon: FileCode2,     label: 'Papyrus IDE',    group: 'Gamer' },
+    { to: '/fomod',    icon: PackagePlus,   label: 'FOMOD Builder',  group: 'Gamer' },
   ];
 
   const groups = ['Core', 'Intelligence', 'Build', 'Data', 'Orchestration', 'Gamer'] as const;

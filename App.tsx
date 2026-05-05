@@ -45,6 +45,11 @@ const AssetForge3D = React.lazy(() => import('./components/AssetForge3D'));
 const VoiceForge = React.lazy(() => import('./components/VoiceForge'));
 const TextureUpscaler = React.lazy(() => import('./components/TextureUpscaler'));
 const WolvenKitPanel = React.lazy(() => import('./components/WolvenKitPanel'));
+// ── Fallout 4 Modding Tools ──
+const FO4EditPanel  = React.lazy(() => import('./components/FO4EditPanel'));
+const BA2Browser    = React.lazy(() => import('./components/BA2Browser'));
+const PapyrusIDE    = React.lazy(() => import('./components/PapyrusIDE'));
+const FOMODBuilder  = React.lazy(() => import('./components/FOMODBuilder'));
 
 // Define window interface for AI Studio helpers & Custom Events
 declare global {
@@ -162,6 +167,11 @@ const App: React.FC = () => {
                 <Route path="/voice-forge" element={<VoiceForge />} />
                 <Route path="/texture-upscaler" element={<TextureUpscaler />} />
                 <Route path="/wolvenkit" element={<WolvenKitPanel />} />
+                {/* ── Fallout 4 Modding Tools ── */}
+                <Route path="/fo4edit"   element={<FO4EditPanel />} />
+                <Route path="/ba2"       element={<BA2Browser />} />
+                <Route path="/papyrus"   element={<PapyrusIDE />} />
+                <Route path="/fomod"     element={<FOMODBuilder />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />

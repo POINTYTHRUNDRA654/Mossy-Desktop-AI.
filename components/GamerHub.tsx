@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Gamepad2, Code2, Monitor, PackageSearch, List, Box,
   Wind, Map, Mic, Layers3, ChevronRight, Cpu, Zap,
-  Sparkles, PackageOpen,
+  Sparkles, PackageOpen, AlertTriangle, Archive, FileCode2, PackagePlus,
 } from 'lucide-react';
 
 interface ToolCard {
@@ -111,6 +111,39 @@ const TOOLS: ToolCard[] = [
     path: '/wolvenkit',
     status: 'requires-setup',
     badge: 'REDengine',
+  },
+  // ── Fallout 4 Modding Tools ──────────────────────────────────────────
+  {
+    title: 'FO4 Conflict Detector',
+    description: 'Run FO4Edit/xEdit conflict analysis on your load order. Color-coded results with AI explanations.',
+    icon: AlertTriangle,
+    path: '/fo4edit',
+    status: 'requires-setup',
+    badge: 'FO4Edit',
+  },
+  {
+    title: 'BA2 Browser',
+    description: 'Inspect, extract, and create Fallout 4 BA2 and Skyrim BSA archives without leaving Mossy.',
+    icon: Archive,
+    path: '/ba2',
+    status: 'ready',
+    badge: 'Built-in',
+  },
+  {
+    title: 'Papyrus IDE',
+    description: 'Write, validate, and compile Papyrus scripts for FO4/Skyrim with snippet library and event reference.',
+    icon: FileCode2,
+    path: '/papyrus',
+    status: 'ready',
+    badge: 'AI',
+  },
+  {
+    title: 'FOMOD Builder',
+    description: 'Design FOMOD installers visually and generate ModuleConfig.xml for MO2, Vortex, and NMM.',
+    icon: PackagePlus,
+    path: '/fomod',
+    status: 'ready',
+    badge: 'Built-in',
   },
 ];
 
