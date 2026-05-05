@@ -43,10 +43,14 @@ function startPythonService(serviceType = 'gemma') {
     // New: WolvenKit CLI automation (WolvenKit/WolvenKit on GitHub)
     'wolvenkit': { var: () => wolvenKitProcess, set: (p) => { wolvenKitProcess = p; }, script: 'wolvenkit_service.py' },
     // New: Fallout 4 modding services
-    'fo4edit':  { var: () => fo4editProcess,  set: (p) => { fo4editProcess = p; },  script: 'fo4edit_service.py' },
-    'ba2':      { var: () => ba2Process,      set: (p) => { ba2Process = p; },      script: 'ba2_service.py' },
-    'papyrus':  { var: () => papyrusProcess,  set: (p) => { papyrusProcess = p; },  script: 'papyrus_service.py' },
-    'fomod':    { var: () => fomodProcess,    set: (p) => { fomodProcess = p; },    script: 'fomod_service.py' },
+    'fo4edit':      { var: () => fo4editProcess,     set: (p) => { fo4editProcess = p; },     script: 'fo4edit_service.py' },
+    'ba2':          { var: () => ba2Process,         set: (p) => { ba2Process = p; },         script: 'ba2_service.py' },
+    'papyrus':      { var: () => papyrusProcess,     set: (p) => { papyrusProcess = p; },     script: 'papyrus_service.py' },
+    'fomod':        { var: () => fomodProcess,       set: (p) => { fomodProcess = p; },       script: 'fomod_service.py' },
+    // New: F4SE C++ plugin scaffolder (Jinja2 templates)
+    'f4se':         { var: () => f4seProcess,        set: (p) => { f4seProcess = p; },        script: 'f4se_service.py' },
+    // New: Blender cell-editor round-trip (ESP extraction + patch writing)
+    'cell-editor':  { var: () => cellEditorProcess,  set: (p) => { cellEditorProcess = p; },  script: 'cell_editor_service.py' },
   };
 
   const svc = serviceMap[serviceType] || serviceMap['gemma'];
@@ -136,10 +140,12 @@ function stopPythonServices() {
   if (rvcProcess) { rvcProcess.kill(); rvcProcess = null; }
   if (esrganProcess) { esrganProcess.kill(); esrganProcess = null; }
   if (wolvenKitProcess) { wolvenKitProcess.kill(); wolvenKitProcess = null; }
-  if (fo4editProcess)  { fo4editProcess.kill();  fo4editProcess = null; }
-  if (ba2Process)      { ba2Process.kill();      ba2Process = null; }
-  if (papyrusProcess)  { papyrusProcess.kill();  papyrusProcess = null; }
-  if (fomodProcess)    { fomodProcess.kill();    fomodProcess = null; }
+  if (fo4editProcess)     { fo4editProcess.kill();     fo4editProcess = null; }
+  if (ba2Process)         { ba2Process.kill();         ba2Process = null; }
+  if (papyrusProcess)     { papyrusProcess.kill();     papyrusProcess = null; }
+  if (fomodProcess)       { fomodProcess.kill();       fomodProcess = null; }
+  if (f4seProcess)        { f4seProcess.kill();        f4seProcess = null; }
+  if (cellEditorProcess)  { cellEditorProcess.kill();  cellEditorProcess = null; }
 }
 
 // ── Auto-launch at OS startup ──────────────────────────────────────────────
@@ -818,30 +824,36 @@ let rvcProcess = null;
 let esrganProcess = null;
 let wolvenKitProcess = null;
 // ── Fallout 4 Modding Services ────────────────────────────────────────────
-let fo4editProcess  = null;
-let ba2Process      = null;
-let papyrusProcess  = null;
-let fomodProcess    = null;
-const OPENCV_SERVICE_PORT = 8005;
-const PIPER_SERVICE_PORT = 8006;
-const TRIPOSR_SERVICE_PORT = 8007;
-const RVC_SERVICE_PORT = 8008;
-const ESRGAN_SERVICE_PORT = 8009;
-const WOLVENKIT_SERVICE_PORT = 8010;
-const FO4EDIT_SERVICE_PORT  = 8012;
-const BA2_SERVICE_PORT      = 8013;
-const PAPYRUS_SERVICE_PORT  = 8014;
-const FOMOD_SERVICE_PORT    = 8015;
-const OPENCV_SERVICE_URL = `http://127.0.0.1:${OPENCV_SERVICE_PORT}`;
-const PIPER_SERVICE_URL = `http://127.0.0.1:${PIPER_SERVICE_PORT}`;
-const TRIPOSR_SERVICE_URL = `http://127.0.0.1:${TRIPOSR_SERVICE_PORT}`;
-const RVC_SERVICE_URL = `http://127.0.0.1:${RVC_SERVICE_PORT}`;
-const ESRGAN_SERVICE_URL = `http://127.0.0.1:${ESRGAN_SERVICE_PORT}`;
-const WOLVENKIT_SERVICE_URL = `http://127.0.0.1:${WOLVENKIT_SERVICE_PORT}`;
-const FO4EDIT_SERVICE_URL  = `http://127.0.0.1:${FO4EDIT_SERVICE_PORT}`;
-const BA2_SERVICE_URL      = `http://127.0.0.1:${BA2_SERVICE_PORT}`;
-const PAPYRUS_SERVICE_URL  = `http://127.0.0.1:${PAPYRUS_SERVICE_PORT}`;
-const FOMOD_SERVICE_URL    = `http://127.0.0.1:${FOMOD_SERVICE_PORT}`;
+let fo4editProcess     = null;
+let ba2Process         = null;
+let papyrusProcess     = null;
+let fomodProcess       = null;
+let f4seProcess        = null;
+let cellEditorProcess  = null;
+const OPENCV_SERVICE_PORT      = 8005;
+const PIPER_SERVICE_PORT       = 8006;
+const TRIPOSR_SERVICE_PORT     = 8007;
+const RVC_SERVICE_PORT         = 8008;
+const ESRGAN_SERVICE_PORT      = 8009;
+const WOLVENKIT_SERVICE_PORT   = 8010;
+const FO4EDIT_SERVICE_PORT     = 8012;
+const BA2_SERVICE_PORT         = 8013;
+const PAPYRUS_SERVICE_PORT     = 8014;
+const FOMOD_SERVICE_PORT       = 8015;
+const F4SE_SERVICE_PORT        = 8016;
+const CELL_EDITOR_SERVICE_PORT = 8017;
+const OPENCV_SERVICE_URL       = `http://127.0.0.1:${OPENCV_SERVICE_PORT}`;
+const PIPER_SERVICE_URL        = `http://127.0.0.1:${PIPER_SERVICE_PORT}`;
+const TRIPOSR_SERVICE_URL      = `http://127.0.0.1:${TRIPOSR_SERVICE_PORT}`;
+const RVC_SERVICE_URL          = `http://127.0.0.1:${RVC_SERVICE_PORT}`;
+const ESRGAN_SERVICE_URL       = `http://127.0.0.1:${ESRGAN_SERVICE_PORT}`;
+const WOLVENKIT_SERVICE_URL    = `http://127.0.0.1:${WOLVENKIT_SERVICE_PORT}`;
+const FO4EDIT_SERVICE_URL      = `http://127.0.0.1:${FO4EDIT_SERVICE_PORT}`;
+const BA2_SERVICE_URL          = `http://127.0.0.1:${BA2_SERVICE_PORT}`;
+const PAPYRUS_SERVICE_URL      = `http://127.0.0.1:${PAPYRUS_SERVICE_PORT}`;
+const FOMOD_SERVICE_URL        = `http://127.0.0.1:${FOMOD_SERVICE_PORT}`;
+const F4SE_SERVICE_URL         = `http://127.0.0.1:${F4SE_SERVICE_PORT}`;
+const CELL_EDITOR_SERVICE_URL  = `http://127.0.0.1:${CELL_EDITOR_SERVICE_PORT}`;
 
 function startAgentCollaborationService() {
   if (agentCollabProcess) return Promise.resolve();
@@ -1592,6 +1604,96 @@ ipcMain.handle('fomod:ai-generate', async (_, args) => {
   catch (err) { return { status: 'error', message: String(err) }; }
 });
 
+// ── fo4edit — new endpoints (construct parser, graph analysis, header diff) ──
+ipcMain.handle('fo4edit:scan-record-types', async (_, args) => {
+  try { await startPythonService('fo4edit'); return await (await fetch(`${FO4EDIT_SERVICE_URL}/scan-record-types`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fo4edit:diff-headers', async (_, args) => {
+  try { await startPythonService('fo4edit'); return await (await fetch(`${FO4EDIT_SERVICE_URL}/diff-headers`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fo4edit:analyze-load-order-graph', async (_, args) => {
+  try { await startPythonService('fo4edit'); const r = await fetch(`${FO4EDIT_SERVICE_URL}/analyze-load-order-graph`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(60000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── ba2 — 7z extraction via py7zr ─────────────────────────────────────────
+ipcMain.handle('ba2:extract-7z', async (_, args) => {
+  try { await startPythonService('ba2'); const r = await fetch(`${BA2_SERVICE_URL}/extract-7z`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(300000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── f4se — C++ plugin scaffolder (Jinja2 templates, port 8016) ───────────
+ipcMain.handle('f4se:health-check', async () => {
+  try { await startPythonService('f4se'); return await (await fetch(`${F4SE_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('f4se:scaffold', async (_, args) => {
+  try { await startPythonService('f4se'); return await (await fetch(`${F4SE_SERVICE_URL}/scaffold`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('f4se:hook-catalog', async () => {
+  try { await startPythonService('f4se'); return await (await fetch(`${F4SE_SERVICE_URL}/hook-catalog`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('f4se:templates', async () => {
+  try { await startPythonService('f4se'); return await (await fetch(`${F4SE_SERVICE_URL}/templates`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── cell-editor — Blender round-trip cell editing (port 8017) ────────────
+ipcMain.handle('cell-editor:health-check', async () => {
+  try { await startPythonService('cell-editor'); return await (await fetch(`${CELL_EDITOR_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('cell-editor:list-cells', async (_, args) => {
+  try { await startPythonService('cell-editor'); return await (await fetch(`${CELL_EDITOR_SERVICE_URL}/list-cells`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('cell-editor:extract-cell', async (_, args) => {
+  try { await startPythonService('cell-editor'); const r = await fetch(`${CELL_EDITOR_SERVICE_URL}/extract-cell`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(60000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('cell-editor:generate-patch-esp', async (_, args) => {
+  try { await startPythonService('cell-editor'); const r = await fetch(`${CELL_EDITOR_SERVICE_URL}/generate-patch-esp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(60000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('cell-editor:blender-addon', async () => {
+  try { await startPythonService('cell-editor'); return await (await fetch(`${CELL_EDITOR_SERVICE_URL}/blender-addon`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── File / directory dialog helpers ───────────────────────────────────────
+const { dialog } = require('electron');
+ipcMain.handle('dialog:open-file', async (_, { title, filters } = {}) => {
+  const result = await dialog.showOpenDialog({ title: title || 'Open File', filters: filters || [], properties: ['openFile'] });
+  return result.canceled ? null : result.filePaths[0];
+});
+ipcMain.handle('dialog:open-directory', async (_, { title } = {}) => {
+  const result = await dialog.showOpenDialog({ title: title || 'Select Folder', properties: ['openDirectory'] });
+  return result.canceled ? null : result.filePaths[0];
+});
+ipcMain.handle('dialog:save-file', async (_, { title, defaultPath, filters } = {}) => {
+  const result = await dialog.showSaveDialog({ title: title || 'Save File', defaultPath, filters: filters || [] });
+  return result.canceled ? null : result.filePath;
+});
+
+// ── File read/write helpers (used by CellEditor and other tools) ──────────
+ipcMain.handle('fs:read-text-file', async (_, { path: filePath }) => {
+  try {
+    const content = await fs.promises.readFile(filePath, 'utf8');
+    return { status: 'ok', content };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fs:write-text-file', async (_, { path: filePath, content }) => {
+  try {
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.promises.writeFile(filePath, content, 'utf8');
+    return { status: 'ok' };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
 // ── System Tray ───────────────────────────────────────────────────────────
 function createTray() {
   let icon;
@@ -1681,7 +1783,7 @@ function createWindow() {
             "font-src 'self' https://fonts.gstatic.com",
             "img-src 'self' data: blob: https:",
             "media-src 'self' blob:",
-            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 http://localhost:8005 http://127.0.0.1:8005 http://localhost:8006 http://127.0.0.1:8006 http://localhost:8007 http://127.0.0.1:8007 http://localhost:8008 http://127.0.0.1:8008 http://localhost:8009 http://127.0.0.1:8009 http://localhost:8010 http://127.0.0.1:8010 http://localhost:8011 http://127.0.0.1:8011 http://localhost:8012 http://127.0.0.1:8012 http://localhost:8013 http://127.0.0.1:8013 http://localhost:8014 http://127.0.0.1:8014 http://localhost:8015 http://127.0.0.1:8015 https://api.steampowered.com https://api.nexusmods.com https://search.nexusmods.com wss://generativelanguage.googleapis.com",
+            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 http://localhost:8005 http://127.0.0.1:8005 http://localhost:8006 http://127.0.0.1:8006 http://localhost:8007 http://127.0.0.1:8007 http://localhost:8008 http://127.0.0.1:8008 http://localhost:8009 http://127.0.0.1:8009 http://localhost:8010 http://127.0.0.1:8010 http://localhost:8011 http://127.0.0.1:8011 http://localhost:8012 http://127.0.0.1:8012 http://localhost:8013 http://127.0.0.1:8013 http://localhost:8014 http://127.0.0.1:8014 http://localhost:8015 http://127.0.0.1:8015 http://localhost:8016 http://127.0.0.1:8016 http://localhost:8017 http://127.0.0.1:8017 https://api.steampowered.com https://api.nexusmods.com https://search.nexusmods.com wss://generativelanguage.googleapis.com",
             "worker-src 'self' blob:",
           ].join('; '),
         ],

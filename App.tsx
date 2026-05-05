@@ -50,6 +50,7 @@ const FO4EditPanel  = React.lazy(() => import('./components/FO4EditPanel'));
 const BA2Browser    = React.lazy(() => import('./components/BA2Browser'));
 const PapyrusIDE    = React.lazy(() => import('./components/PapyrusIDE'));
 const FOMODBuilder  = React.lazy(() => import('./components/FOMODBuilder'));
+const CellEditor    = React.lazy(() => import('./components/CellEditor'));
 
 // Define window interface for AI Studio helpers & Custom Events
 declare global {
@@ -168,10 +169,11 @@ const App: React.FC = () => {
                 <Route path="/texture-upscaler" element={<TextureUpscaler />} />
                 <Route path="/wolvenkit" element={<WolvenKitPanel />} />
                 {/* ── Fallout 4 Modding Tools ── */}
-                <Route path="/fo4edit"   element={<FO4EditPanel />} />
-                <Route path="/ba2"       element={<BA2Browser />} />
-                <Route path="/papyrus"   element={<PapyrusIDE />} />
-                <Route path="/fomod"     element={<FOMODBuilder />} />
+                <Route path="/fo4edit"     element={<FO4EditPanel />} />
+                <Route path="/ba2"         element={<BA2Browser />} />
+                <Route path="/papyrus"     element={<PapyrusIDE />} />
+                <Route path="/fomod"       element={<FOMODBuilder />} />
+                <Route path="/cell-editor" element={<CellEditor />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />

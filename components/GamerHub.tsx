@@ -4,6 +4,7 @@ import {
   Gamepad2, Code2, Monitor, PackageSearch, List, Box,
   Wind, Map, Mic, Layers3, ChevronRight, Cpu, Zap,
   Sparkles, PackageOpen, AlertTriangle, Archive, FileCode2, PackagePlus,
+  Layers, Terminal,
 } from 'lucide-react';
 
 interface ToolCard {
@@ -144,6 +145,22 @@ const TOOLS: ToolCard[] = [
     path: '/fomod',
     status: 'ready',
     badge: 'Built-in',
+  },
+  {
+    title: 'Cell Editor',
+    description: 'Extract any interior cell from a plugin, rebuild its layout in Blender, then export a patch ESP — full round-trip with all dependencies preserved.',
+    icon: Layers,
+    path: '/cell-editor',
+    status: 'ready',
+    badge: 'Blender',
+  },
+  {
+    title: 'F4SE Plugin Scaffolder',
+    description: 'Generate ready-to-compile F4SE C++ plugin stubs (CMakeLists, vcpkg.json, main.cpp with hooks) from templates.',
+    icon: Terminal,
+    path: '/f4se',
+    status: 'ready',
+    badge: 'Jinja2',
   },
 ];
 

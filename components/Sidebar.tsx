@@ -111,10 +111,11 @@ const Sidebar: React.FC = () => {
     { to: '/texture-upscaler',   icon: Sparkles,    label: 'Texture Upscaler',group: 'Gamer' },
     { to: '/wolvenkit',          icon: PackageOpen, label: 'WolvenKit',       group: 'Gamer' },
     // ── Fallout 4 Modding Tools ──────────────────────────────────────────
-    { to: '/fo4edit',  icon: AlertTriangle, label: 'FO4 Conflicts',  group: 'Gamer' },
-    { to: '/ba2',      icon: Archive,       label: 'BA2 Browser',    group: 'Gamer' },
-    { to: '/papyrus',  icon: FileCode2,     label: 'Papyrus IDE',    group: 'Gamer' },
-    { to: '/fomod',    icon: PackagePlus,   label: 'FOMOD Builder',  group: 'Gamer' },
+    { to: '/fo4edit',      icon: AlertTriangle, label: 'FO4 Conflicts',    group: 'Gamer' },
+    { to: '/ba2',          icon: Archive,       label: 'BA2 Browser',      group: 'Gamer' },
+    { to: '/papyrus',      icon: FileCode2,     label: 'Papyrus IDE',      group: 'Gamer' },
+    { to: '/fomod',        icon: PackagePlus,   label: 'FOMOD Builder',    group: 'Gamer' },
+    { to: '/cell-editor',  icon: Layers,        label: 'Cell Editor',      group: 'Gamer' },
   ];
 
   const groups = ['Core', 'Intelligence', 'Build', 'Data', 'Orchestration', 'Gamer'] as const;

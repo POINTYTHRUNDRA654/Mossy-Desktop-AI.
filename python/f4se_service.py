@@ -338,19 +338,23 @@ def scaffold(req: ScaffoldRequest):
         f"src/main.cpp":       _render(env, _MAIN_CPP_TMPL, ctx),
     }
 
-    # Optionally write to disk
+    # Optionally write to disk — guard against path traversal in template keys
     written: List[str] = []
     errors: List[str] = []
     if req.output_dir:
-        base = Path(req.output_dir)
+        base = Path(req.output_dir).resolve()
         for rel_path, content in files.items():
             try:
-                dest = base / rel_path
+                # Resolve the destination and ensure it stays inside base
+                dest = (base / rel_path).resolve()
+                if not str(dest).startswith(str(base)):
+                    errors.append(f"{rel_path}: rejected (path traversal)")
+                    continue
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_text(content, encoding="utf-8")
                 written.append(str(dest))
-            except Exception as e:
-                errors.append(f"{rel_path}: {e}")
+            except OSError as e:
+                errors.append(f"{rel_path}: write error")
 
     return {
         "status": "ok",
