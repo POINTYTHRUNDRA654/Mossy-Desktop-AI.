@@ -30,19 +30,33 @@ interface KnowledgeEntry {
 export default function AgentCollaboration() {
     const [agents, setAgents] = useState<AgentStatus[]>([
         { name: 'Mossy AI (Tutor)', endpoint: 'localhost:8000', status: 'offline', color: 'bg-purple-500' },
-        { name: 'AI Helper', endpoint: 'localhost:21337', status: 'offline', color: 'bg-blue-500' },
-        { name: 'Mossy Manager', endpoint: 'localhost:8005', status: 'offline', color: 'bg-green-500' },
+        { name: 'Desktop Tutor',    endpoint: 'localhost:21337 / :8787', status: 'offline', color: 'bg-emerald-500' },
+        { name: 'AI Helper',        endpoint: 'localhost:21337', status: 'offline', color: 'bg-blue-500' },
+        { name: 'Mossy Manager',    endpoint: 'localhost:8011', status: 'offline', color: 'bg-green-500' },
     ]);
+
+    // Map display names to discovery keys returned by the collaboration service
+    const AGENT_KEY_MAP: Record<string, string> = {
+        'mossy ai (tutor)': 'desktop-ai',
+        'desktop tutor':    'desktop-tutor',
+        'ai helper':        'ai-helper',
+        'mossy manager':    'mossy-manager',
+    };
 
     const [messages, setMessages] = useState<InterAgentMessage[]>([]);
     const [stats, setStats] = useState({
         total_knowledge: 0,
         inter_agent_queries: 0,
         improvements_made: 0,
+        thumbs_up: 0,
+        thumbs_down: 0,
+        training_samples_ready: 0,
     });
 
     const [activeTab, setActiveTab] = useState('collaboration');
     const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+    const [feedbackLoading, setFeedbackLoading] = useState(false);
+    const [lastFeedbackMsg, setLastFeedbackMsg] = useState('');
 
     // Discover agents
     useEffect(() => {
@@ -52,7 +66,8 @@ export default function AgentCollaboration() {
                 const data = await resp.json();
 
                 const updatedAgents = agents.map((agent) => {
-                    const discovered = data[agent.name.toLowerCase().replace('(tutor)', '').replace(' ', '-').trim()];
+                    const key = AGENT_KEY_MAP[agent.name.toLowerCase()] ?? agent.name.toLowerCase().replace(/\s+/g, '-');
+                    const discovered = data[key];
                     return {
                         ...agent,
                         status: discovered?.status === 'online' ? 'online' : 'offline',
@@ -96,6 +111,31 @@ export default function AgentCollaboration() {
         }
     };
 
+    const submitFeedback = async (question: string, answer: string, rating: 1 | -1) => {
+        setFeedbackLoading(true);
+        try {
+            const resp = await fetch('http://localhost:8004/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question, answer, rating }),
+            });
+            const data = await resp.json();
+            setLastFeedbackMsg(
+                rating === 1
+                    ? '✓ Thumbs up recorded — training sample saved!'
+                    : '✓ Thumbs down recorded — improvement cycle triggered!'
+            );
+            // Refresh stats
+            const statsResp = await fetch('http://localhost:8004/stats');
+            setStats(await statsResp.json());
+        } catch (err) {
+            setLastFeedbackMsg('Failed to submit feedback');
+        } finally {
+            setFeedbackLoading(false);
+            setTimeout(() => setLastFeedbackMsg(''), 4000);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-6">
             <div className="max-w-6xl mx-auto">
@@ -106,6 +146,11 @@ export default function AgentCollaboration() {
                         Multi-Agent Tutoring System
                     </h1>
                     <p className="text-slate-400">Fallout 4 Modding Experts Collaborating & Learning</p>
+                    {lastFeedbackMsg && (
+                        <div className="mt-2 px-4 py-2 bg-green-800 border border-green-600 rounded text-green-200 text-sm">
+                            {lastFeedbackMsg}
+                        </div>
+                    )}
                 </div>
 
                 {/* Agent Status Grid */}
@@ -167,7 +212,7 @@ export default function AgentCollaboration() {
 
                 {/* Content */}
                 <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-                    {activeTab === 'collaboration' && <CollaborationTab agents={agents} />}
+                    {activeTab === 'collaboration' && <CollaborationTab agents={agents} onFeedback={submitFeedback} />}
                     {activeTab === 'knowledge' && <KnowledgeTab />}
                     {activeTab === 'improvement' && (
                         <ImprovementTab stats={stats} onTrigger={triggerImprovement} />
@@ -175,7 +220,7 @@ export default function AgentCollaboration() {
                 </div>
 
                 {/* Stats Footer */}
-                <div className="grid grid-cols-3 gap-4 mt-8">
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-4 mt-8">
                     <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
                         <p className="text-slate-400 text-sm">Shared Knowledge</p>
                         <p className="text-3xl font-bold text-purple-400">{stats.total_knowledge}</p>
@@ -187,9 +232,24 @@ export default function AgentCollaboration() {
                         <p className="text-xs text-slate-500 mt-1">communications</p>
                     </div>
                     <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-                        <p className="text-slate-400 text-sm">Improvements Made</p>
+                        <p className="text-slate-400 text-sm">Improvements</p>
                         <p className="text-3xl font-bold text-green-400">{stats.improvements_made}</p>
                         <p className="text-xs text-slate-500 mt-1">optimizations</p>
+                    </div>
+                    <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                        <p className="text-slate-400 text-sm">👍 Thumbs Up</p>
+                        <p className="text-3xl font-bold text-emerald-400">{stats.thumbs_up}</p>
+                        <p className="text-xs text-slate-500 mt-1">good answers</p>
+                    </div>
+                    <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                        <p className="text-slate-400 text-sm">👎 Thumbs Down</p>
+                        <p className="text-3xl font-bold text-red-400">{stats.thumbs_down}</p>
+                        <p className="text-xs text-slate-500 mt-1">improved</p>
+                    </div>
+                    <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                        <p className="text-slate-400 text-sm">Training Samples</p>
+                        <p className="text-3xl font-bold text-yellow-400">{stats.training_samples_ready}</p>
+                        <p className="text-xs text-slate-500 mt-1">ready to tune</p>
                     </div>
                 </div>
             </div>
@@ -201,7 +261,7 @@ export default function AgentCollaboration() {
 // TABS
 // ============================================================================
 
-function CollaborationTab({ agents }: { agents: AgentStatus[] }) {
+function CollaborationTab({ agents, onFeedback }: { agents: AgentStatus[]; onFeedback: (q: string, a: string, r: 1 | -1) => void }) {
     const [fromAgent, setFromAgent] = useState('desktop-ai');
     const [toAgent, setToAgent] = useState('ai-helper');
     const [question, setQuestion] = useState('');
@@ -299,9 +359,27 @@ function CollaborationTab({ agents }: { agents: AgentStatus[] }) {
                         <span className="text-slate-400">
                             Confidence: <span className="text-green-400 font-semibold">{(response.confidence * 100).toFixed(0)}%</span>
                         </span>
-                        {response.sources.length > 0 && (
+                        {response.sources && response.sources.length > 0 && (
                             <span className="text-slate-400">{response.sources.length} sources</span>
                         )}
+                    </div>
+                    {/* Feedback buttons */}
+                    <div className="flex gap-2 mt-3 pt-3 border-t border-slate-700">
+                        <span className="text-xs text-slate-400 self-center mr-1">Was this helpful?</span>
+                        <button
+                            onClick={() => onFeedback(question, response.answer, 1)}
+                            className="px-3 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-sm rounded transition"
+                            title="Thumbs up — save as training sample"
+                        >
+                            👍 Yes
+                        </button>
+                        <button
+                            onClick={() => onFeedback(question, response.answer, -1)}
+                            className="px-3 py-1 bg-red-800 hover:bg-red-700 text-white text-sm rounded transition"
+                            title="Thumbs down — trigger improvement"
+                        >
+                            👎 No
+                        </button>
                     </div>
                 </div>
             )}
@@ -408,11 +486,19 @@ function ImprovementTab({ stats, onTrigger }: { stats: any; onTrigger: () => voi
                         </li>
                         <li className="flex gap-2">
                             <span className="text-green-400">✓</span>
-                            <span><strong>Improvement proposals</strong> - Better answers synthesized from feedback</span>
+                            <span><strong>User feedback loop</strong> - 👍/👎 adjusts confidence &amp; triggers improvement</span>
                         </li>
                         <li className="flex gap-2">
                             <span className="text-green-400">✓</span>
-                            <span><strong>Self-reflection</strong> - Each agent learns from recent interactions</span>
+                            <span><strong>Auto fine-tuning dataset</strong> - Good answers collected for LoRA training</span>
+                        </li>
+                        <li className="flex gap-2">
+                            <span className="text-green-400">✓</span>
+                            <span><strong>Self-critique</strong> - Every answer auto-reviewed before delivery</span>
+                        </li>
+                        <li className="flex gap-2">
+                            <span className="text-green-400">✓</span>
+                            <span><strong>Episodic memory</strong> - Mossy remembers past conversations</span>
                         </li>
                     </ul>
                 </div>
@@ -436,8 +522,9 @@ function ImprovementTab({ stats, onTrigger }: { stats: any; onTrigger: () => voi
                     <p className="text-3xl font-bold text-purple-400">{stats.total_knowledge || 0}</p>
                 </div>
                 <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
-                    <p className="text-slate-400 text-sm mb-2">Inter-Agent Queries</p>
-                    <p className="text-3xl font-bold text-blue-400">{stats.inter_agent_queries || 0}</p>
+                    <p className="text-slate-400 text-sm mb-2">Training Samples Ready</p>
+                    <p className="text-3xl font-bold text-yellow-400">{stats.training_samples_ready || 0}</p>
+                    <p className="text-xs text-slate-500 mt-1">👍 {stats.thumbs_up || 0} up  👎 {stats.thumbs_down || 0} down</p>
                 </div>
             </div>
 
@@ -445,7 +532,8 @@ function ImprovementTab({ stats, onTrigger }: { stats: any; onTrigger: () => voi
                 <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-blue-200">
                     <strong>How it works:</strong> When agents answer questions, other agents validate the answer.
-                    If consensus is low (&lt; 70%), a better answer is synthesized. All agents learn from mistakes.
+                    If consensus is low (&lt; 70%), a better answer is synthesized.  User thumbs-up saves the answer
+                    as a training sample for future LoRA fine-tuning.  Thumbs-down immediately triggers re-synthesis.
                 </div>
             </div>
         </div>

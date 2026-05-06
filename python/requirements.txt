@@ -155,3 +155,7 @@ configobj>=5.0.8
 # Send2Trash — move replaced/backed-up files to OS trash instead of deleting
 Send2Trash>=1.8.2
 
+# ── Web Search (fallback when knowledge base has no results) ──────────────
+# duckduckgo-search — DuckDuckGo search API client (no API key required)
+# Used by Mossy to look up current info and auto-learn from results
+duckduckgo-search>=6.2.0

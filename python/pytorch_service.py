@@ -1,7 +1,7 @@
-/**
- * PyTorch Integration
- * Load and run custom PyTorch models for inference
- */
+"""
+PyTorch Integration
+Load and run custom PyTorch models for inference
+"""
 
 import sys
 import torch

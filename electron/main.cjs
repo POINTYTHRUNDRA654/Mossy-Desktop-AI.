@@ -1027,6 +1027,77 @@ ipcMain.handle('agent:get-learning-history', async (_, agentName) => {
   }
 });
 
+// ── Desktop Tutor Bridge IPC Handlers ────────────────────────────────────────
+// Desktop Tutor (desktop-tutorial repo) runs:
+//   Flask bridge at http://localhost:21337  (/health, /hardware, /capture, /clipboard)
+//   Express AI backend at http://localhost:8787  (/health, /v1/chat)
+
+const DESKTOP_TUTOR_BRIDGE = 'http://localhost:21337';
+const DESKTOP_TUTOR_CHAT   = 'http://localhost:8787';
+
+ipcMain.handle('tutor:status', async () => {
+  const result = { bridge: { status: 'offline' }, chat: { status: 'offline' } };
+  try {
+    const r = await fetch(`${DESKTOP_TUTOR_BRIDGE}/health`, { signal: AbortSignal.timeout(3000) });
+    if (r.ok) result.bridge = { status: 'online', ...(await r.json()) };
+  } catch (_) {}
+  try {
+    const r = await fetch(`${DESKTOP_TUTOR_CHAT}/health`, { signal: AbortSignal.timeout(3000) });
+    if (r.ok) result.chat = { status: 'online', ...(await r.json()) };
+  } catch (_) {}
+  return result;
+});
+
+ipcMain.handle('tutor:get-hardware', async () => {
+  try {
+    const response = await fetch(`${DESKTOP_TUTOR_BRIDGE}/hardware`, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('tutor:get-screen', async () => {
+  try {
+    const response = await fetch(`${DESKTOP_TUTOR_BRIDGE}/capture`, { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
+ipcMain.handle('tutor:chat', async (_, { messages, provider, model }) => {
+  try {
+    const response = await fetch(`${DESKTOP_TUTOR_CHAT}/v1/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: provider || 'groq', model, messages }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    return await response.json();
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+ipcMain.handle('tutor:share-knowledge', async (_, { topic, content, tags, confidence }) => {
+  // Share knowledge from Mossy-Desktop-AI into the Desktop Tutor via agent collab service
+  try {
+    await startAgentCollaborationService();
+    const response = await fetch(`${AGENT_COLLAB_SERVICE}/knowledge/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, content, agent: 'desktop-tutor', tags: tags || [], confidence: confidence || 0.8, timestamp: new Date().toISOString() }),
+    });
+    return await response.json();
+  } catch (err) {
+    return { status: 'error', message: String(err) };
+  }
+});
+
 // ── OpenCV Vision IPC Handlers ──────────────────────────────────────────
 ipcMain.handle('vision:health-check', async () => {
   try {
@@ -1321,10 +1392,6 @@ ipcMain.handle('loot:sort', async (_, { lootPath, game }) => {
     const execFileAsync = promisify(execFile);
     const lootExe = lootPath || (process.platform === 'win32' ? 'C:\\Program Files\\LOOT\\LOOT.exe' : 'loot');
     const { stdout } = await execFileAsync(lootExe, ['--game', game || 'Skyrim', '--auto-sort'], { timeout: 60000 });
-    return { status: 'ok', output: stdout };
-  } catch (err) { return { status: 'error', message: String(err) }; }
-});
-
     return { status: 'ok', output: stdout };
   } catch (err) { return { status: 'error', message: String(err) }; }
 });
@@ -1963,7 +2030,7 @@ function createWindow() {
             "font-src 'self' https://fonts.gstatic.com",
             "img-src 'self' data: blob: https:",
             "media-src 'self' blob:",
-            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 http://localhost:8005 http://127.0.0.1:8005 http://localhost:8006 http://127.0.0.1:8006 http://localhost:8007 http://127.0.0.1:8007 http://localhost:8008 http://127.0.0.1:8008 http://localhost:8009 http://127.0.0.1:8009 http://localhost:8010 http://127.0.0.1:8010 http://localhost:8011 http://127.0.0.1:8011 http://localhost:8012 http://127.0.0.1:8012 http://localhost:8013 http://127.0.0.1:8013 http://localhost:8014 http://127.0.0.1:8014 http://localhost:8015 http://127.0.0.1:8015 http://localhost:8016 http://127.0.0.1:8016 http://localhost:8017 http://127.0.0.1:8017 http://localhost:8018 http://127.0.0.1:8018 http://localhost:8019 http://127.0.0.1:8019 http://localhost:8020 http://127.0.0.1:8020 http://localhost:8021 http://127.0.0.1:8021 http://localhost:8022 http://127.0.0.1:8022 https://api.steampowered.com https://api.nexusmods.com https://search.nexusmods.com wss://generativelanguage.googleapis.com",
+            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8787 http://127.0.0.1:8787 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 http://localhost:8005 http://127.0.0.1:8005 http://localhost:8006 http://127.0.0.1:8006 http://localhost:8007 http://127.0.0.1:8007 http://localhost:8008 http://127.0.0.1:8008 http://localhost:8009 http://127.0.0.1:8009 http://localhost:8010 http://127.0.0.1:8010 http://localhost:8011 http://127.0.0.1:8011 http://localhost:8012 http://127.0.0.1:8012 http://localhost:8013 http://127.0.0.1:8013 http://localhost:8014 http://127.0.0.1:8014 http://localhost:8015 http://127.0.0.1:8015 http://localhost:8016 http://127.0.0.1:8016 http://localhost:8017 http://127.0.0.1:8017 http://localhost:8018 http://127.0.0.1:8018 http://localhost:8019 http://127.0.0.1:8019 http://localhost:8020 http://127.0.0.1:8020 http://localhost:8021 http://127.0.0.1:8021 http://localhost:8022 http://127.0.0.1:8022 https://api.steampowered.com https://api.nexusmods.com https://search.nexusmods.com wss://generativelanguage.googleapis.com",
             "worker-src 'self' blob:",
           ].join('; '),
         ],

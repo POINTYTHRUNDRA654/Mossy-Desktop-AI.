@@ -40,15 +40,21 @@ AGENT_COMMUNICATION_PORT = 8004
 # Agent endpoints
 AGENTS = {
     "desktop-ai": "http://localhost:8000",      # Gemma service (tutor)
-    "ai-helper": "http://localhost:21337",      # Flask hardware/file service
-    "mossy-manager": "http://localhost:8005",   # Future: Mossy Manager service
+    "ai-helper": "http://localhost:21337",      # Flask hardware/file service (legacy name)
+    "mossy-manager": "http://localhost:8011",   # Future: Mossy Manager service (port 8011; 8005 is OpenCV)
+    "desktop-tutor": "http://localhost:21337",  # Desktop Tutor bridge (mossy_server.py)
 }
+
+# Desktop Tutor also exposes an AI chat backend on a separate port
+DESKTOP_TUTOR_BRIDGE_URL = "http://localhost:21337"   # Flask bridge: /health, /hardware, /capture
+DESKTOP_TUTOR_CHAT_URL   = "http://localhost:8787"    # Express backend: /v1/chat
 
 # Database paths
 DB_PATHS = {
     "desktop-ai": "data/agent_memory_desktop.db",
     "ai-helper": "data/agent_memory_helper.db",
     "mossy-manager": "data/agent_memory_manager.db",
+    "desktop-tutor": "data/agent_memory_desktop_tutor.db",
     "shared": "data/shared_knowledge.db",
 }
 
@@ -105,6 +111,18 @@ class ConversationLog(BaseModel):
     learning_points: List[str] = []
     improvement_suggestion: Optional[str] = None
 
+class UserFeedback(BaseModel):
+    """User thumbs-up / thumbs-down on an answer"""
+    question: str
+    answer: str
+    rating: int                  # 1 = thumbs up, -1 = thumbs down
+    knowledge_ids: List[str] = []   # IDs of knowledge entries that contributed
+    comment: str = ""
+
+class TrainingSampleExportRequest(BaseModel):
+    min_quality: float = 0.7
+    limit: int = 500
+
 # ============================================================================
 # DATABASE INITIALIZATION
 # ============================================================================
@@ -150,6 +168,28 @@ def init_databases():
                     reason TEXT,
                     validation_score REAL,
                     timestamp TEXT
+                )
+            """)
+            # ── New tables ──────────────────────────────────────────────────
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_feedback (
+                    id TEXT PRIMARY KEY,
+                    timestamp TEXT,
+                    question TEXT,
+                    answer TEXT,
+                    rating INTEGER,        -- 1 = thumbs up, -1 = thumbs down
+                    knowledge_ids TEXT,    -- comma-separated knowledge entry IDs used
+                    comment TEXT
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS training_samples (
+                    id TEXT PRIMARY KEY,
+                    timestamp TEXT,
+                    prompt TEXT,
+                    completion TEXT,
+                    quality REAL,          -- 0.0–1.0; higher = better training signal
+                    source TEXT            -- 'auto' | 'thumbs_up' | 'expert'
                 )
             """)
         else:
@@ -343,7 +383,7 @@ init_databases()
 knowledge_base = FalloutKnowledgeBase()
 agent_memories = {
     agent: AgentMemory(agent) 
-    for agent in ["desktop-ai", "ai-helper", "mossy-manager"]
+    for agent in ["desktop-ai", "ai-helper", "mossy-manager", "desktop-tutor"]
 }
 
 # ============================================================================
@@ -365,24 +405,33 @@ async def health():
 async def discover_agents():
     """Discover all connected agents and their health"""
     discovered = {}
-    
+
     for agent_name, endpoint in AGENTS.items():
+        # desktop-tutor uses the bridge port (21337) for health checks
+        health_url = f"{DESKTOP_TUTOR_BRIDGE_URL}/health" if agent_name == "desktop-tutor" else f"{endpoint}/health"
         try:
             async with httpx.AsyncClient(timeout=2.0) as client:
-                resp = await client.get(f"{endpoint}/health")
+                resp = await client.get(health_url)
                 if resp.status_code == 200:
-                    discovered[agent_name] = {
-                        "endpoint": endpoint,
-                        "status": "online",
-                        "data": resp.json(),
-                    }
+                    agent_data: Dict = {"status": "online", "endpoint": endpoint, "data": resp.json()}
+                    # Also check Desktop Tutor's AI chat backend
+                    if agent_name == "desktop-tutor":
+                        try:
+                            chat_health = await client.get(f"{DESKTOP_TUTOR_CHAT_URL}/health", timeout=2.0)
+                            agent_data["chat_backend"] = {
+                                "url": DESKTOP_TUTOR_CHAT_URL,
+                                "status": "online" if chat_health.status_code == 200 else "offline",
+                            }
+                        except Exception:
+                            agent_data["chat_backend"] = {"url": DESKTOP_TUTOR_CHAT_URL, "status": "offline"}
+                    discovered[agent_name] = agent_data
         except Exception as e:
             discovered[agent_name] = {
                 "endpoint": endpoint,
                 "status": "offline",
                 "error": str(e),
             }
-    
+
     return discovered
 
 # ============================================================================
@@ -401,13 +450,69 @@ async def query_agent(query: AgentQuery) -> AgentResponse:
     endpoint = AGENTS[query.to_agent]
     
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            # Agent-specific query handling
+        # Per-agent timeouts: desktop-tutor chat needs more time for Groq LLM
+        AGENT_TIMEOUTS = {
+            "desktop-ai":    15.0,
+            "ai-helper":     10.0,
+            "desktop-tutor": 20.0,
+            "mossy-manager": 10.0,
+        }
+        agent_timeout = AGENT_TIMEOUTS.get(query.to_agent, 15.0)
+        async with httpx.AsyncClient(timeout=agent_timeout) as client:
+            # Agent-specific query handling based on the actual API each service exposes
             if query.to_agent == "ai-helper":
-                # Ask AI-Helper to search its knowledge
-                resp = await client.post(
-                    f"{endpoint}/query",
-                    json={"question": query.question, "context": query.context}
+                # AI-Helper uses the Desktop Tutor bridge (port 21337) to get hardware context
+                hw_resp = await client.get(f"{DESKTOP_TUTOR_BRIDGE_URL}/hardware")
+                hw_data = hw_resp.json() if hw_resp.status_code == 200 else {}
+                hw_summary = (
+                    f"OS: {hw_data.get('os', '?')}, CPU: {hw_data.get('cpu', '?')}, "
+                    f"RAM: {hw_data.get('ram', '?')} GB, GPU: {hw_data.get('gpu', '?')}"
+                )
+                return AgentResponse(
+                    agent=query.to_agent,
+                    answer=f"Desktop system context — {hw_summary}",
+                    confidence=0.9,
+                    sources=[{"type": "hardware", "data": hw_data}],
+                    metadata=hw_data,
+                )
+            elif query.to_agent == "desktop-tutor":
+                # Desktop Tutor — first check chat backend (port 8787), fall back to bridge info
+                system_prompt = (
+                    "You are Mossy Desktop Tutor, an expert Fallout 4 modding assistant. "
+                    "Another Mossy AI instance is asking you a question so you can help each "
+                    "other advance. Answer concisely and share any relevant knowledge."
+                )
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                ]
+                if query.context:
+                    messages.append({"role": "user", "content": f"Context: {query.context}\n\nQuestion: {query.question}"})
+                else:
+                    messages.append({"role": "user", "content": query.question})
+
+                chat_resp = await client.post(
+                    f"{DESKTOP_TUTOR_CHAT_URL}/v1/chat",
+                    json={"provider": "groq", "messages": messages, "maxTokens": 1024},
+                )
+                if chat_resp.status_code == 200:
+                    chat_data = chat_resp.json()
+                    answer = chat_data.get("text", "")
+                    return AgentResponse(
+                        agent=query.to_agent,
+                        answer=answer,
+                        confidence=0.85,
+                        sources=[{"type": "groq", "model": chat_data.get("model", "unknown")}],
+                        reasoning=f"Answered by Desktop Tutor via {chat_data.get('model','groq')}",
+                        metadata=chat_data,
+                    )
+                # Fall back to returning hardware info if chat is unavailable
+                hw_resp = await client.get(f"{DESKTOP_TUTOR_BRIDGE_URL}/hardware")
+                hw_data = hw_resp.json() if hw_resp.status_code == 200 else {}
+                return AgentResponse(
+                    agent=query.to_agent,
+                    answer=f"Desktop Tutor chat unavailable — system: {hw_data}",
+                    confidence=0.3,
+                    metadata=hw_data,
                 )
             elif query.to_agent == "desktop-ai":
                 # Ask Desktop AI (Gemma) to answer
@@ -416,32 +521,34 @@ async def query_agent(query: AgentQuery) -> AgentResponse:
                     json={"prompt": query.question}
                 )
             else:
+                # Generic fallback for any future agent
                 resp = await client.post(
                     f"{endpoint}/query",
                     json={"question": query.question}
                 )
-            
+
             if resp.status_code == 200:
                 data = resp.json()
-                
-                # Log the query
-                conn = sqlite3.connect(DB_PATHS["shared"])
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO agent_queries (id, from_agent, to_agent, question, answer, timestamp, agents_consulted)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (str(uuid.uuid4()), query.from_agent, query.to_agent, 
-                      query.question, json.dumps(data), 
-                      datetime.now().isoformat(), query.to_agent))
-                conn.commit()
-                conn.close()
-                
-                # Record learning for from_agent
-                agent_memories[query.from_agent].learn_from_interaction(
-                    {"response": data, "source_agent": query.to_agent},
-                    ["learned from " + query.to_agent]
-                )
-                
+
+                # Only log + learn when from_agent is a recognised agent
+                if query.from_agent in DB_PATHS and query.from_agent != "shared":
+                    conn = sqlite3.connect(DB_PATHS["shared"])
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO agent_queries (id, from_agent, to_agent, question, answer, timestamp, agents_consulted)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (str(uuid.uuid4()), query.from_agent, query.to_agent,
+                          query.question, json.dumps(data),
+                          datetime.now().isoformat(), query.to_agent))
+                    conn.commit()
+                    conn.close()
+
+                    if query.from_agent in agent_memories:
+                        agent_memories[query.from_agent].learn_from_interaction(
+                            {"response": data, "source_agent": query.to_agent},
+                            ["learned from " + query.to_agent]
+                        )
+
                 return AgentResponse(
                     agent=query.to_agent,
                     answer=data.get("text", data.get("answer", str(data))),
@@ -452,7 +559,7 @@ async def query_agent(query: AgentQuery) -> AgentResponse:
                 )
             else:
                 raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
@@ -539,6 +646,21 @@ async def validate_answer(
             validation_results,
             consensus_score
         )
+
+    # Auto-save high-consensus answers as training samples
+    if consensus_score >= 0.85:
+        try:
+            conn = sqlite3.connect(DB_PATHS["shared"])
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO training_samples (id, timestamp, prompt, completion, quality, source)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (str(uuid.uuid4()), datetime.now().isoformat(),
+                  question, answer, round(consensus_score, 3), "auto"))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
     
     return {
         "answer": answer,
@@ -676,6 +798,15 @@ async def get_stats():
     
     cursor.execute("SELECT COUNT(*) FROM improvements")
     total_improvements = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM user_feedback WHERE rating = 1")
+    thumbs_up = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM user_feedback WHERE rating = -1")
+    thumbs_down = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM training_samples WHERE quality >= 0.7")
+    training_samples = cursor.fetchone()[0]
     
     conn.close()
     
@@ -689,10 +820,171 @@ async def get_stats():
         }
     
     return {
+        "total_knowledge": total_knowledge,          # keep legacy key for UI
         "total_knowledge_entries": total_knowledge,
         "inter_agent_queries": total_queries,
         "improvements_made": total_improvements,
+        "thumbs_up": thumbs_up,
+        "thumbs_down": thumbs_down,
+        "training_samples_ready": training_samples,
         "agent_statistics": agent_stats,
+    }
+
+# ============================================================================
+# USER FEEDBACK LOOP
+# ============================================================================
+
+@app.post("/feedback")
+async def submit_feedback(feedback: UserFeedback, background_tasks: BackgroundTasks):
+    """
+    Record a user thumbs-up (rating=1) or thumbs-down (rating=-1) on an answer.
+
+    Thumbs-up:
+    - Saves answer as a high-quality training sample.
+    - Increases confidence of the referenced knowledge entries.
+
+    Thumbs-down:
+    - Saves as a negative signal (low-quality sample — excluded from training).
+    - Immediately triggers an improvement cycle for the question.
+    - Lowers confidence of the referenced knowledge entries.
+    """
+    if feedback.rating not in (1, -1):
+        raise HTTPException(status_code=400, detail="rating must be 1 (thumbs up) or -1 (thumbs down)")
+
+    feedback_id = str(uuid.uuid4())
+    ts = datetime.now().isoformat()
+
+    # Persist feedback record
+    conn = sqlite3.connect(DB_PATHS["shared"])
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO user_feedback (id, timestamp, question, answer, rating, knowledge_ids, comment)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (feedback_id, ts, feedback.question, feedback.answer, feedback.rating,
+          ",".join(feedback.knowledge_ids), feedback.comment))
+
+    quality = 0.95 if feedback.rating == 1 else 0.0
+    source  = "thumbs_up" if feedback.rating == 1 else "thumbs_down"
+
+    # Save as training sample (thumbs-up = high quality; thumbs-down = 0 quality)
+    cursor.execute("""
+        INSERT INTO training_samples (id, timestamp, prompt, completion, quality, source)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (str(uuid.uuid4()), ts, feedback.question, feedback.answer, quality, source))
+
+    # Update confidence of referenced knowledge entries
+    if feedback.knowledge_ids:
+        delta = 0.05 if feedback.rating == 1 else -0.10
+        for kid in feedback.knowledge_ids:
+            cursor.execute(
+                "UPDATE knowledge SET confidence = MIN(0.99, MAX(0.1, confidence + ?)) WHERE id = ?",
+                (delta, kid)
+            )
+
+    conn.commit()
+    conn.close()
+
+    # Thumbs-down triggers an immediate improvement cycle in background
+    if feedback.rating == -1:
+        background_tasks.add_task(
+            propose_improvement,
+            feedback.question,
+            feedback.answer,
+            "user",
+            {"user": {"confidence": 0.0, "comment": feedback.comment}},
+            0.0,
+        )
+
+    return {
+        "id": feedback_id,
+        "rating": feedback.rating,
+        "action": "saved_training_sample" + (" + improvement_triggered" if feedback.rating == -1 else ""),
+        "success": True,
+    }
+
+@app.get("/feedback/stats")
+async def feedback_stats():
+    """Return feedback statistics."""
+    conn = sqlite3.connect(DB_PATHS["shared"])
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM user_feedback WHERE rating = 1")
+    thumbs_up = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM user_feedback WHERE rating = -1")
+    thumbs_down = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM training_samples WHERE quality >= 0.7")
+    good_samples = cur.fetchone()[0]
+    conn.close()
+    return {
+        "thumbs_up": thumbs_up,
+        "thumbs_down": thumbs_down,
+        "total_feedback": thumbs_up + thumbs_down,
+        "high_quality_training_samples": good_samples,
+    }
+
+# ============================================================================
+# TRAINING DATA COLLECTION & EXPORT
+# ============================================================================
+
+@app.post("/training-data/save")
+async def save_training_sample(prompt: str, completion: str, quality: float = 0.8, source: str = "auto"):
+    """Save a validated Q&A pair as a training sample."""
+    conn = sqlite3.connect(DB_PATHS["shared"])
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO training_samples (id, timestamp, prompt, completion, quality, source)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (str(uuid.uuid4()), datetime.now().isoformat(), prompt, completion, quality, source))
+    conn.commit()
+    conn.close()
+    return {"success": True, "quality": quality, "source": source}
+
+@app.post("/training-data/export")
+async def export_training_data(req: TrainingSampleExportRequest):
+    """
+    Export training samples as a list of {prompt, completion} pairs for LoRA fine-tuning.
+    Only samples with quality >= min_quality are included.
+    """
+    conn = sqlite3.connect(DB_PATHS["shared"])
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT prompt, completion, quality, source, timestamp
+        FROM training_samples
+        WHERE quality >= ?
+        ORDER BY quality DESC, timestamp DESC
+        LIMIT ?
+    """, (req.min_quality, req.limit))
+    rows = cur.fetchall()
+    conn.close()
+
+    samples = [
+        {"prompt": r[0], "completion": r[1], "quality": r[2], "source": r[3], "ts": r[4]}
+        for r in rows
+    ]
+    return {
+        "samples": samples,
+        "count": len(samples),
+        "min_quality": req.min_quality,
+        "format": "jsonl_compatible",
+    }
+
+@app.get("/training-data/count")
+async def training_data_count():
+    """Return the number of available training samples by quality tier."""
+    conn = sqlite3.connect(DB_PATHS["shared"])
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM training_samples WHERE quality >= 0.9")
+    excellent = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM training_samples WHERE quality >= 0.7 AND quality < 0.9")
+    good = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM training_samples WHERE quality < 0.7")
+    poor = cur.fetchone()[0]
+    conn.close()
+    return {
+        "excellent_0.9plus": excellent,
+        "good_0.7to0.9": good,
+        "poor_below_0.7": poor,
+        "total": excellent + good + poor,
+        "ready_for_training": excellent + good,
     }
 
 if __name__ == "__main__":

@@ -110,16 +110,49 @@ except ImportError:
 # ────────────────────────────────────────────────────────────────────────────
 
 HAS_LLAMAINDEX = False
+HAS_BM25 = False
 try:
     from llama_index.core import VectorStoreIndex, Document
     from llama_index.embeddings.huggingface import HuggingFaceEmbedding
     from llama_index.vector_stores.chroma import ChromaVectorStore
     from llama_index.core.storage import StorageContext
+    from llama_index.core.retrievers import QueryFusionRetriever
     import chromadb
     HAS_LLAMAINDEX = True
     logger.info("LlamaIndex + Chroma available — RAG enabled")
+    try:
+        from llama_index.retrievers.bm25 import BM25Retriever
+        HAS_BM25 = True
+        logger.info("BM25Retriever available — hybrid search enabled")
+    except ImportError:
+        logger.warning("BM25Retriever not available; falling back to semantic-only search")
 except ImportError:
     logger.warning("LlamaIndex not available; RAG features disabled")
+
+# ────────────────────────────────────────────────────────────────────────────
+# LangGraph imports (stateful agentic workflow)
+# ────────────────────────────────────────────────────────────────────────────
+
+HAS_LANGGRAPH = False
+try:
+    from langgraph.graph import StateGraph, END
+    from typing_extensions import TypedDict as LGTypedDict
+    HAS_LANGGRAPH = True
+    logger.info("LangGraph available — agentic reasoning graph enabled")
+except ImportError:
+    logger.warning("LangGraph not available; graph reasoning disabled")
+
+# ────────────────────────────────────────────────────────────────────────────
+# NetworkX knowledge graph
+# ────────────────────────────────────────────────────────────────────────────
+
+HAS_NETWORKX = False
+try:
+    import networkx as nx
+    HAS_NETWORKX = True
+    logger.info("NetworkX available — knowledge graph enabled")
+except ImportError:
+    logger.warning("NetworkX not available; knowledge graph disabled")
 
 # ────────────────────────────────────────────────────────────────────────────
 # Fine-tuning imports
@@ -139,13 +172,15 @@ except ImportError:
 # Paths — everything on D: drive
 # ────────────────────────────────────────────────────────────────────────────
 
-BASE_DIR    = _DATA_ROOT
-MODELS_DIR  = _DATA_ROOT / "models"
-DATA_DIR    = _DATA_ROOT / "data"
-CHROMA_DIR  = _DATA_ROOT / "data" / "chroma_db"
-JOBS_DIR    = _DATA_ROOT / "data" / "jobs"
-MEMORY_DIR  = _DATA_ROOT / "memory"
-MEMORY_FILE = MEMORY_DIR / "long_term.json"
+BASE_DIR       = _DATA_ROOT
+MODELS_DIR     = _DATA_ROOT / "models"
+DATA_DIR       = _DATA_ROOT / "data"
+CHROMA_DIR     = _DATA_ROOT / "data" / "chroma_db"
+JOBS_DIR       = _DATA_ROOT / "data" / "jobs"
+MEMORY_DIR     = _DATA_ROOT / "memory"
+MEMORY_FILE    = MEMORY_DIR / "long_term.json"
+EPISODES_DB    = DATA_DIR / "episodes.db"          # episodic conversation memory
+KNOWLEDGE_GRAPH_FILE = DATA_DIR / "knowledge_graph.json"  # networkx graph
 
 for d in (MODELS_DIR, DATA_DIR, CHROMA_DIR, JOBS_DIR, MEMORY_DIR):
     d.mkdir(parents=True, exist_ok=True)
@@ -171,8 +206,11 @@ model           = None
 tokenizer       = None
 current_model_id: str = ""
 rag_index       = None
+bm25_retriever  = None   # hybrid search — populated after RAG index has documents
+hybrid_retriever = None  # QueryFusionRetriever combining semantic + BM25
 conv_memory     = None
 fine_tune_jobs: Dict[str, dict] = {}
+knowledge_graph: Any = None   # networkx DiGraph (built lazily)
 
 # ────────────────────────────────────────────────────────────────────────────
 # Long-term memory helpers — persisted to D:\Mossy-AI\memory\long_term.json
@@ -203,8 +241,200 @@ def _memory_block() -> str:
     return f"[Mossy's memory from past sessions]\n{lines}\n"
 
 # ────────────────────────────────────────────────────────────────────────────
-# Pydantic models
+# Episodic memory — SQLite-backed conversation episode store
+# Each completed conversation is summarised into a 1–3 sentence episode entry.
+# Episodes are searched alongside RAG to provide conversational continuity.
 # ────────────────────────────────────────────────────────────────────────────
+
+import sqlite3 as _sqlite3
+
+def _init_episodes_db() -> None:
+    """Create episodes table if it doesn't exist."""
+    con = _sqlite3.connect(str(EPISODES_DB))
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS episodes (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts       TEXT NOT NULL,
+            summary  TEXT NOT NULL,
+            topics   TEXT,
+            outcome  TEXT,
+            rating   REAL DEFAULT 0.8
+        )
+    """)
+    con.commit()
+    con.close()
+
+def _add_episode(summary: str, topics: str = "", outcome: str = "", rating: float = 0.8) -> int:
+    """Persist a conversation episode; evict oldest when over 500."""
+    _init_episodes_db()
+    con = _sqlite3.connect(str(EPISODES_DB))
+    cur = con.cursor()
+    cur.execute(
+        "INSERT INTO episodes (ts, summary, topics, outcome, rating) VALUES (?, ?, ?, ?, ?)",
+        (datetime.now().isoformat(), summary, topics, outcome, rating),
+    )
+    episode_id = cur.lastrowid
+    # Rolling eviction: keep only the 500 most-recent entries
+    cur.execute("DELETE FROM episodes WHERE id NOT IN (SELECT id FROM episodes ORDER BY id DESC LIMIT 500)")
+    con.commit()
+    con.close()
+    return episode_id  # type: ignore[return-value]
+
+def _search_episodes(query: str, limit: int = 3) -> List[Dict]:
+    """Simple keyword search over episode summaries + topics."""
+    _init_episodes_db()
+    con = _sqlite3.connect(str(EPISODES_DB))
+    cur = con.cursor()
+    words = [w.lower() for w in query.split() if len(w) > 3]
+    if not words:
+        cur.execute("SELECT id, ts, summary, topics, outcome, rating FROM episodes ORDER BY id DESC LIMIT ?", (limit,))
+    else:
+        like_clauses = " OR ".join(["LOWER(summary) LIKE ? OR LOWER(topics) LIKE ?" for _ in words])
+        params = [f"%{w}%" for w in words for _ in range(2)]
+        params.append(limit)
+        cur.execute(
+            f"SELECT id, ts, summary, topics, outcome, rating FROM episodes WHERE {like_clauses} ORDER BY id DESC LIMIT ?",
+            params,
+        )
+    rows = cur.fetchall()
+    con.close()
+    return [
+        {"id": r[0], "ts": r[1], "summary": r[2], "topics": r[3], "outcome": r[4], "rating": r[5]}
+        for r in rows
+    ]
+
+def _episodes_block(query: str) -> str:
+    """Return relevant past episodes as a context block to prepend to prompts."""
+    episodes = _search_episodes(query, limit=3)
+    if not episodes:
+        return ""
+    parts = []
+    for ep in episodes:
+        parts.append(f"  [{ep['ts'][:10]}] {ep['summary']}")
+    return "[Relevant past conversations Mossy remembers]\n" + "\n".join(parts) + "\n"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Knowledge graph — networkx DiGraph stored as JSON
+# Nodes = knowledge topics; edges = relationships (requires, conflicts_with…)
+# ────────────────────────────────────────────────────────────────────────────
+
+def _load_knowledge_graph() -> Any:
+    """Load the knowledge graph from disk (or create empty graph)."""
+    global knowledge_graph
+    if not HAS_NETWORKX:
+        return None
+    if KNOWLEDGE_GRAPH_FILE.exists():
+        try:
+            data = json.loads(KNOWLEDGE_GRAPH_FILE.read_text(encoding="utf-8"))
+            knowledge_graph = nx.node_link_graph(data)
+            logger.info(f"Knowledge graph loaded: {knowledge_graph.number_of_nodes()} nodes, "
+                        f"{knowledge_graph.number_of_edges()} edges")
+        except Exception as exc:
+            logger.warning(f"Could not load knowledge graph: {exc}")
+            knowledge_graph = nx.DiGraph()
+    else:
+        knowledge_graph = nx.DiGraph()
+    return knowledge_graph
+
+def _save_knowledge_graph() -> None:
+    """Persist the knowledge graph to disk."""
+    global knowledge_graph
+    if not HAS_NETWORKX or knowledge_graph is None:
+        return
+    try:
+        data = nx.node_link_data(knowledge_graph)
+        KNOWLEDGE_GRAPH_FILE.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    except Exception as exc:
+        logger.warning(f"Could not save knowledge graph: {exc}")
+
+def _graph_context(topic: str) -> str:
+    """Return related nodes from the knowledge graph as a context string."""
+    global knowledge_graph
+    if not HAS_NETWORKX or knowledge_graph is None or topic not in knowledge_graph:
+        return ""
+    neighbors = list(knowledge_graph.successors(topic))[:5]
+    predecessors = list(knowledge_graph.predecessors(topic))[:5]
+    parts = []
+    if predecessors:
+        parts.append(f"  Required by or related to: {', '.join(predecessors)}")
+    if neighbors:
+        parts.append(f"  Also see: {', '.join(neighbors)}")
+    if not parts:
+        return ""
+    return f"[Knowledge graph context for '{topic}']\n" + "\n".join(parts) + "\n"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Hybrid retriever builder — called after RAG index is populated
+# ────────────────────────────────────────────────────────────────────────────
+
+def _build_hybrid_retriever() -> None:
+    """Build BM25 + semantic hybrid retriever from the current RAG index."""
+    global bm25_retriever, hybrid_retriever
+    if not HAS_LLAMAINDEX or not HAS_BM25 or rag_index is None:
+        return
+    try:
+        nodes = list(rag_index.docstore.docs.values())
+        if not nodes:
+            return
+        bm25_retriever = BM25Retriever.from_defaults(nodes=nodes, similarity_top_k=5)
+        semantic_retriever = rag_index.as_retriever(similarity_top_k=5)
+        hybrid_retriever = QueryFusionRetriever(
+            [semantic_retriever, bm25_retriever],
+            similarity_top_k=5,
+            num_queries=1,
+            mode="relative_score",
+            use_async=False,
+        )
+        logger.info("Hybrid BM25 + semantic retriever ready")
+    except Exception as exc:
+        logger.warning(f"Could not build hybrid retriever: {exc}")
+
+# ────────────────────────────────────────────────────────────────────────────
+# Auto-critique helper — wraps _generate with an optional self-critique pass.
+# Applied when the caller requests it (confidence parameter < threshold).
+# ────────────────────────────────────────────────────────────────────────────
+
+def _generate_with_critique(
+    question: str,
+    initial_answer: str,
+    confidence_threshold: float = 0.85,
+    estimated_confidence: float = 1.0,
+) -> str:
+    """
+    If estimated_confidence is below threshold, run a critique + refinement pass.
+    Returns the (possibly improved) answer.
+    """
+    if estimated_confidence >= confidence_threshold or model is None:
+        return initial_answer
+    try:
+        critique_prompt = textwrap.dedent(f"""
+            You are Mossy, a self-improving AI assistant.
+            Critically evaluate the following answer:
+            - Identify errors, gaps, or unclear explanations.
+            - Be brief (2–4 sentences of critique).
+
+            Question: {question}
+            Answer: {initial_answer}
+
+            Critique:
+        """).strip()
+        critique = _generate(critique_prompt, max_tokens=300, temperature=0.4, inject_memory=False)
+
+        refine_prompt = textwrap.dedent(f"""
+            You are Mossy. Rewrite the answer below, fixing the issues identified in the critique.
+            Keep the improved answer focused and accurate.
+
+            Question: {question}
+            Original Answer: {initial_answer}
+            Critique: {critique}
+
+            Improved Answer:
+        """).strip()
+        improved = _generate(refine_prompt, max_tokens=700, temperature=0.5, inject_memory=False)
+        return improved
+    except Exception as exc:
+        logger.warning(f"Auto-critique failed, returning original: {exc}")
+        return initial_answer
 
 class InferenceRequest(BaseModel):
     prompt: str
@@ -212,6 +442,7 @@ class InferenceRequest(BaseModel):
     temperature: float = 0.7
     top_p: float = 0.95
     top_k: int = 50
+    auto_critique: bool = True   # run self-critique when confidence is low
 
 class ChainRequest(BaseModel):
     query: str
@@ -239,6 +470,7 @@ class ToolExecuteRequest(BaseModel):
 class RAGRequest(BaseModel):
     query: str
     use_rag: bool = True
+    use_hybrid: bool = True      # prefer hybrid BM25+semantic over pure semantic
 
 class FineTuneRequest(BaseModel):
     model_name: str = "google/gemma-4-9b"
@@ -248,7 +480,7 @@ class FineTuneRequest(BaseModel):
     num_epochs: int = 3
     batch_size: int = 2
     learning_rate: float = 2e-4
-    max_seq_length: int = 2048
+    max_seq_length: int = 8192   # increased from 2048
     lora_rank: int = 16
     lora_alpha: int = 32
     lora_dropout: float = 0.05
@@ -256,7 +488,28 @@ class FineTuneRequest(BaseModel):
 class LoadModelRequest(BaseModel):
     model_name: str = "google/gemma-4-9b"
     load_in_4bit: bool = True
-    max_seq_length: int = 4096
+    max_seq_length: int = 8192   # increased from 4096
+
+# New Pydantic models for brain enhancement features
+
+class EpisodeAddRequest(BaseModel):
+    summary: str
+    topics: str = ""
+    outcome: str = ""
+    rating: float = 0.8
+
+class EpisodeSearchRequest(BaseModel):
+    query: str
+    limit: int = 3
+
+class KnowledgeGraphEdgeRequest(BaseModel):
+    source: str      # source node (topic)
+    target: str      # target node (topic)
+    relation: str    # e.g., "requires", "conflicts_with", "is_a_patch_for"
+
+class GraphQueryRequest(BaseModel):
+    question: str
+    context: Optional[str] = None
 
 class MemoryAddRequest(BaseModel):
     key: str
@@ -353,7 +606,20 @@ if HAS_LANGCHAIN:
 
 @app.on_event("startup")
 async def startup_event():
-    global conv_memory, rag_index
+    global conv_memory, rag_index, knowledge_graph
+
+    # Initialise episodic memory DB
+    try:
+        _init_episodes_db()
+        logger.info("Episodic memory DB ready")
+    except Exception as exc:
+        logger.warning(f"Episodic memory init failed: {exc}")
+
+    # Load knowledge graph from disk
+    try:
+        _load_knowledge_graph()
+    except Exception as exc:
+        logger.warning(f"Knowledge graph load failed: {exc}")
 
     # Attempt to load the default model; non-fatal if weights not downloaded yet
     default_model = os.getenv("MOSSY_MODEL", "google/gemma-4-9b")
@@ -388,6 +654,8 @@ async def startup_event():
                 [], storage_context=storage_ctx, embed_model=embed_model
             )
             logger.info("LlamaIndex RAG index ready")
+            # Build hybrid retriever if documents already exist in the collection
+            _build_hybrid_retriever()
         except Exception as exc:
             logger.warning(f"RAG init failed: {exc}")
             rag_index = None
@@ -416,17 +684,28 @@ async def health_check():
         "gpu_vram_total_gb": round(gpu_total, 2),
         "unsloth_enabled": HAS_UNSLOTH,
         "rag_enabled": HAS_LLAMAINDEX and rag_index is not None,
+        "hybrid_search_enabled": hybrid_retriever is not None,
         "langchain_enabled": HAS_LANGCHAIN,
+        "langgraph_enabled": HAS_LANGGRAPH,
+        "knowledge_graph_enabled": HAS_NETWORKX,
+        "knowledge_graph_nodes": knowledge_graph.number_of_nodes() if (HAS_NETWORKX and knowledge_graph) else 0,
         "fine_tune_enabled": HAS_FINETUNE,
+        "episodic_memory_enabled": EPISODES_DB.exists(),
         "features": {
-            "inference":    model is not None,
-            "chains":       HAS_LANGCHAIN and model is not None,
-            "rag":          HAS_LLAMAINDEX and rag_index is not None,
-            "fine_tuning":  HAS_FINETUNE and model is not None,
-            "planning":     model is not None,
-            "reflection":   model is not None,
-            "chain_of_thought": model is not None,
-            "tool_execution": True,
+            "inference":          model is not None,
+            "chains":             HAS_LANGCHAIN and model is not None,
+            "rag":                HAS_LLAMAINDEX and rag_index is not None,
+            "hybrid_search":      hybrid_retriever is not None,
+            "fine_tuning":        HAS_FINETUNE and model is not None,
+            "planning":           model is not None,
+            "reflection":         model is not None,
+            "auto_critique":      model is not None,
+            "chain_of_thought":   model is not None,
+            "langgraph_reasoning": HAS_LANGGRAPH and model is not None,
+            "episodic_memory":    True,
+            "knowledge_graph":    HAS_NETWORKX,
+            "tool_execution":     True,
+            "web_search":         True,
         },
     }
 
@@ -456,16 +735,30 @@ async def load_model_by_name(model_name: str):
 async def list_models():
     return {
         "models": [
+            # Gemma 4 family
             "google/gemma-4-9b",
-            "google/gemma-4-12b-it",
+            "google/gemma-4-27b",      # 3× bigger; needs 24 GB+ VRAM in 4-bit
+            # Gemma 3 instruction-tuned
             "google/gemma-3-4b-it",
             "google/gemma-3-12b-it",
+            "google/gemma-3-27b-it",   # strong instruction-tuned 27B
+            # Gemma 2
             "google/gemma-2-9b-it",
+            # Unsloth optimised variants (faster, same quality)
             "unsloth/gemma-3-4b-it",
             "unsloth/gemma-3-12b-it",
+            "unsloth/gemma-3-27b-it",  # unsloth 27B (most advanced + fastest)
+            # Fine-tuned Mossy adapter (saved locally)
+            str(_DATA_ROOT / "models" / "mossy-lora"),
         ],
         "current_model": current_model_id,
         "unsloth_available": HAS_UNSLOTH,
+        "recommended_for_vram": {
+            "8gb":  "google/gemma-3-4b-it",
+            "12gb": "google/gemma-3-12b-it",
+            "16gb": "google/gemma-4-9b",
+            "24gb": "google/gemma-4-27b or google/gemma-3-27b-it",
+        },
     }
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -478,13 +771,34 @@ async def infer(request: InferenceRequest):
     if not model:
         raise HTTPException(status_code=503, detail="Model not loaded")
     try:
+        # Prepend episodic context to help Mossy recall relevant past conversations
+        enriched_prompt = request.prompt
+        episode_ctx = _episodes_block(request.prompt)
+        if episode_ctx:
+            enriched_prompt = episode_ctx + "\n" + enriched_prompt
+
         text = _generate(
-            request.prompt,
+            enriched_prompt,
             max_tokens=request.max_tokens,
             temperature=request.temperature,
             top_p=request.top_p,
             top_k=request.top_k,
         )
+
+        # Auto-critique: if the prompt looks like a factual question (heuristic:
+        # contains a '?' or starts with who/what/how/why/when/where) and the
+        # response is short, confidence is rated lower and critique is triggered.
+        if request.auto_critique:
+            is_question = "?" in request.prompt or request.prompt.lower().lstrip().startswith(
+                ("who ", "what ", "how ", "why ", "when ", "where ", "which ")
+            )
+            estimated_confidence = 0.75 if (is_question and len(text.split()) < 30) else 0.90
+            text = _generate_with_critique(
+                question=request.prompt,
+                initial_answer=text,
+                estimated_confidence=estimated_confidence,
+            )
+
         return {"prompt": request.prompt, "response": text, "text": text, "success": True}
     except Exception as exc:
         logger.error(f"Inference error: {exc}")
@@ -781,16 +1095,46 @@ async def rag_query(request: RAGRequest):
         raise HTTPException(status_code=503, detail="RAG not available — LlamaIndex not installed or index empty")
 
     try:
-        qe       = rag_index.as_query_engine()
-        response = qe.query(request.query)
-        sources  = []
-        if hasattr(response, "source_nodes"):
+        sources: List[Dict] = []
+        response_text: str = ""
+
+        # Prefer hybrid retriever when available
+        if request.use_hybrid and hybrid_retriever is not None:
+            nodes = hybrid_retriever.retrieve(request.query)
+            context = "\n\n".join(n.node.get_content() for n in nodes)
             sources = [
                 {"text": n.node.get_content(), "score": round(n.score or 0.0, 4)}
-                for n in response.source_nodes
+                for n in nodes
             ]
-        return {"query": request.query, "response": str(response),
-                "source_nodes": sources, "success": True}
+            # Synthesise answer using retrieved context
+            if model is not None:
+                synth_prompt = (
+                    f"You are Mossy, an expert AI assistant. "
+                    f"Using the knowledge below, answer the question accurately.\n\n"
+                    f"Knowledge:\n{context}\n\nQuestion: {request.query}\n\nAnswer:"
+                )
+                response_text = _generate(synth_prompt, max_tokens=700, temperature=0.5)
+            else:
+                response_text = context
+        else:
+            # Fallback: pure semantic query engine
+            qe = rag_index.as_query_engine()
+            response = qe.query(request.query)
+            response_text = str(response)
+            if hasattr(response, "source_nodes"):
+                sources = [
+                    {"text": n.node.get_content(), "score": round(n.score or 0.0, 4)}
+                    for n in response.source_nodes
+                ]
+
+        search_mode = "hybrid" if (request.use_hybrid and hybrid_retriever is not None) else "semantic"
+        return {
+            "query": request.query,
+            "response": response_text,
+            "source_nodes": sources,
+            "search_mode": search_mode,
+            "success": True,
+        }
     except Exception as exc:
         logger.error(f"RAG query error: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
@@ -806,6 +1150,8 @@ async def add_documents(documents: List[Dict[str, str]]):
                 text=doc.get("text", ""),
                 metadata=doc.get("metadata", {}),
             ))
+        # Rebuild hybrid retriever so new documents are searchable via BM25 too
+        _build_hybrid_retriever()
         return {"success": True, "documents_added": len(documents)}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -960,8 +1306,272 @@ async def clear_memory():
     return {"success": True, "message": "All memory cleared"}
 
 # ────────────────────────────────────────────────────────────────────────────
-# Web search tool — DuckDuckGo Instant Answer API (no API key, no cost)
+# Episodic memory endpoints
 # ────────────────────────────────────────────────────────────────────────────
+
+@app.post("/episodes/add")
+async def add_episode_endpoint(req: EpisodeAddRequest):
+    """
+    Persist a conversation episode summary.
+    Typically called automatically at the end of a chat session.
+    """
+    episode_id = _add_episode(req.summary, req.topics, req.outcome, req.rating)
+    return {"success": True, "id": episode_id}
+
+@app.post("/episodes/search")
+async def search_episodes_endpoint(req: EpisodeSearchRequest):
+    """Search past conversation episodes for relevant context."""
+    results = _search_episodes(req.query, req.limit)
+    return {"query": req.query, "episodes": results, "count": len(results)}
+
+@app.get("/episodes")
+async def list_episodes(limit: int = 20):
+    """Return the most recent N episodes."""
+    _init_episodes_db()
+    con = _sqlite3.connect(str(EPISODES_DB))
+    cur = con.cursor()
+    cur.execute("SELECT id, ts, summary, topics, outcome, rating FROM episodes ORDER BY id DESC LIMIT ?", (limit,))
+    rows = cur.fetchall()
+    con.close()
+    episodes = [{"id": r[0], "ts": r[1], "summary": r[2], "topics": r[3], "outcome": r[4], "rating": r[5]} for r in rows]
+    return {"episodes": episodes, "count": len(episodes)}
+
+@app.post("/episodes/summarise-session")
+async def summarise_and_save_session(messages: List[Dict[str, str]]):
+    """
+    Given a list of {role, content} messages from a chat session, Gemma
+    summarises the conversation into a 1–3 sentence episode and persists it.
+    """
+    if not model:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    try:
+        conversation_text = "\n".join(
+            f"{m.get('role','user').capitalize()}: {m.get('content','')}"
+            for m in messages[-20:]   # last 20 messages to fit context
+        )
+        prompt = textwrap.dedent(f"""
+            You are Mossy. Summarise the following conversation in 1–3 sentences.
+            Focus on: what was discussed, what was resolved or decided, any key facts learned.
+            Be specific about topics (mod names, error codes, settings).
+
+            Conversation:
+            {conversation_text}
+
+            Summary (1–3 sentences):
+        """).strip()
+        summary = _generate(prompt, max_tokens=200, temperature=0.3, inject_memory=False)
+
+        # Extract topics (simple heuristic)
+        topics_prompt = (
+            f"List 3–5 key topics from this summary as comma-separated keywords: {summary}\n\nTopics:"
+        )
+        topics_raw = _generate(topics_prompt, max_tokens=60, temperature=0.2, inject_memory=False)
+        topics = topics_raw.strip()
+
+        episode_id = _add_episode(summary=summary, topics=topics, outcome="completed")
+        return {"success": True, "id": episode_id, "summary": summary, "topics": topics}
+    except Exception as exc:
+        logger.error(f"Session summarisation error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+# ────────────────────────────────────────────────────────────────────────────
+# Knowledge graph endpoints (networkx)
+# ────────────────────────────────────────────────────────────────────────────
+
+@app.post("/knowledge-graph/add-edge")
+async def knowledge_graph_add_edge(req: KnowledgeGraphEdgeRequest):
+    """Add a directed edge (relationship) between two knowledge topics."""
+    global knowledge_graph
+    if not HAS_NETWORKX:
+        raise HTTPException(status_code=503, detail="NetworkX not installed")
+    if knowledge_graph is None:
+        _load_knowledge_graph()
+    knowledge_graph.add_edge(req.source, req.target, relation=req.relation)
+    _save_knowledge_graph()
+    return {
+        "success": True,
+        "edge": f"{req.source} --[{req.relation}]--> {req.target}",
+        "total_nodes": knowledge_graph.number_of_nodes(),
+        "total_edges": knowledge_graph.number_of_edges(),
+    }
+
+@app.get("/knowledge-graph/neighbors/{topic}")
+async def knowledge_graph_neighbors(topic: str):
+    """Return all nodes directly connected to the given topic."""
+    global knowledge_graph
+    if not HAS_NETWORKX or knowledge_graph is None:
+        raise HTTPException(status_code=503, detail="Knowledge graph not available")
+    successors = [
+        {"node": n, "relation": knowledge_graph[topic][n].get("relation", "")}
+        for n in knowledge_graph.successors(topic)
+    ]
+    predecessors = [
+        {"node": n, "relation": knowledge_graph[n][topic].get("relation", "")}
+        for n in knowledge_graph.predecessors(topic)
+    ]
+    return {"topic": topic, "successors": successors, "predecessors": predecessors}
+
+@app.get("/knowledge-graph/stats")
+async def knowledge_graph_stats():
+    """Return knowledge graph statistics."""
+    global knowledge_graph
+    if not HAS_NETWORKX or knowledge_graph is None:
+        return {"available": False}
+    return {
+        "available": True,
+        "nodes": knowledge_graph.number_of_nodes(),
+        "edges": knowledge_graph.number_of_edges(),
+        "node_list": list(knowledge_graph.nodes())[:50],
+    }
+
+# ────────────────────────────────────────────────────────────────────────────
+# LangGraph multi-step agentic reasoning graph
+# Nodes: retrieve → generate → critique → refine → return
+# Conditional edge: if critique detects major issues, re-retrieve with refined
+# query before generating again.
+# ────────────────────────────────────────────────────────────────────────────
+
+@app.post("/graph-query")
+async def graph_query(request: GraphQueryRequest):
+    """
+    Multi-step agentic reasoning using LangGraph.
+    Stages: retrieve context → generate draft → critique → (optionally refine) → return.
+    Falls back to single-pass inference if LangGraph is unavailable.
+    """
+    if not model:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    question = request.question
+    extra_ctx = request.context or ""
+
+    # ── Fallback (no LangGraph): single-pass with auto-critique ──
+    if not HAS_LANGGRAPH:
+        answer = _generate(
+            f"You are Mossy. Answer this question thoroughly.\n{extra_ctx}\nQuestion: {question}\nAnswer:",
+            max_tokens=700, temperature=0.6,
+        )
+        answer = _generate_with_critique(question, answer, estimated_confidence=0.75)
+        return {"question": question, "answer": answer, "stages": ["generate", "critique"], "success": True}
+
+    # ── LangGraph stateful graph ──
+    try:
+        class GraphState(LGTypedDict):
+            question: str
+            context: str
+            draft: str
+            critique: str
+            answer: str
+            loops: int
+
+        def node_retrieve(state: GraphState) -> GraphState:
+            """Retrieve relevant context from knowledge base + episodes."""
+            ctx_parts: List[str] = []
+            if extra_ctx:
+                ctx_parts.append(extra_ctx)
+            # Episodic memory
+            ep_ctx = _episodes_block(state["question"])
+            if ep_ctx:
+                ctx_parts.append(ep_ctx)
+            # Graph context (if question contains a known node name)
+            if HAS_NETWORKX and knowledge_graph:
+                for node in knowledge_graph.nodes():
+                    if node.lower() in state["question"].lower():
+                        gc = _graph_context(node)
+                        if gc:
+                            ctx_parts.append(gc)
+                            break
+            # RAG
+            if hybrid_retriever is not None:
+                try:
+                    nodes = hybrid_retriever.retrieve(state["question"])
+                    rag_ctx = "\n".join(n.node.get_content()[:300] for n in nodes[:3])
+                    if rag_ctx:
+                        ctx_parts.append(f"[Knowledge base]\n{rag_ctx}")
+                except Exception:
+                    pass
+            state["context"] = "\n\n".join(ctx_parts)
+            return state
+
+        def node_generate(state: GraphState) -> GraphState:
+            """Generate an initial draft answer."""
+            ctx_block = f"\nContext:\n{state['context']}\n" if state["context"] else ""
+            prompt = (
+                f"You are Mossy, an expert AI assistant.{ctx_block}\n"
+                f"Question: {state['question']}\n\nAnswer:"
+            )
+            state["draft"] = _generate(prompt, max_tokens=600, temperature=0.6)
+            state["loops"] = state.get("loops", 0) + 1
+            return state
+
+        def node_critique(state: GraphState) -> GraphState:
+            """Critique the draft; set critique field."""
+            critique_prompt = (
+                f"You are Mossy's inner critic. Evaluate this answer briefly (2–3 sentences). "
+                f"Note ONLY significant errors or major omissions. "
+                f"If the answer is good, reply with: GOOD\n\n"
+                f"Question: {state['question']}\nAnswer: {state['draft']}\n\nCritique:"
+            )
+            state["critique"] = _generate(critique_prompt, max_tokens=200, temperature=0.3, inject_memory=False)
+            return state
+
+        def node_refine(state: GraphState) -> GraphState:
+            """Refine the draft based on critique."""
+            refine_prompt = (
+                f"You are Mossy. Rewrite your answer incorporating this critique.\n\n"
+                f"Question: {state['question']}\n"
+                f"Original: {state['draft']}\n"
+                f"Critique: {state['critique']}\n\n"
+                f"Improved Answer:"
+            )
+            state["answer"] = _generate(refine_prompt, max_tokens=700, temperature=0.5, inject_memory=False)
+            return state
+
+        def node_finalise(state: GraphState) -> GraphState:
+            """No refinement needed — use draft as final answer."""
+            state["answer"] = state["draft"]
+            return state
+
+        def needs_refinement(state: GraphState) -> str:
+            """Edge decision: does critique indicate issues?"""
+            critique = state.get("critique", "").lower()
+            if "good" in critique[:30] or state.get("loops", 0) >= 2:
+                return "finalise"
+            return "refine"
+
+        # Build the graph
+        graph = StateGraph(GraphState)
+        graph.add_node("retrieve", node_retrieve)
+        graph.add_node("generate", node_generate)
+        graph.add_node("critique", node_critique)
+        graph.add_node("refine", node_refine)
+        graph.add_node("finalise", node_finalise)
+
+        graph.set_entry_point("retrieve")
+        graph.add_edge("retrieve", "generate")
+        graph.add_edge("generate", "critique")
+        graph.add_conditional_edges("critique", needs_refinement, {"refine": "refine", "finalise": "finalise"})
+        graph.add_edge("refine", END)
+        graph.add_edge("finalise", END)
+
+        compiled = graph.compile()
+        final_state = compiled.invoke({
+            "question": question, "context": "", "draft": "",
+            "critique": "", "answer": "", "loops": 0,
+        })
+
+        return {
+            "question": question,
+            "answer": final_state.get("answer", ""),
+            "critique": final_state.get("critique", ""),
+            "draft": final_state.get("draft", ""),
+            "loops": final_state.get("loops", 1),
+            "stages": ["retrieve", "generate", "critique",
+                       "refine" if "refine" in final_state.get("critique","").lower() else "finalise"],
+            "success": True,
+        }
+    except Exception as exc:
+        logger.error(f"LangGraph query error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 @app.post("/tools/web-search")
 async def web_search(request: WebSearchRequest):
@@ -969,6 +1579,8 @@ async def web_search(request: WebSearchRequest):
     Search the web using DuckDuckGo's free Instant Answer API.
     Returns a summary + list of related topics.  No API key required.
     Also optionally asks the model to synthesise the results into an answer.
+    Successful results are automatically added to the RAG knowledge base so
+    Mossy learns from every search.
     """
     try:
         query_encoded = urllib.parse.quote_plus(request.query)
@@ -1005,6 +1617,19 @@ async def web_search(request: WebSearchRequest):
             synthesis = _generate(synth_prompt, max_tokens=400, temperature=0.4,
                                    inject_memory=False)
 
+        # Auto-learn: index the synthesised answer (or summary) into RAG knowledge base
+        learn_text = synthesis or summary
+        if learn_text and learn_text != "No instant answer found." and HAS_LLAMAINDEX and rag_index:
+            try:
+                rag_index.insert(Document(
+                    text=f"Web search result for: {request.query}\n\n{learn_text}",
+                    metadata={"source": "web_search", "query": request.query,
+                              "ts": datetime.now().isoformat()},
+                ))
+                _build_hybrid_retriever()   # keep hybrid index fresh
+            except Exception as learn_exc:
+                logger.debug(f"Could not index web search result: {learn_exc}")
+
         return {
             "query":     request.query,
             "summary":   summary,
@@ -1027,17 +1652,19 @@ async def get_config():
     Useful for verifying the D: drive layout is correct.
     """
     return {
-        "mossy_data_root":     str(_DATA_ROOT),
-        "models_dir":          str(MODELS_DIR),
-        "data_dir":            str(DATA_DIR),
-        "chroma_db_dir":       str(CHROMA_DIR),
-        "memory_file":         str(MEMORY_FILE),
-        "hf_home":             os.environ.get("HF_HOME"),
-        "hf_hub_cache":        os.environ.get("HF_HUB_CACHE"),
-        "transformers_cache":  os.environ.get("TRANSFORMERS_CACHE"),
-        "hf_datasets_cache":   os.environ.get("HF_DATASETS_CACHE"),
-        "torch_home":          os.environ.get("TORCH_HOME"),
-        "pip_cache_dir":       os.environ.get("PIP_CACHE_DIR"),
+        "mossy_data_root":       str(_DATA_ROOT),
+        "models_dir":            str(MODELS_DIR),
+        "data_dir":              str(DATA_DIR),
+        "chroma_db_dir":         str(CHROMA_DIR),
+        "memory_file":           str(MEMORY_FILE),
+        "episodes_db":           str(EPISODES_DB),
+        "knowledge_graph_file":  str(KNOWLEDGE_GRAPH_FILE),
+        "hf_home":               os.environ.get("HF_HOME"),
+        "hf_hub_cache":          os.environ.get("HF_HUB_CACHE"),
+        "transformers_cache":    os.environ.get("TRANSFORMERS_CACHE"),
+        "hf_datasets_cache":     os.environ.get("HF_DATASETS_CACHE"),
+        "torch_home":            os.environ.get("TORCH_HOME"),
+        "pip_cache_dir":         os.environ.get("PIP_CACHE_DIR"),
         "current_model":       current_model_id,
         "memory_count":        len(_load_memory()),
     }

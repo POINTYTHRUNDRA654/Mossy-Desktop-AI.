@@ -58,6 +58,13 @@ const NIFViewer      = React.lazy(() => import('./components/NIFViewer'));
 const INITweaker     = React.lazy(() => import('./components/INITweaker'));
 const PluginMerger   = React.lazy(() => import('./components/PluginMerger'));
 const ModDiagnostics = React.lazy(() => import('./components/ModDiagnostics'));
+// ── Desktop Tutor Bridge ──
+const MossyTutorBridge = React.lazy(() => import('./components/MossyTutorBridge'));
+// ── Gemma Fine-Tuner + Reasoning Chain (LangChain) ──
+const Gemma4FineTuner  = React.lazy(() => import('./components/Gemma4FineTuner'));
+const ReasoningChain   = React.lazy(() => import('./components/ReasoningChain'));
+// ── Multi-Agent Collaboration monitor ──
+const AgentCollaboration = React.lazy(() => import('./components/AgentCollaboration'));
 
 // Define window interface for AI Studio helpers & Custom Events
 declare global {
@@ -188,6 +195,12 @@ const App: React.FC = () => {
                 <Route path="/ini-tweaker" element={<INITweaker />} />
                 <Route path="/merger"      element={<PluginMerger />} />
                 <Route path="/diagnostics" element={<ModDiagnostics />} />
+                {/* ── Desktop Tutor Bridge ── */}
+                <Route path="/tutor-bridge"    element={<MossyTutorBridge />} />
+                {/* ── AI Tools ── */}
+                <Route path="/gemma-tuner"     element={<Gemma4FineTuner />} />
+                <Route path="/reasoning"       element={<ReasoningChain />} />
+                <Route path="/agent-collab"    element={<AgentCollaboration />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
