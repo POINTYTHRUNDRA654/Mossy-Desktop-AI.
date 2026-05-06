@@ -416,10 +416,18 @@ async def query_agent(query: AgentQuery) -> AgentResponse:
     endpoint = AGENTS[query.to_agent]
     
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        # Per-agent timeouts: desktop-tutor chat needs more time for Groq LLM
+        AGENT_TIMEOUTS = {
+            "desktop-ai":    15.0,
+            "ai-helper":     10.0,
+            "desktop-tutor": 20.0,
+            "mossy-manager": 10.0,
+        }
+        agent_timeout = AGENT_TIMEOUTS.get(query.to_agent, 15.0)
+        async with httpx.AsyncClient(timeout=agent_timeout) as client:
             # Agent-specific query handling based on the actual API each service exposes
             if query.to_agent == "ai-helper":
-                # AI-Helper (Desktop Tutor bridge) — get hardware context as an answer
+                # AI-Helper uses the Desktop Tutor bridge (port 21337) to get hardware context
                 hw_resp = await client.get(f"{DESKTOP_TUTOR_BRIDGE_URL}/hardware")
                 hw_data = hw_resp.json() if hw_resp.status_code == 200 else {}
                 hw_summary = (
@@ -451,7 +459,6 @@ async def query_agent(query: AgentQuery) -> AgentResponse:
                 chat_resp = await client.post(
                     f"{DESKTOP_TUTOR_CHAT_URL}/v1/chat",
                     json={"provider": "groq", "messages": messages, "maxTokens": 1024},
-                    timeout=20.0,
                 )
                 if chat_resp.status_code == 200:
                     chat_data = chat_resp.json()
@@ -489,24 +496,24 @@ async def query_agent(query: AgentQuery) -> AgentResponse:
             if resp.status_code == 200:
                 data = resp.json()
 
-                # Log the query
-                conn = sqlite3.connect(DB_PATHS["shared"])
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO agent_queries (id, from_agent, to_agent, question, answer, timestamp, agents_consulted)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (str(uuid.uuid4()), query.from_agent, query.to_agent,
-                      query.question, json.dumps(data),
-                      datetime.now().isoformat(), query.to_agent))
-                conn.commit()
-                conn.close()
+                # Only log + learn when from_agent is a recognised agent
+                if query.from_agent in DB_PATHS and query.from_agent != "shared":
+                    conn = sqlite3.connect(DB_PATHS["shared"])
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO agent_queries (id, from_agent, to_agent, question, answer, timestamp, agents_consulted)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (str(uuid.uuid4()), query.from_agent, query.to_agent,
+                          query.question, json.dumps(data),
+                          datetime.now().isoformat(), query.to_agent))
+                    conn.commit()
+                    conn.close()
 
-                # Record learning for from_agent
-                if query.from_agent in agent_memories:
-                    agent_memories[query.from_agent].learn_from_interaction(
-                        {"response": data, "source_agent": query.to_agent},
-                        ["learned from " + query.to_agent]
-                    )
+                    if query.from_agent in agent_memories:
+                        agent_memories[query.from_agent].learn_from_interaction(
+                            {"response": data, "source_agent": query.to_agent},
+                            ["learned from " + query.to_agent]
+                        )
 
                 return AgentResponse(
                     agent=query.to_agent,
