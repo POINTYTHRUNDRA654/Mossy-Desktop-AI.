@@ -52,6 +52,12 @@ const PapyrusIDE     = React.lazy(() => import('./components/PapyrusIDE'));
 const FOMODBuilder   = React.lazy(() => import('./components/FOMODBuilder'));
 const CellEditor     = React.lazy(() => import('./components/CellEditor'));
 const F4SEScaffolder = React.lazy(() => import('./components/F4SEScaffolder'));
+// ── Advanced Modding Tools (New) ──
+const MO2Manager     = React.lazy(() => import('./components/MO2Manager'));
+const NIFViewer      = React.lazy(() => import('./components/NIFViewer'));
+const INITweaker     = React.lazy(() => import('./components/INITweaker'));
+const PluginMerger   = React.lazy(() => import('./components/PluginMerger'));
+const ModDiagnostics = React.lazy(() => import('./components/ModDiagnostics'));
 
 // Define window interface for AI Studio helpers & Custom Events
 declare global {
@@ -176,6 +182,12 @@ const App: React.FC = () => {
                 <Route path="/fomod"       element={<FOMODBuilder />} />
                 <Route path="/cell-editor" element={<CellEditor />} />
                 <Route path="/f4se"        element={<F4SEScaffolder />} />
+                {/* ── Advanced Modding Tools ── */}
+                <Route path="/mo2"         element={<MO2Manager />} />
+                <Route path="/nif-viewer"  element={<NIFViewer />} />
+                <Route path="/ini-tweaker" element={<INITweaker />} />
+                <Route path="/merger"      element={<PluginMerger />} />
+                <Route path="/diagnostics" element={<ModDiagnostics />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />

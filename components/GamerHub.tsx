@@ -4,7 +4,7 @@ import {
   Gamepad2, Code2, Monitor, PackageSearch, List, Box,
   Wind, Map, Mic, Layers3, ChevronRight, Cpu, Zap,
   Sparkles, PackageOpen, AlertTriangle, Archive, FileCode2, PackagePlus,
-  Layers, Terminal,
+  Layers, Terminal, Settings, Sliders, GitMerge, Bug,
 } from 'lucide-react';
 
 interface ToolCard {
@@ -162,6 +162,47 @@ const TOOLS: ToolCard[] = [
     status: 'ready',
     badge: 'Jinja2',
   },
+  // ── Advanced Modding Tools ───────────────────────────────────────────
+  {
+    title: 'MO2 Manager',
+    description: 'Integrate directly with Mod Organizer 2 — browse profiles, toggle mods, view and write load order without leaving Mossy.',
+    icon: Settings,
+    path: '/mo2',
+    status: 'ready',
+    badge: 'Port 8018',
+  },
+  {
+    title: 'NIF Viewer',
+    description: 'Inspect Bethesda NIF mesh files — full block tree, vertex/triangle counts, texture path extraction, and OBJ export for Blender.',
+    icon: Box,
+    path: '/nif-viewer',
+    status: 'ready',
+    badge: 'niffile',
+  },
+  {
+    title: 'INI Tweaker',
+    description: 'Smart Fallout 4 / Skyrim INI editor with a built-in settings database, 5 performance presets, auto-backup and validation.',
+    icon: Sliders,
+    path: '/ini-tweaker',
+    status: 'ready',
+    badge: 'Built-in',
+  },
+  {
+    title: 'Plugin Merger',
+    description: 'Merge multiple ESP/ESM/ESL plugins into one to reduce load order count below 255. Includes conflict analysis and last-writer-wins resolution.',
+    icon: GitMerge,
+    path: '/merger',
+    status: 'experimental',
+    badge: 'Port 8021',
+  },
+  {
+    title: 'Mod Diagnostics',
+    description: 'AI-powered crash log analyzer — parse F4SE/SKSE logs, Papyrus.0.log, MO2 logs, and crash dumps. Get AI-generated fix suggestions.',
+    icon: Bug,
+    path: '/diagnostics',
+    status: 'ready',
+    badge: 'AI',
+  },
 ];
 
 const STATUS_STYLES = {
@@ -196,16 +237,16 @@ const GamerHub: React.FC = () => {
         </div>
         <div className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700">
           <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-xs text-slate-300 font-mono">10 Tools Active</span>
+          <span className="text-xs text-slate-300 font-mono">{TOOLS.length} Tools Active</span>
         </div>
       </div>
 
       {/* Stats bar */}
       <div className="grid grid-cols-3 gap-3 mb-8">
         {[
-          { label: 'AI-Powered', value: '5', icon: Zap, color: 'text-emerald-400' },
-          { label: 'Require API Key', value: '2', icon: Code2, color: 'text-amber-400' },
-          { label: 'Experimental', value: '3', icon: Cpu, color: 'text-purple-400' },
+          { label: 'AI-Powered', value: String(TOOLS.filter(t => t.badge === 'AI').length), icon: Zap, color: 'text-emerald-400' },
+          { label: 'Require Setup', value: String(TOOLS.filter(t => t.status === 'requires-setup').length), icon: Code2, color: 'text-amber-400' },
+          { label: 'Experimental', value: String(TOOLS.filter(t => t.status === 'experimental').length), icon: Cpu, color: 'text-purple-400' },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 flex items-center gap-3">
             <Icon className={`w-5 h-5 ${color}`} />
@@ -263,7 +304,7 @@ const GamerHub: React.FC = () => {
       <div className="mt-8 p-4 rounded-xl bg-slate-800/30 border border-slate-700/50 text-center">
         <p className="text-slate-500 text-xs">
           🎮 Mossy Gamer Tools — built for modders, mappers, and indie devs.
-          Services run locally on ports 8005–8008 via Python FastAPI.
+          Services run locally on ports 8005–8022 via Python FastAPI.
         </p>
       </div>
     </div>

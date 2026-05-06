@@ -51,6 +51,16 @@ function startPythonService(serviceType = 'gemma') {
     'f4se':         { var: () => f4seProcess,        set: (p) => { f4seProcess = p; },        script: 'f4se_service.py' },
     // New: Blender cell-editor round-trip (ESP extraction + patch writing)
     'cell-editor':  { var: () => cellEditorProcess,  set: (p) => { cellEditorProcess = p; },  script: 'cell_editor_service.py' },
+    // New: Mod Organizer 2 integration (profiles, load order, mod toggle)
+    'mo2':          { var: () => mo2Process,          set: (p) => { mo2Process = p; },          script: 'mo2_service.py' },
+    // New: NIF mesh inspector (block tree, textures, geometry, OBJ export)
+    'nif':          { var: () => nifProcess,          set: (p) => { nifProcess = p; },          script: 'nif_service.py' },
+    // New: Smart INI tweaker (FO4/Skyrim settings DB, presets, backup)
+    'ini':          { var: () => iniProcess,          set: (p) => { iniProcess = p; },          script: 'ini_service.py' },
+    // New: ESP/ESM plugin merger (conflict analysis, merge, write output)
+    'merger':       { var: () => mergerProcess,       set: (p) => { mergerProcess = p; },       script: 'plugin_merger_service.py' },
+    // New: Mod diagnostics (crash log, F4SE/SKSE, Papyrus, AI diagnosis)
+    'diag':         { var: () => diagProcess,         set: (p) => { diagProcess = p; },         script: 'diagnostics_service.py' },
   };
 
   const svc = serviceMap[serviceType] || serviceMap['gemma'];
@@ -830,6 +840,12 @@ let papyrusProcess     = null;
 let fomodProcess       = null;
 let f4seProcess        = null;
 let cellEditorProcess  = null;
+// ── New Advanced Modding Services ─────────────────────────────────────────
+let mo2Process         = null;
+let nifProcess         = null;
+let iniProcess         = null;
+let mergerProcess      = null;
+let diagProcess        = null;
 const OPENCV_SERVICE_PORT      = 8005;
 const PIPER_SERVICE_PORT       = 8006;
 const TRIPOSR_SERVICE_PORT     = 8007;
@@ -842,6 +858,11 @@ const PAPYRUS_SERVICE_PORT     = 8014;
 const FOMOD_SERVICE_PORT       = 8015;
 const F4SE_SERVICE_PORT        = 8016;
 const CELL_EDITOR_SERVICE_PORT = 8017;
+const MO2_SERVICE_PORT         = 8018;
+const NIF_SERVICE_PORT         = 8019;
+const INI_SERVICE_PORT         = 8020;
+const MERGER_SERVICE_PORT      = 8021;
+const DIAG_SERVICE_PORT        = 8022;
 const OPENCV_SERVICE_URL       = `http://127.0.0.1:${OPENCV_SERVICE_PORT}`;
 const PIPER_SERVICE_URL        = `http://127.0.0.1:${PIPER_SERVICE_PORT}`;
 const TRIPOSR_SERVICE_URL      = `http://127.0.0.1:${TRIPOSR_SERVICE_PORT}`;
@@ -854,6 +875,11 @@ const PAPYRUS_SERVICE_URL      = `http://127.0.0.1:${PAPYRUS_SERVICE_PORT}`;
 const FOMOD_SERVICE_URL        = `http://127.0.0.1:${FOMOD_SERVICE_PORT}`;
 const F4SE_SERVICE_URL         = `http://127.0.0.1:${F4SE_SERVICE_PORT}`;
 const CELL_EDITOR_SERVICE_URL  = `http://127.0.0.1:${CELL_EDITOR_SERVICE_PORT}`;
+const MO2_SERVICE_URL          = `http://127.0.0.1:${MO2_SERVICE_PORT}`;
+const NIF_SERVICE_URL          = `http://127.0.0.1:${NIF_SERVICE_PORT}`;
+const INI_SERVICE_URL          = `http://127.0.0.1:${INI_SERVICE_PORT}`;
+const MERGER_SERVICE_URL       = `http://127.0.0.1:${MERGER_SERVICE_PORT}`;
+const DIAG_SERVICE_URL         = `http://127.0.0.1:${DIAG_SERVICE_PORT}`;
 
 function startAgentCollaborationService() {
   if (agentCollabProcess) return Promise.resolve();
@@ -1664,6 +1690,160 @@ ipcMain.handle('cell-editor:blender-addon', async () => {
   catch (err) { return { status: 'error', message: String(err) }; }
 });
 
+// ── mo2 — Mod Organizer 2 integration (port 8018) ─────────────────────────
+ipcMain.handle('mo2:health-check', async () => {
+  try { await startPythonService('mo2'); return await (await fetch(`${MO2_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:detect', async () => {
+  try { await startPythonService('mo2'); return await (await fetch(`${MO2_SERVICE_URL}/detect`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:set-path', async (_, args) => {
+  try { await startPythonService('mo2'); return await (await fetch(`${MO2_SERVICE_URL}/set-path`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:list-profiles', async (_, args = {}) => {
+  try { await startPythonService('mo2'); const q = args.mo2_dir ? `?mo2_dir=${encodeURIComponent(args.mo2_dir)}` : ''; return await (await fetch(`${MO2_SERVICE_URL}/list-profiles${q}`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:get-profile', async (_, args = {}) => {
+  try { await startPythonService('mo2'); const q = args.mo2_dir ? `?mo2_dir=${encodeURIComponent(args.mo2_dir)}` : ''; return await (await fetch(`${MO2_SERVICE_URL}/get-profile${q}`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:switch-profile', async (_, args) => {
+  try { await startPythonService('mo2'); return await (await fetch(`${MO2_SERVICE_URL}/switch-profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:list-mods', async (_, args = {}) => {
+  try { await startPythonService('mo2'); const params = new URLSearchParams(); if (args.mo2_dir) params.set('mo2_dir', args.mo2_dir); if (args.profile) params.set('profile', args.profile); return await (await fetch(`${MO2_SERVICE_URL}/list-mods?${params}`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:toggle-mod', async (_, args) => {
+  try { await startPythonService('mo2'); return await (await fetch(`${MO2_SERVICE_URL}/toggle-mod`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:get-load-order', async (_, args = {}) => {
+  try { await startPythonService('mo2'); const params = new URLSearchParams(); if (args.mo2_dir) params.set('mo2_dir', args.mo2_dir); if (args.profile) params.set('profile', args.profile); return await (await fetch(`${MO2_SERVICE_URL}/get-load-order?${params}`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:write-load-order', async (_, args) => {
+  try { await startPythonService('mo2'); return await (await fetch(`${MO2_SERVICE_URL}/write-load-order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── nif — NIF mesh inspector (port 8019) ──────────────────────────────────
+ipcMain.handle('nif:health-check', async () => {
+  try { await startPythonService('nif'); return await (await fetch(`${NIF_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nif:inspect', async (_, args) => {
+  try { await startPythonService('nif'); return await (await fetch(`${NIF_SERVICE_URL}/inspect`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nif:list-textures', async (_, args) => {
+  try { await startPythonService('nif'); return await (await fetch(`${NIF_SERVICE_URL}/list-textures`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nif:get-geometry-stats', async (_, args) => {
+  try { await startPythonService('nif'); return await (await fetch(`${NIF_SERVICE_URL}/get-geometry-stats`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nif:find-nifs', async (_, args) => {
+  try { await startPythonService('nif'); return await (await fetch(`${NIF_SERVICE_URL}/find-nifs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nif:export-obj', async (_, args) => {
+  try { await startPythonService('nif'); const r = await fetch(`${NIF_SERVICE_URL}/export-obj`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(60000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── ini — Smart INI tweaker (port 8020) ───────────────────────────────────
+ipcMain.handle('ini:health-check', async () => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:known-settings', async () => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/known-settings`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:presets', async () => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/presets`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:detect-ini-files', async () => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/detect-ini-files`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:read', async (_, args) => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/read`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:write', async (_, args) => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/write`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:apply-preset', async (_, args) => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/apply-preset`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:backup', async (_, args) => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/backup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:validate', async (_, args) => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── merger — Plugin Merger (port 8021) ────────────────────────────────────
+ipcMain.handle('merger:health-check', async () => {
+  try { await startPythonService('merger'); return await (await fetch(`${MERGER_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('merger:list-records', async (_, args) => {
+  try { await startPythonService('merger'); return await (await fetch(`${MERGER_SERVICE_URL}/list-records`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('merger:analyze', async (_, args) => {
+  try { await startPythonService('merger'); const r = await fetch(`${MERGER_SERVICE_URL}/analyze`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(120000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('merger:merge', async (_, args) => {
+  try { await startPythonService('merger'); const r = await fetch(`${MERGER_SERVICE_URL}/merge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(300000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── diag — Mod Diagnostics (port 8022) ────────────────────────────────────
+ipcMain.handle('diag:health-check', async () => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('diag:detect-game-folders', async () => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/detect-game-folders`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('diag:scan-crash-logs', async (_, args) => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/scan-crash-logs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('diag:parse-crash-log', async (_, args) => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/parse-crash-log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('diag:parse-f4se-log', async (_, args) => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/parse-f4se-log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('diag:scan-papyrus-log', async (_, args) => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/scan-papyrus-log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('diag:parse-mo2-log', async (_, args) => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/parse-mo2-log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
 // ── File / directory dialog helpers ───────────────────────────────────────
 const { dialog } = require('electron');
 ipcMain.handle('dialog:open-file', async (_, { title, filters } = {}) => {
@@ -1783,7 +1963,7 @@ function createWindow() {
             "font-src 'self' https://fonts.gstatic.com",
             "img-src 'self' data: blob: https:",
             "media-src 'self' blob:",
-            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 http://localhost:8005 http://127.0.0.1:8005 http://localhost:8006 http://127.0.0.1:8006 http://localhost:8007 http://127.0.0.1:8007 http://localhost:8008 http://127.0.0.1:8008 http://localhost:8009 http://127.0.0.1:8009 http://localhost:8010 http://127.0.0.1:8010 http://localhost:8011 http://127.0.0.1:8011 http://localhost:8012 http://127.0.0.1:8012 http://localhost:8013 http://127.0.0.1:8013 http://localhost:8014 http://127.0.0.1:8014 http://localhost:8015 http://127.0.0.1:8015 http://localhost:8016 http://127.0.0.1:8016 http://localhost:8017 http://127.0.0.1:8017 https://api.steampowered.com https://api.nexusmods.com https://search.nexusmods.com wss://generativelanguage.googleapis.com",
+            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 http://localhost:8005 http://127.0.0.1:8005 http://localhost:8006 http://127.0.0.1:8006 http://localhost:8007 http://127.0.0.1:8007 http://localhost:8008 http://127.0.0.1:8008 http://localhost:8009 http://127.0.0.1:8009 http://localhost:8010 http://127.0.0.1:8010 http://localhost:8011 http://127.0.0.1:8011 http://localhost:8012 http://127.0.0.1:8012 http://localhost:8013 http://127.0.0.1:8013 http://localhost:8014 http://127.0.0.1:8014 http://localhost:8015 http://127.0.0.1:8015 http://localhost:8016 http://127.0.0.1:8016 http://localhost:8017 http://127.0.0.1:8017 http://localhost:8018 http://127.0.0.1:8018 http://localhost:8019 http://127.0.0.1:8019 http://localhost:8020 http://127.0.0.1:8020 http://localhost:8021 http://127.0.0.1:8021 http://localhost:8022 http://127.0.0.1:8022 https://api.steampowered.com https://api.nexusmods.com https://search.nexusmods.com wss://generativelanguage.googleapis.com",
             "worker-src 'self' blob:",
           ].join('; '),
         ],

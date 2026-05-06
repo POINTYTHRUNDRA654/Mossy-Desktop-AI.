@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo, Gamepad2, Code2, Scan, Trophy, PackageSearch, ListOrdered, Map, Layers, Mic, Box, Sparkles, PackageOpen, AlertTriangle, Archive, FileCode2, PackagePlus } from 'lucide-react';
+import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo, Gamepad2, Code2, Scan, Trophy, PackageSearch, ListOrdered, Map, Layers, Mic, Box, Sparkles, PackageOpen, AlertTriangle, Archive, FileCode2, PackagePlus, Settings, Sliders, GitMerge } from 'lucide-react';
 import { useLive } from './LiveContext';
 import AvatarCore from './AvatarCore';
 import ApiKeySetup from './ApiKeySetup';
@@ -117,6 +117,12 @@ const Sidebar: React.FC = () => {
     { to: '/fomod',        icon: PackagePlus,   label: 'FOMOD Builder',    group: 'Gamer' },
     { to: '/cell-editor',  icon: Layers,        label: 'Cell Editor',      group: 'Gamer' },
     { to: '/f4se',         icon: Code2,         label: 'F4SE Scaffolder',  group: 'Gamer' },
+    // ── Advanced Modding Tools ───────────────────────────────────────────
+    { to: '/mo2',          icon: Settings,      label: 'MO2 Manager',      group: 'Gamer' },
+    { to: '/nif-viewer',   icon: Box,           label: 'NIF Viewer',       group: 'Gamer' },
+    { to: '/ini-tweaker',  icon: Sliders,       label: 'INI Tweaker',      group: 'Gamer' },
+    { to: '/merger',       icon: GitMerge,      label: 'Plugin Merger',    group: 'Gamer' },
+    { to: '/diagnostics',  icon: Bug,           label: 'Mod Diagnostics',  group: 'Gamer' },
   ];
 
   const groups = ['Core', 'Intelligence', 'Build', 'Data', 'Orchestration', 'Gamer'] as const;
