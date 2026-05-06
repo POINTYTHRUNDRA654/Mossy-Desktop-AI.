@@ -116,6 +116,7 @@ const Sidebar: React.FC = () => {
     { to: '/papyrus',      icon: FileCode2,     label: 'Papyrus IDE',      group: 'Gamer' },
     { to: '/fomod',        icon: PackagePlus,   label: 'FOMOD Builder',    group: 'Gamer' },
     { to: '/cell-editor',  icon: Layers,        label: 'Cell Editor',      group: 'Gamer' },
+    { to: '/f4se',         icon: Code2,         label: 'F4SE Scaffolder',  group: 'Gamer' },
   ];
 
   const groups = ['Core', 'Intelligence', 'Build', 'Data', 'Orchestration', 'Gamer'] as const;

@@ -10,6 +10,7 @@ pure-Python parser built with the `construct` binary DSL, which parses
 TES4/GROUP/record headers natively without any external dependency.
 """
 import os
+import re
 import struct
 import subprocess
 import shutil
@@ -17,6 +18,13 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI
 from pydantic import BaseModel
+
+# Safe plugin-name pattern: letters, digits, underscores, hyphens, spaces, dots
+_SAFE_PLUGIN_NAME_RE = re.compile(r'^[\w\- .]+\.(esp|esm|esl)$', re.IGNORECASE)
+
+def _validate_plugin_names(names: List[str]) -> List[str]:
+    """Return only names that look like valid plugin filenames (no shell metacharacters)."""
+    return [n for n in names if _SAFE_PLUGIN_NAME_RE.match(n.strip())]
 
 # construct — declarative binary DSL, much more maintainable than raw struct
 try:
@@ -145,8 +153,8 @@ def _parse_esp_header_construct(plugin_path: str) -> dict:
             elif sr_type == b"SNAM":
                 description = sr_body.rstrip(b"\x00").decode("utf-8", errors="replace")
 
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        return {"error": "Failed to parse plugin header"}
 
     return {
         "masters": masters,
@@ -329,6 +337,10 @@ def check_conflicts(req: CheckConflictsRequest):
     if not xedit_path:
         return _mock_conflict_result(req.plugins_dir, plugin_names)
 
+    # Validate plugin names to prevent command-line injection
+    safe_names = _validate_plugin_names(plugin_names)
+    rejected = [n for n in plugin_names if n not in safe_names]
+
     # Build plugin list arg — FO4Edit accepts plugin names as args
     cmd = [
         xedit_path,
@@ -337,7 +349,7 @@ def check_conflicts(req: CheckConflictsRequest):
         "-IKnowWhatImDoing",
         "-Autoexit",
         "-autoload",
-    ] + plugin_names
+    ] + safe_names
 
     try:
         result = subprocess.run(
@@ -375,8 +387,8 @@ def check_conflicts(req: CheckConflictsRequest):
         }
     except subprocess.TimeoutExpired:
         return {"status": "error", "message": "FO4Edit timed out after 300s"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    except Exception:
+        return {"status": "error", "message": "Unexpected error running FO4Edit"}
 
 
 @app.post("/get-records")

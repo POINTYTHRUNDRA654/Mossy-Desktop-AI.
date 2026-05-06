@@ -65,6 +65,28 @@ DEFAULT_ARCHIVE2_PATHS = [
     r"C:\Program Files\Bethesda.net Launcher\games\Fallout4\Tools\Archive2\Archive2.exe",
 ]
 
+
+def _validate_file_path(raw: str) -> Optional[str]:
+    """Resolve and check that a path points to an existing regular file."""
+    try:
+        resolved = Path(raw).resolve()
+        if resolved.is_file():
+            return str(resolved)
+    except Exception:
+        pass
+    return None
+
+
+def _validate_dir_path(raw: str) -> Optional[str]:
+    """Resolve and check that a path points to an existing directory."""
+    try:
+        resolved = Path(raw).resolve()
+        if resolved.is_dir():
+            return str(resolved)
+    except Exception:
+        pass
+    return None
+
 # BA2 header constants
 BA2_MAGIC = b"BTDX"
 BSA_MAGIC = b"BSA\x00"
@@ -210,11 +232,8 @@ def _parse_ba2(path: str) -> dict:
             "total_size_bytes": total_size,
             "construct_used": CONSTRUCT_AVAILABLE,
         }
-    except Exception as e:
-        return {"error": str(e)}
-
-
-def _parse_bsa(path: str) -> dict:
+    except Exception:
+        return {"error": "Failed to parse BA2 archive"}
     """Parse a BSA archive header (Skyrim/FO3/FNV)."""
     try:
         with open(path, "rb") as f:
@@ -248,11 +267,8 @@ def _parse_bsa(path: str) -> dict:
             "files": [],
             "total_size_bytes": total_size,
         }
-    except Exception as e:
-        return {"error": str(e)}
-
-
-# ── Request Models ─────────────────────────────────────────────────────────
+    except Exception:
+        return {"error": "Failed to parse BSA archive"}
 
 class InspectRequest(BaseModel):
     archive_path: str
@@ -338,15 +354,16 @@ def extract(req: ExtractRequest):
     archive_path = req.archive_path
     output_dir = req.output_dir
 
-    if not os.path.exists(archive_path):
-        return {"status": "error", "message": f"Archive not found: {archive_path}"}
+    safe_archive = _validate_file_path(archive_path)
+    if safe_archive is None:
+        return {"status": "error", "message": "Archive not found or invalid path"}
 
     os.makedirs(output_dir, exist_ok=True)
     errors = []
 
     archive2 = _find_archive2()
     if archive2:
-        cmd = [archive2, archive_path, "-extract=" + output_dir]
+        cmd = [archive2, safe_archive, "-extract=" + output_dir]
         if req.files:
             for fn in req.files[:50]:
                 cmd.extend(["-files=" + fn])
@@ -363,12 +380,12 @@ def extract(req: ExtractRequest):
             }
         except subprocess.TimeoutExpired:
             return {"status": "error", "message": "Archive2.exe timed out"}
-        except Exception as e:
-            errors.append(str(e))
+        except Exception:
+            errors.append("Unexpected error running Archive2.exe")
 
     if BETHESDA_STRUCTS:
         try:
-            arc = BA2Archive.parse_file(archive_path)
+            arc = BA2Archive.parse_file(safe_archive)
             count = 0
             for file_entry in arc.files:
                 if req.files and file_entry.filename not in req.files:
@@ -422,11 +439,8 @@ def extract_7z(req: Extract7zRequest):
             "output_dir": req.output_dir,
             "errors": [],
         }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-
-@app.post("/create")
+    except Exception:
+        return {"status": "error", "message": "Unexpected error extracting 7z archive"}
 def create(req: CreateRequest):
     archive2 = _find_archive2()
     if not archive2:
@@ -437,15 +451,16 @@ def create(req: CreateRequest):
             "file_count": 0,
         }
 
-    if not os.path.isdir(req.input_dir):
-        return {"status": "error", "message": f"Input directory not found: {req.input_dir}"}
+    safe_input = _validate_dir_path(req.input_dir)
+    if safe_input is None:
+        return {"status": "error", "message": "Input directory not found or invalid path"}
 
     archive_flag = "1" if req.archive_type == "textures" else "0"
     compress_flag = "1" if req.compress else "0"
 
     cmd = [
         archive2,
-        req.input_dir,
+        safe_input,
         f"-create={req.output_path}",
         f"-format={archive_flag}",
         f"-compression={compress_flag}",
@@ -463,8 +478,8 @@ def create(req: CreateRequest):
         }
     except subprocess.TimeoutExpired:
         return {"status": "error", "message": "Archive2.exe timed out"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    except Exception:
+        return {"status": "error", "message": "Unexpected error running Archive2.exe"}
 
 
 @app.get("/archive2-path")
