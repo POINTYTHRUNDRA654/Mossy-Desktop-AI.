@@ -39,7 +39,7 @@ interface ChatMessage {
 
 const electronAPI = (window as any).electronAPI;
 
-const STATUS_POLL_INTERVAL_MS = 10_000;
+const statusPollIntervalMs = 10_000;
 
 function ipcInvoke(channel: string, ...args: any[]): Promise<any> {
     return electronAPI?.ipcInvoke?.(channel, ...args) ?? Promise.resolve({ error: 'Electron API unavailable' });
@@ -105,7 +105,7 @@ const MossyTutorBridge: React.FC = () => {
 
     useEffect(() => {
         checkStatus();
-        const interval = setInterval(checkStatus, STATUS_POLL_INTERVAL_MS);
+        const interval = setInterval(checkStatus, statusPollIntervalMs);
         return () => clearInterval(interval);
     }, []);
 

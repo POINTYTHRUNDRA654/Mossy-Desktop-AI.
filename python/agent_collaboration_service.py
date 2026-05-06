@@ -431,8 +431,8 @@ async def query_agent(query: AgentQuery) -> AgentResponse:
                 hw_resp = await client.get(f"{DESKTOP_TUTOR_BRIDGE_URL}/hardware")
                 hw_data = hw_resp.json() if hw_resp.status_code == 200 else {}
                 hw_summary = (
-                    f"OS: {hw_data.get('os','?')}, CPU: {hw_data.get('cpu','?')}, "
-                    f"RAM: {hw_data.get('ram','?')} GB, GPU: {hw_data.get('gpu','?')}"
+                    f"OS: {hw_data.get('os', '?')}, CPU: {hw_data.get('cpu', '?')}, "
+                    f"RAM: {hw_data.get('ram', '?')} GB, GPU: {hw_data.get('gpu', '?')}"
                 )
                 return AgentResponse(
                     agent=query.to_agent,
