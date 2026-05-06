@@ -230,3 +230,5 @@ export const ReasoningChain: React.FC = () => {
         </div>
     );
 };
+
+export default ReasoningChain;
