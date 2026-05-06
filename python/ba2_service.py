@@ -234,6 +234,9 @@ def _parse_ba2(path: str) -> dict:
         }
     except Exception:
         return {"error": "Failed to parse BA2 archive"}
+
+
+def _parse_bsa(path: str) -> dict:
     """Parse a BSA archive header (Skyrim/FO3/FNV)."""
     try:
         with open(path, "rb") as f:
@@ -400,8 +403,8 @@ def extract(req: ExtractRequest):
                 "output_dir": output_dir,
                 "errors": [],
             }
-        except Exception as e:
-            errors.append(f"bethesda_structs error: {e}")
+        except Exception:
+            errors.append("bethesda_structs extraction error")
 
     return {
         "status": "unavailable",
