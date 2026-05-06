@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, shell, session, Tray, Menu, nativeImage, ipcMain, clipboard } = require('electron');
+const { app, BrowserWindow, shell, session, Tray, Menu, nativeImage, ipcMain, clipboard, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
@@ -33,7 +33,34 @@ function startPythonService(serviceType = 'gemma') {
     'gemma': { var: () => gemmaProcess, set: (p) => { gemmaProcess = p; }, script: 'gemma_service_enhanced.py' },
     'pytorch': { var: () => pytorchProcess, set: (p) => { pytorchProcess = p; }, script: 'pytorch_service.py' },
     'whisper': { var: () => whisperProcess, set: (p) => { whisperProcess = p; }, script: 'whisper_service.py' },
-    'chroma': { var: () => chromaProcess, set: (p) => { chromaProcess = p; }, script: 'chroma_service.py' }
+    'chroma': { var: () => chromaProcess, set: (p) => { chromaProcess = p; }, script: 'chroma_service.py' },
+    'opencv': { var: () => opencvProcess, set: (p) => { opencvProcess = p; }, script: 'opencv_service.py' },
+    'piper': { var: () => piperProcess, set: (p) => { piperProcess = p; }, script: 'piper_service.py' },
+    'triposr': { var: () => triposrProcess, set: (p) => { triposrProcess = p; }, script: 'triposr_service.py' },
+    'rvc': { var: () => rvcProcess, set: (p) => { rvcProcess = p; }, script: 'rvc_service.py' },
+    // New: Real-ESRGAN texture upscaling (xinntao/Real-ESRGAN on GitHub)
+    'esrgan': { var: () => esrganProcess, set: (p) => { esrganProcess = p; }, script: 'esrgan_service.py' },
+    // New: WolvenKit CLI automation (WolvenKit/WolvenKit on GitHub)
+    'wolvenkit': { var: () => wolvenKitProcess, set: (p) => { wolvenKitProcess = p; }, script: 'wolvenkit_service.py' },
+    // New: Fallout 4 modding services
+    'fo4edit':      { var: () => fo4editProcess,     set: (p) => { fo4editProcess = p; },     script: 'fo4edit_service.py' },
+    'ba2':          { var: () => ba2Process,         set: (p) => { ba2Process = p; },         script: 'ba2_service.py' },
+    'papyrus':      { var: () => papyrusProcess,     set: (p) => { papyrusProcess = p; },     script: 'papyrus_service.py' },
+    'fomod':        { var: () => fomodProcess,       set: (p) => { fomodProcess = p; },       script: 'fomod_service.py' },
+    // New: F4SE C++ plugin scaffolder (Jinja2 templates)
+    'f4se':         { var: () => f4seProcess,        set: (p) => { f4seProcess = p; },        script: 'f4se_service.py' },
+    // New: Blender cell-editor round-trip (ESP extraction + patch writing)
+    'cell-editor':  { var: () => cellEditorProcess,  set: (p) => { cellEditorProcess = p; },  script: 'cell_editor_service.py' },
+    // New: Mod Organizer 2 integration (profiles, load order, mod toggle)
+    'mo2':          { var: () => mo2Process,          set: (p) => { mo2Process = p; },          script: 'mo2_service.py' },
+    // New: NIF mesh inspector (block tree, textures, geometry, OBJ export)
+    'nif':          { var: () => nifProcess,          set: (p) => { nifProcess = p; },          script: 'nif_service.py' },
+    // New: Smart INI tweaker (FO4/Skyrim settings DB, presets, backup)
+    'ini':          { var: () => iniProcess,          set: (p) => { iniProcess = p; },          script: 'ini_service.py' },
+    // New: ESP/ESM plugin merger (conflict analysis, merge, write output)
+    'merger':       { var: () => mergerProcess,       set: (p) => { mergerProcess = p; },       script: 'plugin_merger_service.py' },
+    // New: Mod diagnostics (crash log, F4SE/SKSE, Papyrus, AI diagnosis)
+    'diag':         { var: () => diagProcess,         set: (p) => { diagProcess = p; },         script: 'diagnostics_service.py' },
   };
 
   const svc = serviceMap[serviceType] || serviceMap['gemma'];
@@ -117,6 +144,18 @@ function stopPythonServices() {
     agentCollabProcess.kill();
     agentCollabProcess = null;
   }
+  if (opencvProcess) { opencvProcess.kill(); opencvProcess = null; }
+  if (piperProcess) { piperProcess.kill(); piperProcess = null; }
+  if (triposrProcess) { triposrProcess.kill(); triposrProcess = null; }
+  if (rvcProcess) { rvcProcess.kill(); rvcProcess = null; }
+  if (esrganProcess) { esrganProcess.kill(); esrganProcess = null; }
+  if (wolvenKitProcess) { wolvenKitProcess.kill(); wolvenKitProcess = null; }
+  if (fo4editProcess)     { fo4editProcess.kill();     fo4editProcess = null; }
+  if (ba2Process)         { ba2Process.kill();         ba2Process = null; }
+  if (papyrusProcess)     { papyrusProcess.kill();     papyrusProcess = null; }
+  if (fomodProcess)       { fomodProcess.kill();       fomodProcess = null; }
+  if (f4seProcess)        { f4seProcess.kill();        f4seProcess = null; }
+  if (cellEditorProcess)  { cellEditorProcess.kill();  cellEditorProcess = null; }
 }
 
 // ── Auto-launch at OS startup ──────────────────────────────────────────────
@@ -139,6 +178,55 @@ ipcMain.handle('get-auto-launch', () => getAutoLaunch());
 ipcMain.handle('set-auto-launch', (_, enable) => { setAutoLaunch(enable); return enable; });
 ipcMain.handle('window-minimize', () => { mainWindow?.minimize(); });
 ipcMain.handle('window-hide', () => { mainWindow?.hide(); });
+
+// ── Secure credential storage (Electron safeStorage — OS keychain) ────────
+// Replaces storing API keys in localStorage (plaintext).
+// Components call: window.electronAPI.ipcInvoke('secrets:set', { key, value })
+//                  window.electronAPI.ipcInvoke('secrets:get', { key })
+const SECRETS_FILE = path.join(
+  process.env.MOSSY_DATA_ROOT || (process.platform === 'win32' ? 'D:\\Mossy-AI' : require('os').homedir() + '/Mossy-AI'),
+  'secrets.enc'
+);
+
+async function readSecrets() {
+  try {
+    const raw = await fs.promises.readFile(SECRETS_FILE);
+    if (!safeStorage.isEncryptionAvailable()) return JSON.parse(raw.toString('utf8'));
+    return JSON.parse(safeStorage.decryptString(raw));
+  } catch { return {}; }
+}
+
+async function writeSecrets(obj) {
+  await fs.promises.mkdir(path.dirname(SECRETS_FILE), { recursive: true });
+  const text = JSON.stringify(obj);
+  const data = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text) : Buffer.from(text, 'utf8');
+  await fs.promises.writeFile(SECRETS_FILE, data);
+}
+
+ipcMain.handle('secrets:set', async (_, { key, value }) => {
+  try {
+    const store = await readSecrets();
+    store[key] = value;
+    await writeSecrets(store);
+    return { status: 'ok' };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('secrets:get', async (_, { key }) => {
+  try {
+    const store = await readSecrets();
+    return { status: 'ok', value: store[key] ?? null };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('secrets:delete', async (_, { key }) => {
+  try {
+    const store = await readSecrets();
+    delete store[key];
+    await writeSecrets(store);
+    return { status: 'ok' };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
 ipcMain.handle('bridge-scan', async (_, { base = 'D:\\', depth = 3, maxEntries = 4000, includeExe = true } = {}) => {
   const normalizedBase = path.resolve(base);
   if (!normalizedBase.toLowerCase().startsWith('d:')) {
@@ -738,6 +826,61 @@ const AGENT_COLLAB_SERVICE = `http://127.0.0.1:${AGENT_COLLAB_PORT}`;
 // Start agent collaboration service if not running
 let agentCollabProcess = null;
 
+// ── Gamer Tools Service Management ──────────────────────────────────────
+let opencvProcess = null;
+let piperProcess = null;
+let triposrProcess = null;
+let rvcProcess = null;
+let esrganProcess = null;
+let wolvenKitProcess = null;
+// ── Fallout 4 Modding Services ────────────────────────────────────────────
+let fo4editProcess     = null;
+let ba2Process         = null;
+let papyrusProcess     = null;
+let fomodProcess       = null;
+let f4seProcess        = null;
+let cellEditorProcess  = null;
+// ── New Advanced Modding Services ─────────────────────────────────────────
+let mo2Process         = null;
+let nifProcess         = null;
+let iniProcess         = null;
+let mergerProcess      = null;
+let diagProcess        = null;
+const OPENCV_SERVICE_PORT      = 8005;
+const PIPER_SERVICE_PORT       = 8006;
+const TRIPOSR_SERVICE_PORT     = 8007;
+const RVC_SERVICE_PORT         = 8008;
+const ESRGAN_SERVICE_PORT      = 8009;
+const WOLVENKIT_SERVICE_PORT   = 8010;
+const FO4EDIT_SERVICE_PORT     = 8012;
+const BA2_SERVICE_PORT         = 8013;
+const PAPYRUS_SERVICE_PORT     = 8014;
+const FOMOD_SERVICE_PORT       = 8015;
+const F4SE_SERVICE_PORT        = 8016;
+const CELL_EDITOR_SERVICE_PORT = 8017;
+const MO2_SERVICE_PORT         = 8018;
+const NIF_SERVICE_PORT         = 8019;
+const INI_SERVICE_PORT         = 8020;
+const MERGER_SERVICE_PORT      = 8021;
+const DIAG_SERVICE_PORT        = 8022;
+const OPENCV_SERVICE_URL       = `http://127.0.0.1:${OPENCV_SERVICE_PORT}`;
+const PIPER_SERVICE_URL        = `http://127.0.0.1:${PIPER_SERVICE_PORT}`;
+const TRIPOSR_SERVICE_URL      = `http://127.0.0.1:${TRIPOSR_SERVICE_PORT}`;
+const RVC_SERVICE_URL          = `http://127.0.0.1:${RVC_SERVICE_PORT}`;
+const ESRGAN_SERVICE_URL       = `http://127.0.0.1:${ESRGAN_SERVICE_PORT}`;
+const WOLVENKIT_SERVICE_URL    = `http://127.0.0.1:${WOLVENKIT_SERVICE_PORT}`;
+const FO4EDIT_SERVICE_URL      = `http://127.0.0.1:${FO4EDIT_SERVICE_PORT}`;
+const BA2_SERVICE_URL          = `http://127.0.0.1:${BA2_SERVICE_PORT}`;
+const PAPYRUS_SERVICE_URL      = `http://127.0.0.1:${PAPYRUS_SERVICE_PORT}`;
+const FOMOD_SERVICE_URL        = `http://127.0.0.1:${FOMOD_SERVICE_PORT}`;
+const F4SE_SERVICE_URL         = `http://127.0.0.1:${F4SE_SERVICE_PORT}`;
+const CELL_EDITOR_SERVICE_URL  = `http://127.0.0.1:${CELL_EDITOR_SERVICE_PORT}`;
+const MO2_SERVICE_URL          = `http://127.0.0.1:${MO2_SERVICE_PORT}`;
+const NIF_SERVICE_URL          = `http://127.0.0.1:${NIF_SERVICE_PORT}`;
+const INI_SERVICE_URL          = `http://127.0.0.1:${INI_SERVICE_PORT}`;
+const MERGER_SERVICE_URL       = `http://127.0.0.1:${MERGER_SERVICE_PORT}`;
+const DIAG_SERVICE_URL         = `http://127.0.0.1:${DIAG_SERVICE_PORT}`;
+
 function startAgentCollaborationService() {
   if (agentCollabProcess) return Promise.resolve();
 
@@ -884,6 +1027,853 @@ ipcMain.handle('agent:get-learning-history', async (_, agentName) => {
   }
 });
 
+// ── OpenCV Vision IPC Handlers ──────────────────────────────────────────
+ipcMain.handle('vision:health-check', async () => {
+  try {
+    await startPythonService('opencv');
+    const response = await fetch(`${OPENCV_SERVICE_URL}/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('vision:screenshot', async (_, args) => {
+  try {
+    await startPythonService('opencv');
+    const response = await fetch(`${OPENCV_SERVICE_URL}/screenshot`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args || {}),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('vision:analyze-hud', async (_, args) => {
+  try {
+    await startPythonService('opencv');
+    const response = await fetch(`${OPENCV_SERVICE_URL}/analyze-hud`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('vision:ocr-text', async (_, args) => {
+  try {
+    await startPythonService('opencv');
+    const response = await fetch(`${OPENCV_SERVICE_URL}/ocr-text`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('vision:detect-game-state', async (_, args) => {
+  try {
+    await startPythonService('opencv');
+    const response = await fetch(`${OPENCV_SERVICE_URL}/detect-game-state`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Piper TTS IPC Handlers ───────────────────────────────────────────────
+ipcMain.handle('piper:health-check', async () => {
+  try {
+    await startPythonService('piper');
+    const response = await fetch(`${PIPER_SERVICE_URL}/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('piper:voices', async () => {
+  try {
+    await startPythonService('piper');
+    const response = await fetch(`${PIPER_SERVICE_URL}/voices`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('piper:synthesize', async (_, args) => {
+  try {
+    await startPythonService('piper');
+    const response = await fetch(`${PIPER_SERVICE_URL}/synthesize`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── TripoSR 3D IPC Handlers ─────────────────────────────────────────────
+ipcMain.handle('triposr:health-check', async () => {
+  try {
+    await startPythonService('triposr');
+    const response = await fetch(`${TRIPOSR_SERVICE_URL}/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('triposr:generate-mesh', async (_, args) => {
+  try {
+    await startPythonService('triposr');
+    const response = await fetch(`${TRIPOSR_SERVICE_URL}/generate-mesh`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('triposr:outputs', async () => {
+  try {
+    await startPythonService('triposr');
+    const response = await fetch(`${TRIPOSR_SERVICE_URL}/outputs`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── RVC Voice Conversion IPC Handlers ──────────────────────────────────
+ipcMain.handle('rvc:health-check', async () => {
+  try {
+    await startPythonService('rvc');
+    const response = await fetch(`${RVC_SERVICE_URL}/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('rvc:models', async () => {
+  try {
+    await startPythonService('rvc');
+    const response = await fetch(`${RVC_SERVICE_URL}/models`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('rvc:convert', async (_, args) => {
+  try {
+    await startPythonService('rvc');
+    const response = await fetch(`${RVC_SERVICE_URL}/convert`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('rvc:train-model', async (_, args) => {
+  try {
+    await startPythonService('rvc');
+    const response = await fetch(`${RVC_SERVICE_URL}/train-model`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('rvc:training-status', async (_, jobId) => {
+  try {
+    const response = await fetch(`${RVC_SERVICE_URL}/training-status/${encodeURIComponent(jobId)}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Ollama Code Generation IPC Handlers ─────────────────────────────────
+const OLLAMA_URL = 'http://127.0.0.1:11434';
+ipcMain.handle('ollama:health-check', async () => {
+  try {
+    const response = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(3000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'healthy', models: data.models?.map(m => m.name) || [] };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ollama:code-gen', async (_, { model, system_prompt, prompt }) => {
+  try {
+    const response = await fetch(`${OLLAMA_URL}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model || 'deepseek-coder-v2',
+        system: system_prompt || 'You are an expert game developer and modder. Generate clean, well-commented code.',
+        prompt: prompt,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', code: data.response, model_used: data.model };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ollama:list-models', async () => {
+  try {
+    const response = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', models: data.models || [] };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Steam Web API IPC Handlers ───────────────────────────────────────────
+const STEAM_API_BASE = 'https://api.steampowered.com';
+ipcMain.handle('steam:get-library', async (_, { apiKey, steamId }) => {
+  try {
+    const url = `${STEAM_API_BASE}/IPlayerService/GetOwnedGames/v1/?key=${encodeURIComponent(apiKey)}&steamid=${encodeURIComponent(steamId)}&include_appinfo=1&include_played_free_games=1&format=json`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', games: data.response?.games || [], count: data.response?.game_count || 0 };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('steam:get-achievements', async (_, { apiKey, steamId, appId }) => {
+  try {
+    const url = `${STEAM_API_BASE}/ISteamUserStats/GetPlayerAchievements/v1/?key=${encodeURIComponent(apiKey)}&steamid=${encodeURIComponent(steamId)}&appid=${encodeURIComponent(appId)}&l=en&format=json`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', achievements: data.playerstats?.achievements || [], game_name: data.playerstats?.gameName || '' };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('steam:get-recent', async (_, { apiKey, steamId }) => {
+  try {
+    const url = `${STEAM_API_BASE}/IPlayerService/GetRecentlyPlayedGames/v1/?key=${encodeURIComponent(apiKey)}&steamid=${encodeURIComponent(steamId)}&count=10&format=json`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', games: data.response?.games || [] };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('steam:get-player', async (_, { apiKey, steamId }) => {
+  try {
+    const url = `${STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v2/?key=${encodeURIComponent(apiKey)}&steamids=${encodeURIComponent(steamId)}&format=json`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const player = data.response?.players?.[0];
+    return { status: 'ok', player: player || null };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Nexus Mods API IPC Handlers ──────────────────────────────────────────
+const NEXUS_API_BASE = 'https://api.nexusmods.com/v1';
+ipcMain.handle('nexus:search', async (_, { apiKey, game, query, page }) => {
+  try {
+    const searchUrl = `https://search.nexusmods.com/mods?terms=${encodeURIComponent(query)}&game_id=${encodeURIComponent(game)}&blocked_tags=&blocked_authors=&include_adult=0&page_size=20&page=${page || 0}`;
+    const response = await fetch(searchUrl, {
+      headers: { apikey: apiKey, 'Application-Name': 'MossyAI', 'Application-Version': '1.0.0' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', results: data.results || [], total: data.total || 0 };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nexus:get-mod', async (_, { apiKey, game, modId }) => {
+  try {
+    const response = await fetch(`${NEXUS_API_BASE}/games/${encodeURIComponent(game)}/mods/${encodeURIComponent(modId)}.json`, {
+      headers: { apikey: apiKey, 'Application-Name': 'MossyAI', 'Application-Version': '1.0.0' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', mod: data };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nexus:trending', async (_, { apiKey, game }) => {
+  try {
+    const response = await fetch(`${NEXUS_API_BASE}/games/${encodeURIComponent(game)}/mods/trending.json`, {
+      headers: { apikey: apiKey, 'Application-Name': 'MossyAI', 'Application-Version': '1.0.0' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return { status: 'ok', mods: data };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── LOOT Load Order IPC Handlers ─────────────────────────────────────────
+ipcMain.handle('loot:analyze', async (_, { lootPath, game, modsDir }) => {
+  try {
+    const { promisify } = require('util');
+    const execFileAsync = promisify(execFile);
+    const lootExe = lootPath || (process.platform === 'win32' ? 'C:\\Program Files\\LOOT\\LOOT.exe' : 'loot');
+    const args = ['--game', game || 'Skyrim', '--game-path', modsDir || ''];
+    const { stdout, stderr } = await execFileAsync(lootExe, args, { timeout: 60000 });
+    return { status: 'ok', output: stdout, warnings: stderr };
+  } catch (err) {
+    return { status: 'error', message: String(err), output: '', warnings: '' };
+  }
+});
+ipcMain.handle('loot:sort', async (_, { lootPath, game }) => {
+  try {
+    const { promisify } = require('util');
+    const execFileAsync = promisify(execFile);
+    const lootExe = lootPath || (process.platform === 'win32' ? 'C:\\Program Files\\LOOT\\LOOT.exe' : 'loot');
+    const { stdout } = await execFileAsync(lootExe, ['--game', game || 'Skyrim', '--auto-sort'], { timeout: 60000 });
+    return { status: 'ok', output: stdout };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+    return { status: 'ok', output: stdout };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── YOLOv8 Object Detection via Vision service ──────────────────────────
+ipcMain.handle('vision:detect-objects', async (_, args) => {
+  try {
+    await startPythonService('opencv');
+    const response = await fetch(`${OPENCV_SERVICE_URL}/detect-objects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Real-ESRGAN Texture Upscaling IPC Handlers ──────────────────────────
+// GitHub: https://github.com/xinntao/Real-ESRGAN
+// HuggingFace: https://huggingface.co/nateraw/real-esrgan
+ipcMain.handle('esrgan:health-check', async () => {
+  try {
+    await startPythonService('esrgan');
+    const response = await fetch(`${ESRGAN_SERVICE_URL}/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('esrgan:list-models', async () => {
+  try {
+    await startPythonService('esrgan');
+    const response = await fetch(`${ESRGAN_SERVICE_URL}/models`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('esrgan:upscale', async (_, args) => {
+  try {
+    await startPythonService('esrgan');
+    const response = await fetch(`${ESRGAN_SERVICE_URL}/upscale`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(180000), // upscaling can be slow on CPU
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('esrgan:upscale-batch', async (_, args) => {
+  try {
+    await startPythonService('esrgan');
+    const response = await fetch(`${ESRGAN_SERVICE_URL}/upscale-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(600000), // batch can be very slow
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── WolvenKit CLI Automation IPC Handlers ──────────────────────────────
+// GitHub: https://github.com/WolvenKit/WolvenKit
+// Automates Cyberpunk 2077 and Witcher 3 mod workflows
+ipcMain.handle('wolvenkit:health-check', async () => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/health`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('wolvenkit:set-cli-path', async (_, { path: cliPath }) => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/set-cli-path`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: cliPath }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('wolvenkit:extract', async (_, args) => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('wolvenkit:pack', async (_, args) => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/pack`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('wolvenkit:convert', async (_, args) => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/convert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('wolvenkit:export', async (_, args) => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('wolvenkit:search', async (_, args) => {
+  try {
+    await startPythonService('wolvenkit');
+    const response = await fetch(`${WOLVENKIT_SERVICE_URL}/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── RTX Remix REST API IPC Handlers ─────────────────────────────────────
+// GitHub: https://github.com/NVIDIAGameWorks/rtx-remix (MIT License)
+// RTX Remix Toolkit exposes a local REST API when running.
+// Default port is 8011; adjust if your RTX Remix uses a different port.
+const RTX_REMIX_URL = 'http://127.0.0.1:8011';
+
+ipcMain.handle('rtxremix:health-check', async () => {
+  try {
+    const response = await fetch(`${RTX_REMIX_URL}/health`, { signal: AbortSignal.timeout(3000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return { status: 'healthy', ...(await response.json()) };
+  } catch (err) { return { status: 'offline', message: 'RTX Remix Toolkit not running. Launch it from NVIDIA App or start it manually.' }; }
+});
+
+ipcMain.handle('rtxremix:list-assets', async () => {
+  try {
+    const response = await fetch(`${RTX_REMIX_URL}/assets`, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('rtxremix:replace-asset', async (_, args) => {
+  try {
+    const response = await fetch(`${RTX_REMIX_URL}/assets/replace`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+ipcMain.handle('rtxremix:capture-scene', async () => {
+  try {
+    const response = await fetch(`${RTX_REMIX_URL}/capture`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Fallout 4 Modding IPC Handlers ──────────────────────────────────────
+// ── FO4Edit / xEdit conflict detection ──────────────────────────────────
+ipcMain.handle('fo4edit:health-check', async () => {
+  try { await startPythonService('fo4edit'); return await (await fetch(`${FO4EDIT_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fo4edit:set-path', async (_, args) => {
+  try { await startPythonService('fo4edit'); return await (await fetch(`${FO4EDIT_SERVICE_URL}/set-path`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fo4edit:check-conflicts', async (_, args) => {
+  try { await startPythonService('fo4edit'); const r = await fetch(`${FO4EDIT_SERVICE_URL}/check-conflicts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(120000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fo4edit:get-records', async (_, args) => {
+  try { await startPythonService('fo4edit'); return await (await fetch(`${FO4EDIT_SERVICE_URL}/get-records`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── BA2 / BSA Archive Handler ────────────────────────────────────────────
+ipcMain.handle('ba2:health-check', async () => {
+  try { await startPythonService('ba2'); return await (await fetch(`${BA2_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ba2:inspect', async (_, args) => {
+  try { await startPythonService('ba2'); return await (await fetch(`${BA2_SERVICE_URL}/inspect`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ba2:extract', async (_, args) => {
+  try { await startPythonService('ba2'); const r = await fetch(`${BA2_SERVICE_URL}/extract`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(300000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ba2:create', async (_, args) => {
+  try { await startPythonService('ba2'); const r = await fetch(`${BA2_SERVICE_URL}/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(300000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ba2:get-archive2-path', async () => {
+  try { await startPythonService('ba2'); return await (await fetch(`${BA2_SERVICE_URL}/archive2-path`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── Papyrus Script Compiler / Validator ──────────────────────────────────
+ipcMain.handle('papyrus:health-check', async () => {
+  try { await startPythonService('papyrus'); return await (await fetch(`${PAPYRUS_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('papyrus:compile', async (_, args) => {
+  try { await startPythonService('papyrus'); const r = await fetch(`${PAPYRUS_SERVICE_URL}/compile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(60000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('papyrus:validate', async (_, args) => {
+  try { await startPythonService('papyrus'); return await (await fetch(`${PAPYRUS_SERVICE_URL}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('papyrus:generate-template', async (_, args) => {
+  try { await startPythonService('papyrus'); return await (await fetch(`${PAPYRUS_SERVICE_URL}/generate-template`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('papyrus:common-events', async () => {
+  try { await startPythonService('papyrus'); return await (await fetch(`${PAPYRUS_SERVICE_URL}/common-events`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('papyrus:snippet-library', async () => {
+  try { await startPythonService('papyrus'); return await (await fetch(`${PAPYRUS_SERVICE_URL}/snippet-library`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('papyrus:set-compiler-path', async (_, args) => {
+  try { await startPythonService('papyrus'); return await (await fetch(`${PAPYRUS_SERVICE_URL}/set-compiler-path`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── FOMOD Installer Builder ───────────────────────────────────────────────
+ipcMain.handle('fomod:health-check', async () => {
+  try { await startPythonService('fomod'); return await (await fetch(`${FOMOD_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fomod:create-installer', async (_, args) => {
+  try { await startPythonService('fomod'); return await (await fetch(`${FOMOD_SERVICE_URL}/create-installer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fomod:validate', async (_, args) => {
+  try { await startPythonService('fomod'); return await (await fetch(`${FOMOD_SERVICE_URL}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fomod:parse', async (_, args) => {
+  try { await startPythonService('fomod'); return await (await fetch(`${FOMOD_SERVICE_URL}/parse`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fomod:templates', async () => {
+  try { await startPythonService('fomod'); return await (await fetch(`${FOMOD_SERVICE_URL}/templates`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fomod:ai-generate', async (_, args) => {
+  try { await startPythonService('fomod'); return await (await fetch(`${FOMOD_SERVICE_URL}/ai-generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── fo4edit — new endpoints (construct parser, graph analysis, header diff) ──
+ipcMain.handle('fo4edit:scan-record-types', async (_, args) => {
+  try { await startPythonService('fo4edit'); return await (await fetch(`${FO4EDIT_SERVICE_URL}/scan-record-types`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fo4edit:diff-headers', async (_, args) => {
+  try { await startPythonService('fo4edit'); return await (await fetch(`${FO4EDIT_SERVICE_URL}/diff-headers`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fo4edit:analyze-load-order-graph', async (_, args) => {
+  try { await startPythonService('fo4edit'); const r = await fetch(`${FO4EDIT_SERVICE_URL}/analyze-load-order-graph`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(60000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── ba2 — 7z extraction via py7zr ─────────────────────────────────────────
+ipcMain.handle('ba2:extract-7z', async (_, args) => {
+  try { await startPythonService('ba2'); const r = await fetch(`${BA2_SERVICE_URL}/extract-7z`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(300000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── f4se — C++ plugin scaffolder (Jinja2 templates, port 8016) ───────────
+ipcMain.handle('f4se:health-check', async () => {
+  try { await startPythonService('f4se'); return await (await fetch(`${F4SE_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('f4se:scaffold', async (_, args) => {
+  try { await startPythonService('f4se'); return await (await fetch(`${F4SE_SERVICE_URL}/scaffold`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('f4se:hook-catalog', async () => {
+  try { await startPythonService('f4se'); return await (await fetch(`${F4SE_SERVICE_URL}/hook-catalog`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('f4se:templates', async () => {
+  try { await startPythonService('f4se'); return await (await fetch(`${F4SE_SERVICE_URL}/templates`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── cell-editor — Blender round-trip cell editing (port 8017) ────────────
+ipcMain.handle('cell-editor:health-check', async () => {
+  try { await startPythonService('cell-editor'); return await (await fetch(`${CELL_EDITOR_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('cell-editor:list-cells', async (_, args) => {
+  try { await startPythonService('cell-editor'); return await (await fetch(`${CELL_EDITOR_SERVICE_URL}/list-cells`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('cell-editor:extract-cell', async (_, args) => {
+  try { await startPythonService('cell-editor'); const r = await fetch(`${CELL_EDITOR_SERVICE_URL}/extract-cell`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(60000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('cell-editor:generate-patch-esp', async (_, args) => {
+  try { await startPythonService('cell-editor'); const r = await fetch(`${CELL_EDITOR_SERVICE_URL}/generate-patch-esp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(60000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('cell-editor:blender-addon', async () => {
+  try { await startPythonService('cell-editor'); return await (await fetch(`${CELL_EDITOR_SERVICE_URL}/blender-addon`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── mo2 — Mod Organizer 2 integration (port 8018) ─────────────────────────
+ipcMain.handle('mo2:health-check', async () => {
+  try { await startPythonService('mo2'); return await (await fetch(`${MO2_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:detect', async () => {
+  try { await startPythonService('mo2'); return await (await fetch(`${MO2_SERVICE_URL}/detect`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:set-path', async (_, args) => {
+  try { await startPythonService('mo2'); return await (await fetch(`${MO2_SERVICE_URL}/set-path`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:list-profiles', async (_, args = {}) => {
+  try { await startPythonService('mo2'); const q = args.mo2_dir ? `?mo2_dir=${encodeURIComponent(args.mo2_dir)}` : ''; return await (await fetch(`${MO2_SERVICE_URL}/list-profiles${q}`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:get-profile', async (_, args = {}) => {
+  try { await startPythonService('mo2'); const q = args.mo2_dir ? `?mo2_dir=${encodeURIComponent(args.mo2_dir)}` : ''; return await (await fetch(`${MO2_SERVICE_URL}/get-profile${q}`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:switch-profile', async (_, args) => {
+  try { await startPythonService('mo2'); return await (await fetch(`${MO2_SERVICE_URL}/switch-profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:list-mods', async (_, args = {}) => {
+  try { await startPythonService('mo2'); const params = new URLSearchParams(); if (args.mo2_dir) params.set('mo2_dir', args.mo2_dir); if (args.profile) params.set('profile', args.profile); return await (await fetch(`${MO2_SERVICE_URL}/list-mods?${params}`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:toggle-mod', async (_, args) => {
+  try { await startPythonService('mo2'); return await (await fetch(`${MO2_SERVICE_URL}/toggle-mod`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:get-load-order', async (_, args = {}) => {
+  try { await startPythonService('mo2'); const params = new URLSearchParams(); if (args.mo2_dir) params.set('mo2_dir', args.mo2_dir); if (args.profile) params.set('profile', args.profile); return await (await fetch(`${MO2_SERVICE_URL}/get-load-order?${params}`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('mo2:write-load-order', async (_, args) => {
+  try { await startPythonService('mo2'); return await (await fetch(`${MO2_SERVICE_URL}/write-load-order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── nif — NIF mesh inspector (port 8019) ──────────────────────────────────
+ipcMain.handle('nif:health-check', async () => {
+  try { await startPythonService('nif'); return await (await fetch(`${NIF_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nif:inspect', async (_, args) => {
+  try { await startPythonService('nif'); return await (await fetch(`${NIF_SERVICE_URL}/inspect`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nif:list-textures', async (_, args) => {
+  try { await startPythonService('nif'); return await (await fetch(`${NIF_SERVICE_URL}/list-textures`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nif:get-geometry-stats', async (_, args) => {
+  try { await startPythonService('nif'); return await (await fetch(`${NIF_SERVICE_URL}/get-geometry-stats`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nif:find-nifs', async (_, args) => {
+  try { await startPythonService('nif'); return await (await fetch(`${NIF_SERVICE_URL}/find-nifs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('nif:export-obj', async (_, args) => {
+  try { await startPythonService('nif'); const r = await fetch(`${NIF_SERVICE_URL}/export-obj`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(60000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── ini — Smart INI tweaker (port 8020) ───────────────────────────────────
+ipcMain.handle('ini:health-check', async () => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:known-settings', async () => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/known-settings`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:presets', async () => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/presets`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:detect-ini-files', async () => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/detect-ini-files`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:read', async (_, args) => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/read`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:write', async (_, args) => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/write`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:apply-preset', async (_, args) => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/apply-preset`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:backup', async (_, args) => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/backup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('ini:validate', async (_, args) => {
+  try { await startPythonService('ini'); return await (await fetch(`${INI_SERVICE_URL}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── merger — Plugin Merger (port 8021) ────────────────────────────────────
+ipcMain.handle('merger:health-check', async () => {
+  try { await startPythonService('merger'); return await (await fetch(`${MERGER_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('merger:list-records', async (_, args) => {
+  try { await startPythonService('merger'); return await (await fetch(`${MERGER_SERVICE_URL}/list-records`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('merger:analyze', async (_, args) => {
+  try { await startPythonService('merger'); const r = await fetch(`${MERGER_SERVICE_URL}/analyze`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(120000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('merger:merge', async (_, args) => {
+  try { await startPythonService('merger'); const r = await fetch(`${MERGER_SERVICE_URL}/merge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args), signal: AbortSignal.timeout(300000) }); return await r.json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── diag — Mod Diagnostics (port 8022) ────────────────────────────────────
+ipcMain.handle('diag:health-check', async () => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/health`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('diag:detect-game-folders', async () => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/detect-game-folders`)).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('diag:scan-crash-logs', async (_, args) => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/scan-crash-logs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('diag:parse-crash-log', async (_, args) => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/parse-crash-log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('diag:parse-f4se-log', async (_, args) => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/parse-f4se-log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('diag:scan-papyrus-log', async (_, args) => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/scan-papyrus-log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('diag:parse-mo2-log', async (_, args) => {
+  try { await startPythonService('diag'); return await (await fetch(`${DIAG_SERVICE_URL}/parse-mo2-log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) })).json(); }
+  catch (err) { return { status: 'error', message: String(err) }; }
+});
+
+// ── File / directory dialog helpers ───────────────────────────────────────
+const { dialog } = require('electron');
+ipcMain.handle('dialog:open-file', async (_, { title, filters } = {}) => {
+  const result = await dialog.showOpenDialog({ title: title || 'Open File', filters: filters || [], properties: ['openFile'] });
+  return result.canceled ? null : result.filePaths[0];
+});
+ipcMain.handle('dialog:open-directory', async (_, { title } = {}) => {
+  const result = await dialog.showOpenDialog({ title: title || 'Select Folder', properties: ['openDirectory'] });
+  return result.canceled ? null : result.filePaths[0];
+});
+ipcMain.handle('dialog:save-file', async (_, { title, defaultPath, filters } = {}) => {
+  const result = await dialog.showSaveDialog({ title: title || 'Save File', defaultPath, filters: filters || [] });
+  return result.canceled ? null : result.filePath;
+});
+
+// ── File read/write helpers (used by CellEditor and other tools) ──────────
+ipcMain.handle('fs:read-text-file', async (_, { path: filePath }) => {
+  try {
+    const content = await fs.promises.readFile(filePath, 'utf8');
+    return { status: 'ok', content };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+ipcMain.handle('fs:write-text-file', async (_, { path: filePath, content }) => {
+  try {
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.promises.writeFile(filePath, content, 'utf8');
+    return { status: 'ok' };
+  } catch (err) { return { status: 'error', message: String(err) }; }
+});
+
 // ── System Tray ───────────────────────────────────────────────────────────
 function createTray() {
   let icon;
@@ -973,7 +1963,7 @@ function createWindow() {
             "font-src 'self' https://fonts.gstatic.com",
             "img-src 'self' data: blob: https:",
             "media-src 'self' blob:",
-            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 wss://generativelanguage.googleapis.com",
+            "connect-src 'self' https://generativelanguage.googleapis.com https://*.googleapis.com http://localhost:11434 http://127.0.0.1:11434 http://localhost:3000 http://localhost:21337 http://127.0.0.1:21337 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 http://localhost:8002 http://127.0.0.1:8002 http://localhost:8003 http://127.0.0.1:8003 http://localhost:8004 http://127.0.0.1:8004 http://localhost:8005 http://127.0.0.1:8005 http://localhost:8006 http://127.0.0.1:8006 http://localhost:8007 http://127.0.0.1:8007 http://localhost:8008 http://127.0.0.1:8008 http://localhost:8009 http://127.0.0.1:8009 http://localhost:8010 http://127.0.0.1:8010 http://localhost:8011 http://127.0.0.1:8011 http://localhost:8012 http://127.0.0.1:8012 http://localhost:8013 http://127.0.0.1:8013 http://localhost:8014 http://127.0.0.1:8014 http://localhost:8015 http://127.0.0.1:8015 http://localhost:8016 http://127.0.0.1:8016 http://localhost:8017 http://127.0.0.1:8017 http://localhost:8018 http://127.0.0.1:8018 http://localhost:8019 http://127.0.0.1:8019 http://localhost:8020 http://127.0.0.1:8020 http://localhost:8021 http://127.0.0.1:8021 http://localhost:8022 http://127.0.0.1:8022 https://api.steampowered.com https://api.nexusmods.com https://search.nexusmods.com wss://generativelanguage.googleapis.com",
             "worker-src 'self' blob:",
           ].join('; '),
         ],

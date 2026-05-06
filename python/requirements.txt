@@ -38,16 +38,23 @@ scikit-learn>=1.4.0
 pandas>=2.2.0
 Pillow>=10.3.0
 
-# ── Reasoning & LLM orchestration (LangChain) ────────────────────────────
+# ── Reasoning & LLM orchestration (LangChain + LangGraph) ───────────────
 langchain>=0.2.0
 langchain-community>=0.2.0
 langchain-core>=0.2.0
+# LangGraph — stateful multi-agent workflow automation (nodes, edges, state machines)
+langgraph>=0.1.0
 
-# ── RAG — document retrieval (LlamaIndex + Chroma) ───────────────────────
+# ── RAG — document retrieval (LlamaIndex + Chroma + hybrid search) ───────
 llama-index>=0.10.0
 llama-index-core>=0.10.0
 llama-index-vector-stores-chroma>=0.1.0
 llama-index-embeddings-huggingface>=0.2.0
+# BM25 hybrid retriever — keyword + semantic search combined (highest recall)
+llama-index-retrievers-bm25>=0.1.0
+rank_bm25>=0.2.2
+# Cohere reranker — re-rank top-K results for precision
+llama-index-postprocessor-cohere-rerank>=0.1.0
 chromadb>=0.5.0
 sentence-transformers>=3.0.0
 
@@ -58,4 +65,93 @@ librosa>=0.10.0
 # ── Multi-Agent Collaboration ─────────────────────────────────────────────
 requests>=2.31.0
 aiohttp>=3.9.0
+
+# ── HuggingFace Hub — model downloads & management ───────────────────────
+huggingface_hub>=0.23.0
+
+# ── OpenCV Vision & YOLOv8 Game Screen Analysis ───────────────────────────
+# opencv-python and ultralytics enable screenshot capture, HUD parsing,
+# object detection on game screens (YOLOv8 via Ultralytics).
+opencv-python>=4.9.0
+mss>=9.0.0                   # fast cross-platform screen capture
+pytesseract>=0.3.10          # OCR — reads text from game HUDs
+scikit-image>=0.22.0         # structural similarity (compare screenshots)
+# YOLOv8 real-time object detection (ultralytics/ultralytics on GitHub)
+# pip install ultralytics
+ultralytics>=8.2.0
+
+# ── Real-ESRGAN Texture Upscaling (xinntao/Real-ESRGAN on GitHub) ─────────
+# Upscales game textures 2×-4× with AI; HuggingFace model: nateraw/real-esrgan
+# pip install realesrgan basicsr facexlib gfpgan
+realesrgan>=0.3.0
+basicsr>=1.4.2
+facexlib>=0.3.0
+gfpgan>=1.3.8
+
+# ── Piper TTS (rhasspy/piper on GitHub — voices on HuggingFace) ───────────
+# Voices hosted at: huggingface.co/rhasspy/piper-voices
+# pip install piper-tts
+piper-tts>=1.2.0
+
+# ── TripoSR 3D Mesh Generation (VAST-AI-Research/TripoSR on GitHub) ───────
+# Install separately: pip install git+https://github.com/VAST-AI-Research/TripoSR.git
+# tsr  (TripoSR, optional — service works without it via stub cube OBJ)
+trimesh>=4.3.0               # 3D mesh manipulation, OBJ/GLB export
+
+# ── RVC Voice Conversion (RVC-Project on GitHub) ──────────────────────────
+# Install separately: pip install git+https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI.git
+# rvc  (optional — service stubs gracefully without it)
+soundfile>=0.12.0            # audio I/O for voice conversion pipeline
+
+# ── Vector search (Chroma dependency) ────────────────────────────────────
+hnswlib>=0.7.0
+
+# ── Performance / serialisation ──────────────────────────────────────────
+orjson>=3.9.0             # 3× faster JSON encode/decode (drop-in replacement)
+aiofiles>=23.2.0          # async file I/O for FastAPI endpoints
+aiosqlite>=0.19.0         # async SQLite driver (agent memory databases)
+xxhash>=3.4.0             # extremely fast non-cryptographic hash (file change detection)
+zstandard>=0.22.0         # zstd compression (BA2 General archives use zstd in FO4 NG)
+msgspec>=0.18.0           # ultra-fast struct/JSON schema with Pydantic-like API
+
+# ── Configuration management ──────────────────────────────────────────────
+pydantic-settings>=2.0.0  # load settings from .env / env vars into Pydantic models
+
+# ── Database ORM ─────────────────────────────────────────────────────────
+sqlalchemy>=2.0.0         # async-capable ORM for knowledge / profile databases
+
+# ── System monitoring ─────────────────────────────────────────────────────
+psutil>=5.9.0             # cross-platform CPU/RAM/disk metrics
+gputil>=1.4.0             # NVIDIA GPU utilisation and VRAM readout
+
+# ── Fallout 4 / Bethesda Modding ─────────────────────────────────────────
+# construct — declarative binary DSL for ESP/ESM record parsing & BA2 structs
+construct>=2.10.0
+# networkx — directed graph for load-order topological sort & cycle detection
+networkx>=3.3.0
+# pyffi — read/write NIF mesh files and KF animation files
+pyffi>=2.2.4
+# deepdiff — diff mod configs (JSON/INI) across versions for conflict review
+deepdiff>=6.7.0
+# py7zr — extract/create 7-Zip archives (most Nexus mod downloads are .7z)
+py7zr>=0.21.0
+# lxml — high-performance XML parser for FOMOD ModuleConfig.xml validation
+lxml>=5.2.0
+# watchdog — filesystem events; tools react instantly when a plugin is saved
+watchdog>=4.0.0
+# pywin32 — Windows COM automation to drive FO4Edit, MO2, xEdit headlessly
+pywin32>=306; sys_platform == "win32"
+# imageio — DDS read/write pipeline for texture inspection & upscaling tools
+imageio>=2.34.0
+# jinja2 — C++ template codegen for F4SE plugin scaffolding (headers, hooks)
+jinja2>=3.1.0
+# bethesda-structs — typed Bethesda file-format structs (BA2, BSA, ESM, NIF)
+bethesda-structs>=0.6.2
+# niffile — modern NIF block reader; faster than pyffi for inspection-only tasks
+niffile>=0.0.8
+# configparser (stdlib) already handles INI; configobj adds full round-trip INI
+# with comment preservation — critical for Fallout4Custom.ini editing
+configobj>=5.0.8
+# Send2Trash — move replaced/backed-up files to OS trash instead of deleting
+Send2Trash>=1.8.2
 

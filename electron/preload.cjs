@@ -75,6 +75,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'agent:get-stats',
       'agent:trigger-improvement',
       'agent:get-learning-history',
+      // Secure credential storage (OS keychain via safeStorage)
+      'secrets:set',
+      'secrets:get',
+      'secrets:delete',
+      // ComfyUI image generation
+      'comfyui:health-check',
+      'comfyui:generate-image',
+      'comfyui:list-models',
       // System
       'system:detect-tools',
       'bridge-scan',
@@ -86,6 +94,88 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'watcher:get-folders',
       // Hardware sensors
       'system:gpu-sensors',
+      // Vision (OpenCV + YOLOv8)
+      'vision:health-check',
+      'vision:screenshot',
+      'vision:analyze-hud',
+      'vision:ocr-text',
+      'vision:detect-game-state',
+      'vision:detect-objects',      // YOLOv8 via ultralytics
+      // Piper TTS
+      'piper:health-check',
+      'piper:voices',
+      'piper:synthesize',
+      // TripoSR 3D
+      'triposr:health-check',
+      'triposr:generate-mesh',
+      'triposr:outputs',
+      // RVC Voice
+      'rvc:health-check',
+      'rvc:models',
+      'rvc:convert',
+      'rvc:train-model',
+      'rvc:training-status',
+      // Real-ESRGAN Texture Upscaling (xinntao/Real-ESRGAN + nateraw/real-esrgan on HuggingFace)
+      'esrgan:health-check',
+      'esrgan:list-models',
+      'esrgan:upscale',
+      'esrgan:upscale-batch',
+      // WolvenKit CLI Automation (WolvenKit/WolvenKit on GitHub)
+      'wolvenkit:health-check',
+      'wolvenkit:set-cli-path',
+      'wolvenkit:extract',
+      'wolvenkit:pack',
+      'wolvenkit:convert',
+      'wolvenkit:export',
+      'wolvenkit:search',
+      // RTX Remix REST API (NVIDIAGameWorks/rtx-remix on GitHub)
+      'rtxremix:health-check',
+      'rtxremix:list-assets',
+      'rtxremix:replace-asset',
+      'rtxremix:capture-scene',
+      // Ollama Code Gen
+      'ollama:health-check',
+      'ollama:code-gen',
+      'ollama:list-models',
+      // Steam
+      'steam:get-library',
+      'steam:get-achievements',
+      'steam:get-recent',
+      'steam:get-player',
+      // Nexus Mods
+      'nexus:search',
+      'nexus:get-mod',
+      'nexus:trending',
+      // LOOT
+      'loot:analyze',
+      'loot:sort',
+      // ── Fallout 4 Modding Tools ──────────────────────────────────────────
+      // FO4Edit / xEdit conflict detection
+      'fo4edit:health-check',
+      'fo4edit:set-path',
+      'fo4edit:check-conflicts',
+      'fo4edit:get-records',
+      // BA2 / BSA archive handler
+      'ba2:health-check',
+      'ba2:inspect',
+      'ba2:extract',
+      'ba2:create',
+      'ba2:get-archive2-path',
+      // Papyrus script compiler & validator
+      'papyrus:health-check',
+      'papyrus:compile',
+      'papyrus:validate',
+      'papyrus:generate-template',
+      'papyrus:common-events',
+      'papyrus:snippet-library',
+      'papyrus:set-compiler-path',
+      // FOMOD installer XML builder
+      'fomod:health-check',
+      'fomod:create-installer',
+      'fomod:validate',
+      'fomod:parse',
+      'fomod:templates',
+      'fomod:ai-generate',
     ]);
     if (!ALLOWED.has(channel)) {
       return Promise.reject(new Error(`IPC channel not allowed: ${channel}`));
