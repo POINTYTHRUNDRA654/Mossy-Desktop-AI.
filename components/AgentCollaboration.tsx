@@ -30,9 +30,18 @@ interface KnowledgeEntry {
 export default function AgentCollaboration() {
     const [agents, setAgents] = useState<AgentStatus[]>([
         { name: 'Mossy AI (Tutor)', endpoint: 'localhost:8000', status: 'offline', color: 'bg-purple-500' },
-        { name: 'AI Helper', endpoint: 'localhost:21337', status: 'offline', color: 'bg-blue-500' },
-        { name: 'Mossy Manager', endpoint: 'localhost:8005', status: 'offline', color: 'bg-green-500' },
+        { name: 'Desktop Tutor',    endpoint: 'localhost:21337 / :8787', status: 'offline', color: 'bg-emerald-500' },
+        { name: 'AI Helper',        endpoint: 'localhost:21337', status: 'offline', color: 'bg-blue-500' },
+        { name: 'Mossy Manager',    endpoint: 'localhost:8011', status: 'offline', color: 'bg-green-500' },
     ]);
+
+    // Map display names to discovery keys returned by the collaboration service
+    const AGENT_KEY_MAP: Record<string, string> = {
+        'mossy ai (tutor)': 'desktop-ai',
+        'desktop tutor':    'desktop-tutor',
+        'ai helper':        'ai-helper',
+        'mossy manager':    'mossy-manager',
+    };
 
     const [messages, setMessages] = useState<InterAgentMessage[]>([]);
     const [stats, setStats] = useState({
@@ -52,7 +61,8 @@ export default function AgentCollaboration() {
                 const data = await resp.json();
 
                 const updatedAgents = agents.map((agent) => {
-                    const discovered = data[agent.name.toLowerCase().replace('(tutor)', '').replace(' ', '-').trim()];
+                    const key = AGENT_KEY_MAP[agent.name.toLowerCase()] ?? agent.name.toLowerCase().replace(/\s+/g, '-');
+                    const discovered = data[key];
                     return {
                         ...agent,
                         status: discovered?.status === 'online' ? 'online' : 'offline',

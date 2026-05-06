@@ -41,7 +41,7 @@ AGENT_COMMUNICATION_PORT = 8004
 AGENTS = {
     "desktop-ai": "http://localhost:8000",      # Gemma service (tutor)
     "ai-helper": "http://localhost:21337",      # Flask hardware/file service (legacy name)
-    "mossy-manager": "http://localhost:8005",   # Future: Mossy Manager service
+    "mossy-manager": "http://localhost:8011",   # Future: Mossy Manager service (port 8011; 8005 is OpenCV)
     "desktop-tutor": "http://localhost:21337",  # Desktop Tutor bridge (mossy_server.py)
 }
 

@@ -1396,10 +1396,6 @@ ipcMain.handle('loot:sort', async (_, { lootPath, game }) => {
   } catch (err) { return { status: 'error', message: String(err) }; }
 });
 
-    return { status: 'ok', output: stdout };
-  } catch (err) { return { status: 'error', message: String(err) }; }
-});
-
 // ── YOLOv8 Object Detection via Vision service ──────────────────────────
 ipcMain.handle('vision:detect-objects', async (_, args) => {
   try {
