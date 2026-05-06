@@ -111,6 +111,18 @@ class ConversationLog(BaseModel):
     learning_points: List[str] = []
     improvement_suggestion: Optional[str] = None
 
+class UserFeedback(BaseModel):
+    """User thumbs-up / thumbs-down on an answer"""
+    question: str
+    answer: str
+    rating: int                  # 1 = thumbs up, -1 = thumbs down
+    knowledge_ids: List[str] = []   # IDs of knowledge entries that contributed
+    comment: str = ""
+
+class TrainingSampleExportRequest(BaseModel):
+    min_quality: float = 0.7
+    limit: int = 500
+
 # ============================================================================
 # DATABASE INITIALIZATION
 # ============================================================================
@@ -156,6 +168,28 @@ def init_databases():
                     reason TEXT,
                     validation_score REAL,
                     timestamp TEXT
+                )
+            """)
+            # ── New tables ──────────────────────────────────────────────────
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_feedback (
+                    id TEXT PRIMARY KEY,
+                    timestamp TEXT,
+                    question TEXT,
+                    answer TEXT,
+                    rating INTEGER,        -- 1 = thumbs up, -1 = thumbs down
+                    knowledge_ids TEXT,    -- comma-separated knowledge entry IDs used
+                    comment TEXT
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS training_samples (
+                    id TEXT PRIMARY KEY,
+                    timestamp TEXT,
+                    prompt TEXT,
+                    completion TEXT,
+                    quality REAL,          -- 0.0–1.0; higher = better training signal
+                    source TEXT            -- 'auto' | 'thumbs_up' | 'expert'
                 )
             """)
         else:
@@ -612,6 +646,21 @@ async def validate_answer(
             validation_results,
             consensus_score
         )
+
+    # Auto-save high-consensus answers as training samples
+    if consensus_score >= 0.85:
+        try:
+            conn = sqlite3.connect(DB_PATHS["shared"])
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO training_samples (id, timestamp, prompt, completion, quality, source)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (str(uuid.uuid4()), datetime.now().isoformat(),
+                  question, answer, round(consensus_score, 3), "auto"))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
     
     return {
         "answer": answer,
@@ -749,6 +798,15 @@ async def get_stats():
     
     cursor.execute("SELECT COUNT(*) FROM improvements")
     total_improvements = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM user_feedback WHERE rating = 1")
+    thumbs_up = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM user_feedback WHERE rating = -1")
+    thumbs_down = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM training_samples WHERE quality >= 0.7")
+    training_samples = cursor.fetchone()[0]
     
     conn.close()
     
@@ -762,10 +820,171 @@ async def get_stats():
         }
     
     return {
+        "total_knowledge": total_knowledge,          # keep legacy key for UI
         "total_knowledge_entries": total_knowledge,
         "inter_agent_queries": total_queries,
         "improvements_made": total_improvements,
+        "thumbs_up": thumbs_up,
+        "thumbs_down": thumbs_down,
+        "training_samples_ready": training_samples,
         "agent_statistics": agent_stats,
+    }
+
+# ============================================================================
+# USER FEEDBACK LOOP
+# ============================================================================
+
+@app.post("/feedback")
+async def submit_feedback(feedback: UserFeedback, background_tasks: BackgroundTasks):
+    """
+    Record a user thumbs-up (rating=1) or thumbs-down (rating=-1) on an answer.
+
+    Thumbs-up:
+    - Saves answer as a high-quality training sample.
+    - Increases confidence of the referenced knowledge entries.
+
+    Thumbs-down:
+    - Saves as a negative signal (low-quality sample — excluded from training).
+    - Immediately triggers an improvement cycle for the question.
+    - Lowers confidence of the referenced knowledge entries.
+    """
+    if feedback.rating not in (1, -1):
+        raise HTTPException(status_code=400, detail="rating must be 1 (thumbs up) or -1 (thumbs down)")
+
+    feedback_id = str(uuid.uuid4())
+    ts = datetime.now().isoformat()
+
+    # Persist feedback record
+    conn = sqlite3.connect(DB_PATHS["shared"])
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO user_feedback (id, timestamp, question, answer, rating, knowledge_ids, comment)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (feedback_id, ts, feedback.question, feedback.answer, feedback.rating,
+          ",".join(feedback.knowledge_ids), feedback.comment))
+
+    quality = 0.95 if feedback.rating == 1 else 0.0
+    source  = "thumbs_up" if feedback.rating == 1 else "thumbs_down"
+
+    # Save as training sample (thumbs-up = high quality; thumbs-down = 0 quality)
+    cursor.execute("""
+        INSERT INTO training_samples (id, timestamp, prompt, completion, quality, source)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (str(uuid.uuid4()), ts, feedback.question, feedback.answer, quality, source))
+
+    # Update confidence of referenced knowledge entries
+    if feedback.knowledge_ids:
+        delta = 0.05 if feedback.rating == 1 else -0.10
+        for kid in feedback.knowledge_ids:
+            cursor.execute(
+                "UPDATE knowledge SET confidence = MIN(0.99, MAX(0.1, confidence + ?)) WHERE id = ?",
+                (delta, kid)
+            )
+
+    conn.commit()
+    conn.close()
+
+    # Thumbs-down triggers an immediate improvement cycle in background
+    if feedback.rating == -1:
+        background_tasks.add_task(
+            propose_improvement,
+            feedback.question,
+            feedback.answer,
+            "user",
+            {"user": {"confidence": 0.0, "comment": feedback.comment}},
+            0.0,
+        )
+
+    return {
+        "id": feedback_id,
+        "rating": feedback.rating,
+        "action": "saved_training_sample" + (" + improvement_triggered" if feedback.rating == -1 else ""),
+        "success": True,
+    }
+
+@app.get("/feedback/stats")
+async def feedback_stats():
+    """Return feedback statistics."""
+    conn = sqlite3.connect(DB_PATHS["shared"])
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM user_feedback WHERE rating = 1")
+    thumbs_up = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM user_feedback WHERE rating = -1")
+    thumbs_down = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM training_samples WHERE quality >= 0.7")
+    good_samples = cur.fetchone()[0]
+    conn.close()
+    return {
+        "thumbs_up": thumbs_up,
+        "thumbs_down": thumbs_down,
+        "total_feedback": thumbs_up + thumbs_down,
+        "high_quality_training_samples": good_samples,
+    }
+
+# ============================================================================
+# TRAINING DATA COLLECTION & EXPORT
+# ============================================================================
+
+@app.post("/training-data/save")
+async def save_training_sample(prompt: str, completion: str, quality: float = 0.8, source: str = "auto"):
+    """Save a validated Q&A pair as a training sample."""
+    conn = sqlite3.connect(DB_PATHS["shared"])
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO training_samples (id, timestamp, prompt, completion, quality, source)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (str(uuid.uuid4()), datetime.now().isoformat(), prompt, completion, quality, source))
+    conn.commit()
+    conn.close()
+    return {"success": True, "quality": quality, "source": source}
+
+@app.post("/training-data/export")
+async def export_training_data(req: TrainingSampleExportRequest):
+    """
+    Export training samples as a list of {prompt, completion} pairs for LoRA fine-tuning.
+    Only samples with quality >= min_quality are included.
+    """
+    conn = sqlite3.connect(DB_PATHS["shared"])
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT prompt, completion, quality, source, timestamp
+        FROM training_samples
+        WHERE quality >= ?
+        ORDER BY quality DESC, timestamp DESC
+        LIMIT ?
+    """, (req.min_quality, req.limit))
+    rows = cur.fetchall()
+    conn.close()
+
+    samples = [
+        {"prompt": r[0], "completion": r[1], "quality": r[2], "source": r[3], "ts": r[4]}
+        for r in rows
+    ]
+    return {
+        "samples": samples,
+        "count": len(samples),
+        "min_quality": req.min_quality,
+        "format": "jsonl_compatible",
+    }
+
+@app.get("/training-data/count")
+async def training_data_count():
+    """Return the number of available training samples by quality tier."""
+    conn = sqlite3.connect(DB_PATHS["shared"])
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM training_samples WHERE quality >= 0.9")
+    excellent = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM training_samples WHERE quality >= 0.7 AND quality < 0.9")
+    good = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM training_samples WHERE quality < 0.7")
+    poor = cur.fetchone()[0]
+    conn.close()
+    return {
+        "excellent_0.9plus": excellent,
+        "good_0.7to0.9": good,
+        "poor_below_0.7": poor,
+        "total": excellent + good + poor,
+        "ready_for_training": excellent + good,
     }
 
 if __name__ == "__main__":

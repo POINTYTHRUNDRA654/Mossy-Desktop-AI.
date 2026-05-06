@@ -42,6 +42,43 @@ export const Gemma4FineTuner: React.FC = () => {
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [brainSamplesCount, setBrainSamplesCount] = useState<number | null>(null);
+    const [loadingBrain, setLoadingBrain] = useState(false);
+
+    /** Fetch training samples collected by Mossy's feedback loop */
+    const loadFromBrain = async () => {
+        setLoadingBrain(true);
+        setError(null);
+        try {
+            const countResp = await fetch('http://localhost:8004/training-data/count');
+            const countData = await countResp.json();
+            setBrainSamplesCount(countData.ready_for_training || 0);
+
+            if ((countData.ready_for_training || 0) === 0) {
+                setError('No high-quality training samples collected yet. Give Mossy some thumbs-up feedback first!');
+                setLoadingBrain(false);
+                return;
+            }
+
+            const exportResp = await fetch('http://localhost:8004/training-data/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ min_quality: 0.7, limit: 500 }),
+            });
+            const exportData = await exportResp.json();
+            const samples: Array<{ prompt: string; completion: string }> = exportData.samples || [];
+
+            // Format as prompt + completion blocks separated by blank lines
+            const formatted = samples
+                .map((s) => `### Question\n${s.prompt}\n### Answer\n${s.completion}`)
+                .join('\n\n');
+            setTrainingData(formatted);
+        } catch (err) {
+            setError('Failed to load from brain: ' + String(err));
+        } finally {
+            setLoadingBrain(false);
+        }
+    };
 
     const handleStartFineTune = async () => {
         try {
@@ -124,7 +161,11 @@ export const Gemma4FineTuner: React.FC = () => {
 
     return (
         <div className="w-full max-w-4xl mx-auto p-6 bg-slate-900 rounded-lg border border-slate-700">
-            <h2 className="text-2xl font-bold text-white mb-6">Gemma 4 Fine-Tuner</h2>
+            <h2 className="text-2xl font-bold text-white mb-2">Gemma 4 Fine-Tuner</h2>
+            <p className="text-slate-400 text-sm mb-6">
+                Train Mossy's brain on collected knowledge. Use "Load from Brain" to import
+                high-quality answers that Mossy has already validated.
+            </p>
 
             {/* Configuration Section */}
             <div className="space-y-4 mb-6">
@@ -217,17 +258,36 @@ export const Gemma4FineTuner: React.FC = () => {
 
                 {/* Training Data Section */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
-                        Training Data (separate by blank lines)
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-slate-300">
+                            Training Data (separate by blank lines)
+                        </label>
+                        <button
+                            onClick={loadFromBrain}
+                            disabled={loadingBrain || loading}
+                            className="flex items-center gap-1 px-3 py-1 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 disabled:opacity-50 text-white text-sm rounded transition"
+                            title="Import high-quality Q&A samples collected by Mossy's feedback loop"
+                        >
+                            {loadingBrain ? (
+                                <><Loader className="w-4 h-4 animate-spin" /> Loading…</>
+                            ) : (
+                                <>🧠 Load from Brain{brainSamplesCount !== null ? ` (${brainSamplesCount} samples)` : ''}</>
+                            )}
+                        </button>
+                    </div>
                     <textarea
                         value={trainingData}
                         onChange={(e) => setTrainingData(e.target.value)}
-                        placeholder="Enter training examples here. Separate multiple examples with a blank line."
+                        placeholder="Enter training examples here — or click 'Load from Brain' to import Mossy's collected knowledge. Separate multiple examples with a blank line."
                         rows={6}
                         className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white font-mono text-sm resize-none"
                         disabled={loading}
                     />
+                    {trainingData && (
+                        <p className="mt-1 text-xs text-slate-500">
+                            {trainingData.split('\n\n').filter(t => t.trim()).length} training samples loaded
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -242,18 +302,18 @@ export const Gemma4FineTuner: React.FC = () => {
             {/* Start Button */}
             <button
                 onClick={handleStartFineTune}
-                disabled={loading}
-                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-medium rounded flex items-center justify-center gap-2 transition"
+                disabled={loading || !trainingData.trim()}
+                className="w-full px-4 py-3 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-600 text-white font-bold rounded flex items-center justify-center gap-2 transition text-base"
             >
                 {loading ? (
                     <>
-                        <Loader className="w-4 h-4 animate-spin" />
-                        Training in progress...
+                        <Loader className="w-5 h-5 animate-spin" />
+                        Tuning Mossy's Brain...
                     </>
                 ) : (
                     <>
-                        <Play className="w-4 h-4" />
-                        Start Fine-Tuning
+                        <Play className="w-5 h-5" />
+                        🧠 Tune Mossy's Brain
                     </>
                 )}
             </button>
