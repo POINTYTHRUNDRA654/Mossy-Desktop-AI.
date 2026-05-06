@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo, Gamepad2, Code2, Scan, Trophy, PackageSearch, ListOrdered, Map, Layers, Mic, Box, Sparkles, PackageOpen, AlertTriangle, Archive, FileCode2, PackagePlus, Settings, Sliders, GitMerge } from 'lucide-react';
+import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo, Gamepad2, Code2, Scan, Trophy, PackageSearch, ListOrdered, Map, Layers, Mic, Box, Sparkles, PackageOpen, AlertTriangle, Archive, FileCode2, PackagePlus, Settings, Sliders, GitMerge, Link2 } from 'lucide-react';
 import { useLive } from './LiveContext';
 import AvatarCore from './AvatarCore';
 import ApiKeySetup from './ApiKeySetup';
@@ -74,6 +74,7 @@ const Sidebar: React.FC = () => {
     { to: '/monitor',     icon: Activity,        label: 'System Map',      group: 'Core' },
     { to: '/terminal',    icon: SquareTerminal,  label: 'HyperTerminal',   group: 'Core' },
     { to: '/bridge',      icon: Monitor,         label: 'Desktop Bridge',  group: 'Core' },
+    { to: '/tutor-bridge', icon: Link2,          label: 'Tutor Bridge',    group: 'Core' },
     { to: '/workshop',    icon: Hammer,          label: 'The Workshop',    group: 'Core' },
 
     // ── Intelligence ──────────────────────────────────────────────────────

@@ -40,15 +40,21 @@ AGENT_COMMUNICATION_PORT = 8004
 # Agent endpoints
 AGENTS = {
     "desktop-ai": "http://localhost:8000",      # Gemma service (tutor)
-    "ai-helper": "http://localhost:21337",      # Flask hardware/file service
+    "ai-helper": "http://localhost:21337",      # Flask hardware/file service (legacy name)
     "mossy-manager": "http://localhost:8005",   # Future: Mossy Manager service
+    "desktop-tutor": "http://localhost:21337",  # Desktop Tutor bridge (mossy_server.py)
 }
+
+# Desktop Tutor also exposes an AI chat backend on a separate port
+DESKTOP_TUTOR_BRIDGE_URL = "http://localhost:21337"   # Flask bridge: /health, /hardware, /capture
+DESKTOP_TUTOR_CHAT_URL   = "http://localhost:8787"    # Express backend: /v1/chat
 
 # Database paths
 DB_PATHS = {
     "desktop-ai": "data/agent_memory_desktop.db",
     "ai-helper": "data/agent_memory_helper.db",
     "mossy-manager": "data/agent_memory_manager.db",
+    "desktop-tutor": "data/agent_memory_desktop_tutor.db",
     "shared": "data/shared_knowledge.db",
 }
 
@@ -343,7 +349,7 @@ init_databases()
 knowledge_base = FalloutKnowledgeBase()
 agent_memories = {
     agent: AgentMemory(agent) 
-    for agent in ["desktop-ai", "ai-helper", "mossy-manager"]
+    for agent in ["desktop-ai", "ai-helper", "mossy-manager", "desktop-tutor"]
 }
 
 # ============================================================================
@@ -365,24 +371,33 @@ async def health():
 async def discover_agents():
     """Discover all connected agents and their health"""
     discovered = {}
-    
+
     for agent_name, endpoint in AGENTS.items():
+        # desktop-tutor uses the bridge port (21337) for health checks
+        health_url = f"{DESKTOP_TUTOR_BRIDGE_URL}/health" if agent_name == "desktop-tutor" else f"{endpoint}/health"
         try:
             async with httpx.AsyncClient(timeout=2.0) as client:
-                resp = await client.get(f"{endpoint}/health")
+                resp = await client.get(health_url)
                 if resp.status_code == 200:
-                    discovered[agent_name] = {
-                        "endpoint": endpoint,
-                        "status": "online",
-                        "data": resp.json(),
-                    }
+                    agent_data: Dict = {"status": "online", "endpoint": endpoint, "data": resp.json()}
+                    # Also check Desktop Tutor's AI chat backend
+                    if agent_name == "desktop-tutor":
+                        try:
+                            chat_health = await client.get(f"{DESKTOP_TUTOR_CHAT_URL}/health", timeout=2.0)
+                            agent_data["chat_backend"] = {
+                                "url": DESKTOP_TUTOR_CHAT_URL,
+                                "status": "online" if chat_health.status_code == 200 else "offline",
+                            }
+                        except Exception:
+                            agent_data["chat_backend"] = {"url": DESKTOP_TUTOR_CHAT_URL, "status": "offline"}
+                    discovered[agent_name] = agent_data
         except Exception as e:
             discovered[agent_name] = {
                 "endpoint": endpoint,
                 "status": "offline",
                 "error": str(e),
             }
-    
+
     return discovered
 
 # ============================================================================
@@ -401,13 +416,62 @@ async def query_agent(query: AgentQuery) -> AgentResponse:
     endpoint = AGENTS[query.to_agent]
     
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            # Agent-specific query handling
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            # Agent-specific query handling based on the actual API each service exposes
             if query.to_agent == "ai-helper":
-                # Ask AI-Helper to search its knowledge
-                resp = await client.post(
-                    f"{endpoint}/query",
-                    json={"question": query.question, "context": query.context}
+                # AI-Helper (Desktop Tutor bridge) — get hardware context as an answer
+                hw_resp = await client.get(f"{DESKTOP_TUTOR_BRIDGE_URL}/hardware")
+                hw_data = hw_resp.json() if hw_resp.status_code == 200 else {}
+                hw_summary = (
+                    f"OS: {hw_data.get('os','?')}, CPU: {hw_data.get('cpu','?')}, "
+                    f"RAM: {hw_data.get('ram','?')} GB, GPU: {hw_data.get('gpu','?')}"
+                )
+                return AgentResponse(
+                    agent=query.to_agent,
+                    answer=f"Desktop system context — {hw_summary}",
+                    confidence=0.9,
+                    sources=[{"type": "hardware", "data": hw_data}],
+                    metadata=hw_data,
+                )
+            elif query.to_agent == "desktop-tutor":
+                # Desktop Tutor — first check chat backend (port 8787), fall back to bridge info
+                system_prompt = (
+                    "You are Mossy Desktop Tutor, an expert Fallout 4 modding assistant. "
+                    "Another Mossy AI instance is asking you a question so you can help each "
+                    "other advance. Answer concisely and share any relevant knowledge."
+                )
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                ]
+                if query.context:
+                    messages.append({"role": "user", "content": f"Context: {query.context}\n\nQuestion: {query.question}"})
+                else:
+                    messages.append({"role": "user", "content": query.question})
+
+                chat_resp = await client.post(
+                    f"{DESKTOP_TUTOR_CHAT_URL}/v1/chat",
+                    json={"provider": "groq", "messages": messages, "maxTokens": 1024},
+                    timeout=20.0,
+                )
+                if chat_resp.status_code == 200:
+                    chat_data = chat_resp.json()
+                    answer = chat_data.get("text", "")
+                    return AgentResponse(
+                        agent=query.to_agent,
+                        answer=answer,
+                        confidence=0.85,
+                        sources=[{"type": "groq", "model": chat_data.get("model", "unknown")}],
+                        reasoning=f"Answered by Desktop Tutor via {chat_data.get('model','groq')}",
+                        metadata=chat_data,
+                    )
+                # Fall back to returning hardware info if chat is unavailable
+                hw_resp = await client.get(f"{DESKTOP_TUTOR_BRIDGE_URL}/hardware")
+                hw_data = hw_resp.json() if hw_resp.status_code == 200 else {}
+                return AgentResponse(
+                    agent=query.to_agent,
+                    answer=f"Desktop Tutor chat unavailable — system: {hw_data}",
+                    confidence=0.3,
+                    metadata=hw_data,
                 )
             elif query.to_agent == "desktop-ai":
                 # Ask Desktop AI (Gemma) to answer
@@ -416,32 +480,34 @@ async def query_agent(query: AgentQuery) -> AgentResponse:
                     json={"prompt": query.question}
                 )
             else:
+                # Generic fallback for any future agent
                 resp = await client.post(
                     f"{endpoint}/query",
                     json={"question": query.question}
                 )
-            
+
             if resp.status_code == 200:
                 data = resp.json()
-                
+
                 # Log the query
                 conn = sqlite3.connect(DB_PATHS["shared"])
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO agent_queries (id, from_agent, to_agent, question, answer, timestamp, agents_consulted)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (str(uuid.uuid4()), query.from_agent, query.to_agent, 
-                      query.question, json.dumps(data), 
+                """, (str(uuid.uuid4()), query.from_agent, query.to_agent,
+                      query.question, json.dumps(data),
                       datetime.now().isoformat(), query.to_agent))
                 conn.commit()
                 conn.close()
-                
+
                 # Record learning for from_agent
-                agent_memories[query.from_agent].learn_from_interaction(
-                    {"response": data, "source_agent": query.to_agent},
-                    ["learned from " + query.to_agent]
-                )
-                
+                if query.from_agent in agent_memories:
+                    agent_memories[query.from_agent].learn_from_interaction(
+                        {"response": data, "source_agent": query.to_agent},
+                        ["learned from " + query.to_agent]
+                    )
+
                 return AgentResponse(
                     agent=query.to_agent,
                     answer=data.get("text", data.get("answer", str(data))),
@@ -452,7 +518,7 @@ async def query_agent(query: AgentQuery) -> AgentResponse:
                 )
             else:
                 raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 

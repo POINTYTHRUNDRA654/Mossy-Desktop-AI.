@@ -58,6 +58,8 @@ const NIFViewer      = React.lazy(() => import('./components/NIFViewer'));
 const INITweaker     = React.lazy(() => import('./components/INITweaker'));
 const PluginMerger   = React.lazy(() => import('./components/PluginMerger'));
 const ModDiagnostics = React.lazy(() => import('./components/ModDiagnostics'));
+// ── Desktop Tutor Bridge ──
+const MossyTutorBridge = React.lazy(() => import('./components/MossyTutorBridge'));
 
 // Define window interface for AI Studio helpers & Custom Events
 declare global {
@@ -188,6 +190,8 @@ const App: React.FC = () => {
                 <Route path="/ini-tweaker" element={<INITweaker />} />
                 <Route path="/merger"      element={<PluginMerger />} />
                 <Route path="/diagnostics" element={<ModDiagnostics />} />
+                {/* ── Desktop Tutor Bridge ── */}
+                <Route path="/tutor-bridge" element={<MossyTutorBridge />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
