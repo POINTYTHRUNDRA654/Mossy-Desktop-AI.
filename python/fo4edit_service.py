@@ -19,7 +19,8 @@ from typing import Optional, List, Dict, Any
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-# Safe plugin-name pattern: letters, digits, underscores, hyphens, spaces, dots
+# Safe plugin-name pattern: letters, digits, underscores, hyphens, spaces, dots.
+# subprocess list form (no shell=True) is used, so spaces in filenames are safe.
 _SAFE_PLUGIN_NAME_RE = re.compile(r'^[\w\- .]+\.(esp|esm|esl)$', re.IGNORECASE)
 
 def _validate_plugin_names(names: List[str]) -> List[str]:

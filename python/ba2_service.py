@@ -342,8 +342,8 @@ def inspect(req: InspectRequest):
                     "files": [{"name": n, "size": 0, "compressed": True} for n in names[:500]],
                     "total_size_bytes": os.path.getsize(path),
                 }
-            except Exception as e:
-                return {"status": "error", "message": f"7z inspect error: {e}"}
+            except Exception:
+                return {"status": "error", "message": "7z inspect error"}
         return {"status": "error", "message": f"Unknown archive format (magic={magic!r})"}
 
     if "error" in result:
@@ -444,6 +444,9 @@ def extract_7z(req: Extract7zRequest):
         }
     except Exception:
         return {"status": "error", "message": "Unexpected error extracting 7z archive"}
+
+
+@app.post("/create")
 def create(req: CreateRequest):
     archive2 = _find_archive2()
     if not archive2:
