@@ -65,6 +65,12 @@ const Gemma4FineTuner  = React.lazy(() => import('./components/Gemma4FineTuner')
 const ReasoningChain   = React.lazy(() => import('./components/ReasoningChain'));
 // ── Multi-Agent Collaboration monitor ──
 const AgentCollaboration = React.lazy(() => import('./components/AgentCollaboration'));
+// ── Photopea Editor ──
+const PhotopeaEditor = React.lazy(() => import('./components/PhotopeaEditor'));
+// ── NVIDIA Material & Shader Tools ──
+const MaterializerEditor = React.lazy(() => import('./components/MaterializerEditor'));
+const ShaderMap4Editor = React.lazy(() => import('./components/ShaderMap4Editor'));
+const TextureToolsEditor = React.lazy(() => import('./components/TextureToolsEditor'));
 
 // Define window interface for AI Studio helpers & Custom Events
 declare global {
@@ -201,6 +207,10 @@ const App: React.FC = () => {
                 <Route path="/gemma-tuner"     element={<Gemma4FineTuner />} />
                 <Route path="/reasoning"       element={<ReasoningChain />} />
                 <Route path="/agent-collab"    element={<AgentCollaboration />} />
+                <Route path="/photopea"        element={<PhotopeaEditor />} />
+                <Route path="/materializer"    element={<MaterializerEditor />} />
+                <Route path="/shadermap4"      element={<ShaderMap4Editor />} />
+                <Route path="/texture-tools"   element={<TextureToolsEditor />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />

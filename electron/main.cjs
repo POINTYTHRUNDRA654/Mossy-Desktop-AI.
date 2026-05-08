@@ -61,6 +61,12 @@ function startPythonService(serviceType = 'gemma') {
     'merger':       { var: () => mergerProcess,       set: (p) => { mergerProcess = p; },       script: 'plugin_merger_service.py' },
     // New: Mod diagnostics (crash log, F4SE/SKSE, Papyrus, AI diagnosis)
     'diag':         { var: () => diagProcess,         set: (p) => { diagProcess = p; },         script: 'diagnostics_service.py' },
+    // New: Photopea file service (image editing, file management)
+    'photopea':     { var: () => photopeaProcess,     set: (p) => { photopeaProcess = p; },     script: 'photopea_service.py' },
+    // New: NVIDIA Materializer (texture generation)
+    'materializer': { var: () => materializerProcess, set: (p) => { materializerProcess = p; }, script: 'materializer_service_real.py' },
+    // New: NVIDIA Texture Tools (texture compression)
+    'texture-tools': { var: () => textureToolsProcess, set: (p) => { textureToolsProcess = p; }, script: 'texture_tools_service.py' },
   };
 
   const svc = serviceMap[serviceType] || serviceMap['gemma'];
@@ -156,6 +162,14 @@ function stopPythonServices() {
   if (fomodProcess)       { fomodProcess.kill();       fomodProcess = null; }
   if (f4seProcess)        { f4seProcess.kill();        f4seProcess = null; }
   if (cellEditorProcess)  { cellEditorProcess.kill();  cellEditorProcess = null; }
+  if (mo2Process)         { mo2Process.kill();         mo2Process = null; }
+  if (nifProcess)         { nifProcess.kill();         nifProcess = null; }
+  if (iniProcess)         { iniProcess.kill();         iniProcess = null; }
+  if (mergerProcess)      { mergerProcess.kill();      mergerProcess = null; }
+  if (diagProcess)        { diagProcess.kill();        diagProcess = null; }
+  if (photopeaProcess)    { photopeaProcess.kill();    photopeaProcess = null; }
+  if (materializerProcess) { materializerProcess.kill(); materializerProcess = null; }
+  if (textureToolsProcess) { textureToolsProcess.kill(); textureToolsProcess = null; }
 }
 
 // ── Auto-launch at OS startup ──────────────────────────────────────────────
@@ -846,6 +860,11 @@ let nifProcess         = null;
 let iniProcess         = null;
 let mergerProcess      = null;
 let diagProcess        = null;
+// ── Design & Image Editing Services ──────────────────────────────────────
+let photopeaProcess    = null;
+// ── Material & Texture Tools ───────────────────────────────────────────────
+let materializerProcess = null;
+let textureToolsProcess = null;
 const OPENCV_SERVICE_PORT      = 8005;
 const PIPER_SERVICE_PORT       = 8006;
 const TRIPOSR_SERVICE_PORT     = 8007;
@@ -863,6 +882,9 @@ const NIF_SERVICE_PORT         = 8019;
 const INI_SERVICE_PORT         = 8020;
 const MERGER_SERVICE_PORT      = 8021;
 const DIAG_SERVICE_PORT        = 8022;
+const PHOTOPEA_SERVICE_PORT    = 8008;
+const MATERIALIZER_SERVICE_PORT = 8011;
+const TEXTURE_TOOLS_SERVICE_PORT = 8023;
 const OPENCV_SERVICE_URL       = `http://127.0.0.1:${OPENCV_SERVICE_PORT}`;
 const PIPER_SERVICE_URL        = `http://127.0.0.1:${PIPER_SERVICE_PORT}`;
 const TRIPOSR_SERVICE_URL      = `http://127.0.0.1:${TRIPOSR_SERVICE_PORT}`;
@@ -880,6 +902,9 @@ const NIF_SERVICE_URL          = `http://127.0.0.1:${NIF_SERVICE_PORT}`;
 const INI_SERVICE_URL          = `http://127.0.0.1:${INI_SERVICE_PORT}`;
 const MERGER_SERVICE_URL       = `http://127.0.0.1:${MERGER_SERVICE_PORT}`;
 const DIAG_SERVICE_URL         = `http://127.0.0.1:${DIAG_SERVICE_PORT}`;
+const PHOTOPEA_SERVICE_URL     = `http://127.0.0.1:${PHOTOPEA_SERVICE_PORT}`;
+const MATERIALIZER_SERVICE_URL = `http://127.0.0.1:${MATERIALIZER_SERVICE_PORT}`;
+const TEXTURE_TOOLS_SERVICE_URL = `http://127.0.0.1:${TEXTURE_TOOLS_SERVICE_PORT}`;
 
 function startAgentCollaborationService() {
   if (agentCollabProcess) return Promise.resolve();

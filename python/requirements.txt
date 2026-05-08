@@ -159,3 +159,8 @@ Send2Trash>=1.8.2
 # duckduckgo-search — DuckDuckGo search API client (no API key required)
 # Used by Mossy to look up current info and auto-learn from results
 duckduckgo-search>=6.2.0
+
+# ── Web Framework / Microservices ─────────────────────────────────────────
+# Flask — lightweight Python web framework for microservices
+flask>=3.0.0
+flask-cors>=4.0.0          # CORS support for cross-origin requests

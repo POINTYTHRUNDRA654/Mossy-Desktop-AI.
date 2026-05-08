@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
-import { Box, RefreshCw, Copy, CheckCircle, Download, Zap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Box, RefreshCw, Copy, CheckCircle, Download, Zap, Sparkles, Settings, FileText } from 'lucide-react';
 
 const TASK_CATEGORIES = [
+  // Standard Blender
   'UV Unwrapping', 'LOD Generation', 'Batch Export', 'Texture Baking',
   'Armature Rigging', 'Particle Systems', 'Geometry Nodes',
   'Animation', 'Material Setup', 'Custom Tool',
+  // NVIDIA Omniverse
+  'Omniverse Scene Optimization', 'Material Conversion (Omniverse)',
+  'Particle Baking', 'Audio2Face Setup', 'Omniverse Material Baking',
 ];
 
 const BLENDER_VERSIONS = ['3.6 LTS', '4.0', '4.1', '4.2 LTS'];
@@ -18,7 +22,28 @@ const QUICK_TEMPLATES = [
   { label: 'Origin to Bottom', text: 'Set origin of all selected objects to the bottom center of their bounding box' },
 ];
 
+const OMNIVERSE_TEMPLATES = [
+  { label: 'Optimize Scene', text: 'Run Omniverse Scene Optimizer on all meshes: fix normals, remove doubles, decimate by 50%, and generate auto UVs' },
+  { label: 'Convert Material', text: 'Convert Blender material to Omniverse standard with PBR texture baking and USD export' },
+  { label: 'Particle Bake', text: 'Bake particle simulation to mesh sequence and export to Omniverse format with shape keys' },
+  { label: 'Audio2Face Export', text: 'Prepare rigged character for Audio2Face by exporting mesh, skeleton, and blend shapes to USD' },
+  { label: 'Material Bake', text: 'Bake all selected materials to individual texture maps optimized for Omniverse' },
+  { label: 'Proxy Geometry', text: 'Generate simplified proxy geometry for Omniverse LOD system with collision shapes' },
+];
+
+interface TabType {
+  id: 'standard' | 'omniverse';
+  label: string;
+  icon: React.ReactNode;
+}
+
+const TABS: TabType[] = [
+  { id: 'standard', label: 'Standard Blender', icon: <Box className="w-4 h-4" /> },
+  { id: 'omniverse', label: 'NVIDIA Omniverse', icon: <Sparkles className="w-4 h-4" /> },
+];
+
 const BlenderForge: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'standard' | 'omniverse'>('standard');
   const [category, setCategory] = useState('UV Unwrapping');
   const [blenderVersion, setBlenderVersion] = useState('4.2 LTS');
   const [description, setDescription] = useState('');
@@ -28,14 +53,48 @@ const BlenderForge: React.FC = () => {
   const [explaining, setExplaining] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const SYSTEM_PROMPT = `You are an expert Blender Python (bpy) developer targeting Blender ${blenderVersion}.
+  const isOmniverseMode = activeTab === 'omniverse';
+  const templates = isOmniverseMode ? OMNIVERSE_TEMPLATES : QUICK_TEMPLATES;
+  const categories = isOmniverseMode 
+    ? TASK_CATEGORIES.filter(c => c.includes('Omniverse') || c === 'Material Conversion (Omniverse)' || c === 'Particle Baking' || c === 'Audio2Face Setup' || c === 'Omniverse Material Baking')
+    : TASK_CATEGORIES.filter(c => !c.includes('Omniverse') && c !== 'Material Conversion (Omniverse)' && c !== 'Particle Baking' && c !== 'Audio2Face Setup' && c !== 'Omniverse Material Baking');
+
+  // Reset category when switching tabs
+  useEffect(() => {
+    if (isOmniverseMode && !category.includes('Omniverse') && category !== 'Particle Baking' && category !== 'Audio2Face Setup' && category !== 'Material Conversion (Omniverse)') {
+      setCategory('Omniverse Scene Optimization');
+    } else if (!isOmniverseMode && (category.includes('Omniverse') || category === 'Particle Baking' || category === 'Audio2Face Setup' || category === 'Material Conversion (Omniverse)' || category === 'Omniverse Material Baking')) {
+      setCategory('UV Unwrapping');
+    }
+  }, [isOmniverseMode, category]);
+
+  const SYSTEM_PROMPT = isOmniverseMode
+    ? `You are an expert Blender Python (bpy) developer AND NVIDIA Omniverse addon developer targeting Blender ${blenderVersion}.
+You have deep knowledge of the NVIDIA Omniverse Blender addons:
+- omni_panel: Material conversion, particle baking, compositing, material baking
+- omni_audio2face: Character prep, mesh export, skeleton setup, shape keys/blend shapes
+- omni_optimization_panel: Scene optimization, mesh fixing, decimation, auto UV generation, proxy geometry
+
+Generate production-grade bpy scripts that integrate with these addons. Always include:
+- import bpy at the top
+- Conditional imports for Omniverse addon modules where applicable
+- A main() function with proper error handling
+- if __name__ == "__main__": main()
+- Full docstrings and inline comments
+- Try/except blocks with informative error messages
+- Validation of Omniverse addon availability
+
+Category: ${category}
+Blender Version: ${blenderVersion}`
+    : `You are an expert Blender Python (bpy) developer targeting Blender ${blenderVersion}.
 Generate clean, well-commented bpy scripts. Always include:
 - import bpy at the top
 - A main() function
 - if __name__ == "__main__": main()
 - Error handling with try/except
-- Docstrings
-Category: ${category}`;
+- Docstrings and inline comments
+Category: ${category}
+Blender Version: ${blenderVersion}`;
 
   const generateScript = async () => {
     if (!description.trim()) return;
@@ -64,7 +123,7 @@ Category: ${category}`;
     if (!generatedScript) return;
     setExplaining(true);
     const r = await window.electronAPI?.ipcInvoke('gemma:run-inference', {
-      prompt: `Explain this Blender Python script in plain English, step by step:\n\n${generatedScript}`,
+      prompt: `Explain this Blender ${isOmniverseMode ? 'Omniverse' : ''} Python script in plain English, step by step:\n\n${generatedScript}`,
     });
     setExplaining(false);
     setExplanation(r?.response || r?.text || '');
@@ -81,7 +140,7 @@ Category: ${category}`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `blender_${category.toLowerCase().replace(/\s+/g, '_')}.py`;
+    a.download = `blender_${isOmniverseMode ? 'omni_' : ''}${category.toLowerCase().replace(/\s+/g, '_')}.py`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -90,13 +149,35 @@ Category: ${category}`;
     <div className="h-full overflow-y-auto bg-[#050910] p-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center">
-          <Box className="w-5 h-5 text-emerald-400" />
+        <div className={`w-10 h-10 rounded-xl ${isOmniverseMode ? 'bg-purple-600/20 border border-purple-500/30' : 'bg-emerald-600/20 border border-emerald-500/30'} flex items-center justify-center transition-all`}>
+          {isOmniverseMode ? (
+            <Sparkles className="w-5 h-5 text-purple-400" />
+          ) : (
+            <Box className="w-5 h-5 text-emerald-400" />
+          )}
         </div>
         <div>
           <h1 className="text-xl font-bold text-white">Blender Forge</h1>
-          <p className="text-slate-400 text-xs">bpy script generator · Mossy AI</p>
+          <p className="text-slate-400 text-xs">{isOmniverseMode ? 'Omniverse addons' : 'bpy script generator'} · Mossy AI</p>
         </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex gap-2 mb-6 border-b border-slate-700">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
+              activeTab === tab.id
+                ? 'border-emerald-500 text-emerald-400'
+                : 'border-transparent text-slate-400 hover:text-slate-300'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-4">
@@ -107,7 +188,7 @@ Category: ${category}`;
             onChange={e => setCategory(e.target.value)}
             className="w-full bg-slate-800 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500"
           >
-            {TASK_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div>
@@ -124,13 +205,17 @@ Category: ${category}`;
 
       {/* Quick templates */}
       <div className="mb-4">
-        <p className="text-xs text-slate-500 mb-2">Quick Templates</p>
+        <p className="text-xs text-slate-500 mb-2">{isOmniverseMode ? 'Omniverse' : 'Quick'} Templates</p>
         <div className="flex flex-wrap gap-1.5">
-          {QUICK_TEMPLATES.map(t => (
+          {templates.map(t => (
             <button
               key={t.label}
               onClick={() => setDescription(t.text)}
-              className="px-2.5 py-1 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 text-[11px] transition-colors"
+              className={`px-2.5 py-1 rounded-full text-slate-300 text-[11px] transition-colors ${
+                isOmniverseMode
+                  ? 'bg-purple-700/30 hover:bg-purple-600/40 border border-purple-600/50'
+                  : 'bg-slate-700 hover:bg-slate-600'
+              }`}
             >
               {t.label}
             </button>
@@ -144,7 +229,7 @@ Category: ${category}`;
           value={description}
           onChange={e => setDescription(e.target.value)}
           rows={4}
-          placeholder="Describe your Blender task in plain English..."
+          placeholder={isOmniverseMode ? "Describe your Omniverse workflow in plain English..." : "Describe your Blender task in plain English..."}
           className="w-full bg-slate-800 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-emerald-500 placeholder-slate-600"
         />
       </div>
@@ -152,10 +237,14 @@ Category: ${category}`;
       <button
         onClick={generateScript}
         disabled={loading || !description.trim()}
-        className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors mb-6"
+        className={`flex items-center gap-2 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors mb-6 disabled:bg-slate-700 disabled:text-slate-500 ${
+          isOmniverseMode
+            ? 'bg-purple-600 hover:bg-purple-500 disabled:hover:bg-slate-700'
+            : 'bg-emerald-600 hover:bg-emerald-500 disabled:hover:bg-slate-700'
+        }`}
       >
         {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-        {loading ? 'Generating...' : 'Generate bpy Script'}
+        {loading ? 'Generating...' : `Generate ${isOmniverseMode ? 'Omniverse' : 'bpy'} Script`}
       </button>
 
       {generatedScript && (
@@ -188,6 +277,22 @@ Category: ${category}`;
         <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700">
           <p className="text-xs text-slate-400 mb-2 font-medium">AI Explanation</p>
           <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{explanation}</p>
+        </div>
+      )}
+
+      {/* Omniverse Info Panel */}
+      {isOmniverseMode && (
+        <div className="mt-6 p-4 rounded-xl bg-purple-900/20 border border-purple-700/30">
+          <p className="text-xs text-purple-300 mb-2 font-medium flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            NVIDIA Omniverse Integration
+          </p>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            This script integrates with NVIDIA Omniverse Blender addons. Ensure addons are installed:
+            <br/>• <code className="text-purple-400">omni_panel</code> - Material & particle workflows
+            <br/>• <code className="text-purple-400">omni_audio2face</code> - Character animation prep
+            <br/>• <code className="text-purple-400">omni_optimization_panel</code> - Scene optimization
+          </p>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, VolumeX, HardDrive, Container, Wifi, WifiOff, ListTodo, Gamepad2, Code2, Scan, Trophy, PackageSearch, ListOrdered, Map, Layers, Mic, Box, Sparkles, PackageOpen, AlertTriangle, Archive, FileCode2, PackagePlus, Settings, Sliders, GitMerge, Link2, FlaskConical, Share2, Cpu } from 'lucide-react';
+import { MessageSquare, Activity, Monitor, Hammer, GitBranch, SquareTerminal, BrainCircuit, Aperture, LayoutDashboard, Workflow, Hexagon, DraftingCompass, Triangle, Bug, Package, Library, Feather, Power, Volume2, HardDrive, Container, Wifi, WifiOff, ListTodo, Gamepad2, Code2, Scan, Trophy, PackageSearch, ListOrdered, Map, Layers, Mic, Box, Sparkles, PackageOpen, AlertTriangle, Archive, FileCode2, PackagePlus, Settings, Sliders, GitMerge, Link2, FlaskConical, Share2, Cpu, Image, Palette, Zap } from 'lucide-react';
 import { useLive } from './LiveContext';
 import AvatarCore from './AvatarCore';
 import ApiKeySetup from './ApiKeySetup';
@@ -91,6 +91,10 @@ const Sidebar: React.FC = () => {
     { to: '/blueprint',   icon: DraftingCompass, label: 'The Blueprint',   group: 'Build' },
     { to: '/assembler',   icon: Package,         label: 'The Assembler',   group: 'Build' },
     { to: '/crucible',    icon: Bug,             label: 'The Crucible',    group: 'Build' },
+    { to: '/photopea',    icon: Image,           label: 'Photopea Editor', group: 'Build' },
+    { to: '/materializer', icon: Palette,        label: 'Materializer',    group: 'Build' },
+    { to: '/shadermap4',  icon: Layers,          label: 'ShaderMap4',      group: 'Build' },
+    { to: '/texture-tools',   icon: Zap,              label: 'Texture Tools',   group: 'Build' },
 
     // ── Data & Memory ─────────────────────────────────────────────────────
     { to: '/vault',       icon: Container,       label: 'The Vault',       group: 'Data' },

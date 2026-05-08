@@ -1,5 +1,15 @@
 {
   "name": "mossy-ai-assistant",
+  "description": "Mossy: Personal desktop AI companion for creative workflows, modding, and system integration",
+  "author": {
+    "name": "POINTYTHRUNDRA654",
+    "url": "https://github.com/POINTYTHRUNDRA654"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/POINTYTHRUNDRA654/Mossy-Desktop-AI"
+  },
+  "license": "MIT",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -18,8 +28,8 @@
   },
   "build": {
     "appId": "com.mossy.ai-assistant",
-    "productName": "Mossy's. Desktop AIS, New Brain",
-    "copyright": "Copyright © 2024",
+    "productName": "Mossy AI Assistant",
+    "copyright": "Copyright © 2024-2026 POINTYTHRUNDRA654. Licensed under MIT. Built with open-source projects — see CREDITS.md for full attribution.",
     "directories": {
       "buildResources": "assets",
       "output": "release"
