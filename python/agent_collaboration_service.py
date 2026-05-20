@@ -7,8 +7,10 @@ Specialized for Fallout 4 modding expertise and continuous self-improvement
 import os
 import json
 import time
+import asyncio
 import sqlite3
 import uuid
+import shutil
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -36,6 +38,8 @@ except ImportError:
 
 PORT = 8004
 AGENT_COMMUNICATION_PORT = 8004
+HERMES_AGENT_COMMAND = os.getenv("HERMES_AGENT_COMMAND", "hermes-agent")
+HERMES_AGENT_TIMEOUT_SECONDS = int(os.getenv("HERMES_AGENT_TIMEOUT_SECONDS", "90"))
 
 # Agent endpoints
 AGENTS = {
@@ -43,6 +47,7 @@ AGENTS = {
     "ai-helper": "http://localhost:21337",      # Flask hardware/file service (legacy name)
     "mossy-manager": "http://localhost:8011",   # Future: Mossy Manager service (port 8011; 8005 is OpenCV)
     "desktop-tutor": "http://localhost:21337",  # Desktop Tutor bridge (mossy_server.py)
+    "hermes-agent": "local-cli:hermes-agent",   # Optional local Hermes CLI
 }
 
 # Desktop Tutor also exposes an AI chat backend on a separate port
@@ -55,6 +60,7 @@ DB_PATHS = {
     "ai-helper": "data/agent_memory_helper.db",
     "mossy-manager": "data/agent_memory_manager.db",
     "desktop-tutor": "data/agent_memory_desktop_tutor.db",
+    "hermes-agent": "data/agent_memory_hermes.db",
     "shared": "data/shared_knowledge.db",
 }
 
@@ -383,8 +389,68 @@ init_databases()
 knowledge_base = FalloutKnowledgeBase()
 agent_memories = {
     agent: AgentMemory(agent) 
-    for agent in ["desktop-ai", "ai-helper", "mossy-manager", "desktop-tutor"]
+    for agent in ["desktop-ai", "ai-helper", "mossy-manager", "desktop-tutor", "hermes-agent"]
 }
+
+def is_hermes_available() -> bool:
+    return shutil.which(HERMES_AGENT_COMMAND) is not None
+
+async def query_hermes_agent(question: str, context: Optional[str] = None) -> AgentResponse:
+    """Query local Hermes Agent CLI in one-shot mode."""
+    if not is_hermes_available():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Hermes Agent CLI not found ({HERMES_AGENT_COMMAND}). "
+                f"Install with: pip install \"hermes-agent==0.14.0\""
+            ),
+        )
+
+    prompt = question.strip()
+    if context:
+        prompt = f"Context:\n{context.strip()}\n\nQuestion:\n{prompt}"
+
+    proc = await asyncio.create_subprocess_exec(
+        HERMES_AGENT_COMMAND,
+        "--prompt",
+        prompt,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(),
+            timeout=HERMES_AGENT_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()
+        raise HTTPException(
+            status_code=504,
+            detail=f"Hermes Agent timed out after {HERMES_AGENT_TIMEOUT_SECONDS}s",
+        )
+
+    output = stdout.decode("utf-8", errors="replace").strip()
+    err_text = stderr.decode("utf-8", errors="replace").strip()
+
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Hermes Agent failed (exit {proc.returncode}): {err_text[:500]}",
+        )
+
+    if not output:
+        output = "Hermes Agent returned no output."
+
+    return AgentResponse(
+        agent="hermes-agent",
+        answer=output,
+        confidence=0.75,
+        sources=[{"type": "local-cli", "command": HERMES_AGENT_COMMAND}],
+        reasoning="Answered by local Hermes Agent CLI",
+        metadata={"stderr": err_text[:500]},
+    )
 
 # ============================================================================
 # HEALTH & DISCOVERY
@@ -407,6 +473,15 @@ async def discover_agents():
     discovered = {}
 
     for agent_name, endpoint in AGENTS.items():
+        if agent_name == "hermes-agent":
+            discovered[agent_name] = {
+                "endpoint": endpoint,
+                "status": "online" if is_hermes_available() else "offline",
+                "data": {"command": HERMES_AGENT_COMMAND},
+                "error": "" if is_hermes_available() else f"Command not found: {HERMES_AGENT_COMMAND}",
+            }
+            continue
+
         # desktop-tutor uses the bridge port (21337) for health checks
         health_url = f"{DESKTOP_TUTOR_BRIDGE_URL}/health" if agent_name == "desktop-tutor" else f"{endpoint}/health"
         try:
@@ -514,6 +589,8 @@ async def query_agent(query: AgentQuery) -> AgentResponse:
                     confidence=0.3,
                     metadata=hw_data,
                 )
+            elif query.to_agent == "hermes-agent":
+                return await query_hermes_agent(query.question, query.context)
             elif query.to_agent == "desktop-ai":
                 # Ask Desktop AI (Gemma) to answer
                 resp = await client.post(
@@ -616,8 +693,8 @@ async def validate_answer(
     validation_results = {}
     
     # Query other agents for validation
-    for agent_name in AGENTS.keys():
-        if agent_name == answering_agent:
+    for agent_name, endpoint in AGENTS.items():
+        if agent_name == answering_agent or not endpoint.startswith("http"):
             continue
         
         try:

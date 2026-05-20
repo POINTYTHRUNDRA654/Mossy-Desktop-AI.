@@ -2,10 +2,11 @@
 
 ## What You Now Have
 
-✅ **Three AI agents** work together to teach Fallout 4 modding:
+✅ **Four AI agents** work together to teach Fallout 4 modding:
 - **Mossy-Desktop-AI** (Tutor) — Synthesizes polished answers
 - **AI-Helper** (Executor) — Scans files, finds real-world data  
 - **Mossy Manager** (Expert) — Load order and compatibility knowledge
+- **Hermes Agent** (Optional CLI peer) — Additional local reasoning/tool-use agent
 
 ✅ **Shared Knowledge Base** — All agents learn from each other
 ✅ **Individual Memory** — Each agent maintains its own learning record
@@ -54,7 +55,18 @@ Ask questions like:
 - Desktop AI answers
 - AI-Helper verifies with system data
 - Mossy Manager checks against known patterns
-- All three agents learn from the answer
+- Hermes Agent can be queried as an additional peer
+- All agents learn from the answer
+
+### Optional: Enable Hermes Agent
+Install into the same Python environment used by Mossy services:
+
+```bash
+cd python
+pip install "hermes-agent==0.14.0"
+```
+
+If `hermes-agent` is on your PATH, it is auto-discovered by the collaboration service.
 
 ### Open AgentCollaboration Component
 - **Inter-Agent Chat tab**: Watch agents query each other
@@ -148,6 +160,7 @@ Ask questions like:
 | **8004** | **Agent Collab** | **Inter-agent communication** ← NEW |
 | 21337 | AI-Helper | System + file access |
 | 8005 | Mossy Manager | Load order expert (future) |
+| CLI | Hermes Agent | Optional local CLI peer agent |
 
 ---
 
@@ -167,6 +180,7 @@ data/
   ├── agent_memory_desktop.db
   ├── agent_memory_helper.db
   ├── agent_memory_manager.db
+  ├── agent_memory_hermes.db
   └── shared_knowledge.db
 ```
 

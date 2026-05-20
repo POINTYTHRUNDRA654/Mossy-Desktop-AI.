@@ -33,6 +33,7 @@ export default function AgentCollaboration() {
         { name: 'Desktop Tutor',    endpoint: 'localhost:21337 / :8787', status: 'offline', color: 'bg-emerald-500' },
         { name: 'AI Helper',        endpoint: 'localhost:21337', status: 'offline', color: 'bg-blue-500' },
         { name: 'Mossy Manager',    endpoint: 'localhost:8011', status: 'offline', color: 'bg-green-500' },
+        { name: 'Hermes Agent',     endpoint: 'local-cli', status: 'offline', color: 'bg-yellow-500' },
     ]);
 
     // Map display names to discovery keys returned by the collaboration service
@@ -41,6 +42,7 @@ export default function AgentCollaboration() {
         'desktop tutor':    'desktop-tutor',
         'ai helper':        'ai-helper',
         'mossy manager':    'mossy-manager',
+        'hermes agent':     'hermes-agent',
     };
 
     const [messages, setMessages] = useState<InterAgentMessage[]>([]);
@@ -312,6 +314,7 @@ function CollaborationTab({ agents, onFeedback }: { agents: AgentStatus[]; onFee
                             <option value="desktop-ai">Mossy AI (Tutor)</option>
                             <option value="ai-helper">AI Helper</option>
                             <option value="mossy-manager">Mossy Manager</option>
+                            <option value="hermes-agent">Hermes Agent</option>
                         </select>
                     </div>
                     <div>
@@ -326,6 +329,7 @@ function CollaborationTab({ agents, onFeedback }: { agents: AgentStatus[]; onFee
                             <option value="ai-helper">AI Helper</option>
                             <option value="desktop-ai">Mossy AI (Tutor)</option>
                             <option value="mossy-manager">Mossy Manager</option>
+                            <option value="hermes-agent">Hermes Agent</option>
                         </select>
                     </div>
                 </div>
