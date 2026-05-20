@@ -41,6 +41,7 @@ AGENT_COMMUNICATION_PORT = 8004
 HERMES_AGENT_PIP_SPEC = "hermes-agent==0.14.0"
 HERMES_AGENT_COMMAND = os.getenv("HERMES_AGENT_COMMAND", "hermes-agent")
 HERMES_AGENT_TIMEOUT_SECONDS = int(os.getenv("HERMES_AGENT_TIMEOUT_SECONDS", "90"))
+HERMES_AGENT_STDERR_MAX_CHARS = int(os.getenv("HERMES_AGENT_STDERR_MAX_CHARS", "2000"))
 
 # Agent endpoints
 AGENTS = {
@@ -437,11 +438,12 @@ async def query_hermes_agent(question: str, context: Optional[str] = None) -> Ag
 
     output = stdout.decode("utf-8", errors="replace").strip()
     err_text = stderr.decode("utf-8", errors="replace").strip()
+    err_preview = err_text[:HERMES_AGENT_STDERR_MAX_CHARS]
 
     if proc.returncode != 0:
         raise HTTPException(
             status_code=502,
-            detail=f"Hermes Agent failed (exit {proc.returncode}): {err_text[:500]}",
+            detail=f"Hermes Agent failed (exit {proc.returncode}): {err_preview}",
         )
 
     if not output:
@@ -453,7 +455,11 @@ async def query_hermes_agent(question: str, context: Optional[str] = None) -> Ag
         confidence=0.75,
         sources=[{"type": "local-cli", "command": HERMES_AGENT_COMMAND}],
         reasoning="Answered by local Hermes Agent CLI",
-        metadata={"stderr": err_text[:500]},
+        metadata={
+            "stderr": err_preview,
+            "stderr_truncated": len(err_text) > len(err_preview),
+            "warning": "Hermes emitted stderr output" if err_text else "",
+        },
     )
 
 # ============================================================================
