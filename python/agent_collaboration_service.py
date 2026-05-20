@@ -42,6 +42,9 @@ HERMES_AGENT_PIP_SPEC = "hermes-agent==0.14.0"
 HERMES_AGENT_COMMAND = os.getenv("HERMES_AGENT_COMMAND", "hermes-agent")
 HERMES_AGENT_TIMEOUT_SECONDS = int(os.getenv("HERMES_AGENT_TIMEOUT_SECONDS", "90"))
 HERMES_AGENT_STDERR_MAX_CHARS = int(os.getenv("HERMES_AGENT_STDERR_MAX_CHARS", "2000"))
+# Hermes CLI answers are external and unverified by cross-agent consensus at source.
+# Use a conservative default confidence until explicit validation runs.
+HERMES_AGENT_DEFAULT_CONFIDENCE = 0.75
 
 # Agent endpoints
 AGENTS = {
@@ -391,7 +394,7 @@ init_databases()
 knowledge_base = FalloutKnowledgeBase()
 agent_memories = {
     agent: AgentMemory(agent) 
-    for agent in ["desktop-ai", "ai-helper", "mossy-manager", "desktop-tutor", "hermes-agent"]
+    for agent in [agent for agent in DB_PATHS.keys() if agent != "shared"]
 }
 
 def is_hermes_available() -> bool:
@@ -449,17 +452,20 @@ async def query_hermes_agent(question: str, context: Optional[str] = None) -> Ag
     if not output:
         output = "Hermes Agent returned no output."
 
+    metadata = {
+        "stderr": err_preview,
+        "stderr_truncated": len(err_text) > len(err_preview),
+    }
+    if err_text:
+        metadata["warning"] = "Hermes emitted stderr output"
+
     return AgentResponse(
         agent="hermes-agent",
         answer=output,
-        confidence=0.75,
+        confidence=HERMES_AGENT_DEFAULT_CONFIDENCE,
         sources=[{"type": "local-cli", "command": HERMES_AGENT_COMMAND}],
         reasoning="Answered by local Hermes Agent CLI",
-        metadata={
-            "stderr": err_preview,
-            "stderr_truncated": len(err_text) > len(err_preview),
-            "warning": "Hermes emitted stderr output" if err_text else "",
-        },
+        metadata=metadata,
     )
 
 # ============================================================================
