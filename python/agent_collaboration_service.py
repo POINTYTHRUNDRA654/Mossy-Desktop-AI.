@@ -38,6 +38,7 @@ except ImportError:
 
 PORT = 8004
 AGENT_COMMUNICATION_PORT = 8004
+HERMES_AGENT_PIP_SPEC = "hermes-agent==0.14.0"
 HERMES_AGENT_COMMAND = os.getenv("HERMES_AGENT_COMMAND", "hermes-agent")
 HERMES_AGENT_TIMEOUT_SECONDS = int(os.getenv("HERMES_AGENT_TIMEOUT_SECONDS", "90"))
 
@@ -395,6 +396,9 @@ agent_memories = {
 def is_hermes_available() -> bool:
     return shutil.which(HERMES_AGENT_COMMAND) is not None
 
+def is_http_agent_endpoint(endpoint: str) -> bool:
+    return endpoint.startswith("http://") or endpoint.startswith("https://")
+
 async def query_hermes_agent(question: str, context: Optional[str] = None) -> AgentResponse:
     """Query local Hermes Agent CLI in one-shot mode."""
     if not is_hermes_available():
@@ -402,7 +406,7 @@ async def query_hermes_agent(question: str, context: Optional[str] = None) -> Ag
             status_code=503,
             detail=(
                 f"Hermes Agent CLI not found ({HERMES_AGENT_COMMAND}). "
-                f"Install with: pip install \"hermes-agent==0.14.0\""
+                f"Install with: pip install \"{HERMES_AGENT_PIP_SPEC}\""
             ),
         )
 
@@ -694,7 +698,7 @@ async def validate_answer(
     
     # Query other agents for validation
     for agent_name, endpoint in AGENTS.items():
-        if agent_name == answering_agent or not endpoint.startswith("http"):
+        if agent_name == answering_agent or not is_http_agent_endpoint(endpoint):
             continue
         
         try:

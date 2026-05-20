@@ -63,10 +63,10 @@ Install into the same Python environment used by Mossy services:
 
 ```bash
 cd python
-pip install "hermes-agent==0.14.0"
+pip install -r requirements.txt
 ```
 
-If `hermes-agent` is on your PATH, it is auto-discovered by the collaboration service.
+`requirements.txt` includes `hermes-agent` for Python 3.11+, and if `hermes-agent` is on your PATH it is auto-discovered by the collaboration service.
 
 ### Open AgentCollaboration Component
 - **Inter-Agent Chat tab**: Watch agents query each other
